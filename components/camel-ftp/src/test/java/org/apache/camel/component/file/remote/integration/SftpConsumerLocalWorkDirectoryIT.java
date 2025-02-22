@@ -29,7 +29,6 @@ import org.apache.camel.component.file.remote.sftp.integration.SftpServerTestSup
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.TestSupport;
 import org.apache.camel.util.FileUtil;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -50,9 +49,7 @@ public class SftpConsumerLocalWorkDirectoryIT extends SftpServerTestSupport {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() throws Exception {
         prepareFtpServer();
     }
 

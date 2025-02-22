@@ -5,6 +5,7 @@
 :description: Send and receive messages to/from Hazelcast distributed topic.
 :since: 2.15
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: Hazelcast
@@ -41,7 +42,7 @@ The topic producer provides only one operation (publish).
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-=== Sample for *publish*:
+=== Example for *publish*:
 
 [source,java]
 ----------------------------------------------------------------------------------------
@@ -54,7 +55,7 @@ from("direct:add")
 
 The topic consumer provides only one operation (received). This
 component is supposed to support multiple consumption as it's expected
-when it comes to topics so you are free to have as much consumers as you
+when it comes to topics, so you are free to have as many consumers as you
 need on the same hazelcast topic.
 
 [source,java]

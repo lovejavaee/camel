@@ -32,37 +32,36 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class AggregationStrategyWithPreservationTest extends CamelTestSupport {
+class AggregationStrategyWithPreservationTest extends CamelTestSupport {
 
     private static final int EXPECTED_NO_FILES = 5;
 
     private TarAggregationStrategy tar = new TarAggregationStrategy(true, true);
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void cleanOutputDirectories() {
         tar.setParentDir("target/temp");
         deleteDirectory("target/temp");
         deleteDirectory("target/out");
-        super.setUp();
     }
 
     @Test
-    public void testSplitter() throws Exception {
+    void testSplitter() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:aggregateToTarEntry");
         mock.expectedMessageCount(1);
 
         MockEndpoint.assertIsSatisfied(context);
 
-        Thread.sleep(500);
+        await("Should be a file in target/out directory").until(() -> {
+            File[] files = new File("target/out").listFiles();
+            return files != null && files.length > 0;
+        });
 
         File[] files = new File("target/out").listFiles();
-        assertTrue(files.length > 0, "Should be a file in target/out directory");
-
         File resultFile = files[0];
         Set<String> expectedTarFiles = new HashSet<>(
                 Arrays.asList("another/hello.txt",
@@ -71,7 +70,7 @@ public class AggregationStrategyWithPreservationTest extends CamelTestSupport {
         TarArchiveInputStream tin = new TarArchiveInputStream(new FileInputStream(resultFile));
         try {
             int fileCount = 0;
-            for (TarArchiveEntry te = tin.getNextTarEntry(); te != null; te = tin.getNextTarEntry()) {
+            for (TarArchiveEntry te = tin.getNextEntry(); te != null; te = tin.getNextEntry()) {
                 String name = te.getName();
                 if (expectedTarFiles.contains(name)) {
                     expectedTarFiles.remove(te.getName());

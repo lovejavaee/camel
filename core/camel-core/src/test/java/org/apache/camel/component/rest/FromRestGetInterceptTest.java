@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class FromRestGetInterceptTest extends ContextTestSupport {
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("dummy-rest", new DummyRestConsumerFactory());
         return jndi;
     }
@@ -36,7 +36,7 @@ public class FromRestGetInterceptTest extends ContextTestSupport {
     public void testFromRestModel() throws Exception {
         getMockEndpoint("mock:hello").expectedMessageCount(1);
         getMockEndpoint("mock:bar").expectedMessageCount(1);
-        getMockEndpoint("mock:intercept").expectedMessageCount(4);
+        getMockEndpoint("mock:intercept").expectedMessageCount(3);
 
         String out = template.requestBody("seda:get-say-hello", "I was here", String.class);
         assertEquals("Bye World", out);
@@ -45,10 +45,10 @@ public class FromRestGetInterceptTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 restConfiguration().host("localhost");
                 intercept().to("mock:intercept");
 

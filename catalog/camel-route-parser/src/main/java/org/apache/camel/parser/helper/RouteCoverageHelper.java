@@ -67,14 +67,61 @@ public final class RouteCoverageHelper {
                 NodeList routes = dom.getElementsByTagName("route");
                 for (int i = 0; i < routes.getLength(); i++) {
                     Node route = routes.item(i);
-                    String id = route.getAttributes().getNamedItem("id").getNodeValue();
-                    String customId = route.getAttributes().getNamedItem("customId") != null
-                            ? route.getAttributes().getNamedItem("customId").getNodeValue() : "false";
-                    // must be the target route and the route must be explicit assigned with that route id (not anonymous route)
-                    if ("true".equals(customId) && routeId.equals(id)) {
+                    Node n = route.getAttributes().getNamedItem("id");
+                    String id = n != null ? n.getNodeValue() : null;
+                    if (routeId.equals(id)) {
                         // parse each route and build a List<CoverageData> for line by line coverage data
                         AtomicInteger counter = new AtomicInteger();
                         parseRouteData(catalog, route, answer, counter);
+                    }
+                }
+            }
+        }
+
+        return answer;
+    }
+
+    /**
+     * Parses the dumped route coverage data and creates a line by line coverage data
+     *
+     * @param  directory      the directory with the dumped route coverage data
+     * @param  sourceLocation the location of the route (filename:line)
+     * @return                line by line coverage data
+     */
+    public static List<CoverageData> parseDumpRouteCoverageByLineNumber(String directory, String sourceLocation)
+            throws Exception {
+        List<CoverageData> answer = new ArrayList<>();
+
+        if (sourceLocation == null) {
+            return answer;
+        }
+
+        File[] files = new File(directory).listFiles(f -> f.getName().endsWith(".xml"));
+        if (files == null) {
+            return answer;
+        }
+
+        CamelCatalog catalog = new DefaultCamelCatalog(true);
+
+        for (File file : files) {
+            try (FileInputStream fis = new FileInputStream(file)) {
+                Document dom = XmlLineNumberParser.parseXml(fis);
+                NodeList routes = dom.getElementsByTagName("route");
+                for (int i = 0; i < routes.getLength(); i++) {
+                    Node route = routes.item(i);
+                    Node n = route.getAttributes().getNamedItem("id");
+                    String id = n != null ? n.getNodeValue() : null;
+                    n = route.getAttributes().getNamedItem("sourceLocation");
+                    String loc = n != null ? n.getNodeValue() : null;
+                    if (sourceLocation.equals(loc)) {
+                        // parse each route and build a List<CoverageData> for line by line coverage data
+                        AtomicInteger counter = new AtomicInteger();
+                        List<CoverageData> list = new ArrayList<>();
+                        parseRouteData(catalog, route, list, counter);
+                        if (id != null && !list.isEmpty()) {
+                            list.get(0).setRouteId(id);
+                        }
+                        answer.addAll(list);
                     }
                 }
             }

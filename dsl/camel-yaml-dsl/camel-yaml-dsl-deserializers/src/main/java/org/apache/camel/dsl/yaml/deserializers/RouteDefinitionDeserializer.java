@@ -20,12 +20,16 @@ import org.apache.camel.dsl.yaml.common.YamlDeserializationContext;
 import org.apache.camel.dsl.yaml.common.YamlDeserializerBase;
 import org.apache.camel.dsl.yaml.common.YamlDeserializerResolver;
 import org.apache.camel.dsl.yaml.common.exception.UnsupportedFieldException;
-import org.apache.camel.model.DescriptionDefinition;
+import org.apache.camel.model.ErrorHandlerDefinition;
 import org.apache.camel.model.FromDefinition;
+import org.apache.camel.model.InputTypeDefinition;
+import org.apache.camel.model.OutputTypeDefinition;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.spi.annotations.YamlIn;
 import org.apache.camel.spi.annotations.YamlProperty;
 import org.apache.camel.spi.annotations.YamlType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.snakeyaml.engine.v2.nodes.MappingNode;
 import org.snakeyaml.engine.v2.nodes.Node;
 import org.snakeyaml.engine.v2.nodes.NodeTuple;
@@ -39,19 +43,31 @@ import org.snakeyaml.engine.v2.nodes.NodeTuple;
                   @YamlProperty(name = "id", type = "string"),
                   @YamlProperty(name = "description", type = "string"),
                   @YamlProperty(name = "group", type = "string"),
-                  @YamlProperty(name = "node-prefix-id", type = "string"),
+                  @YamlProperty(name = "nodePrefixId", type = "string"),
                   @YamlProperty(name = "precondition", type = "string"),
-                  @YamlProperty(name = "route-configuration-id", type = "string"),
-                  @YamlProperty(name = "auto-startup", type = "boolean"),
-                  @YamlProperty(name = "route-policy", type = "string"),
-                  @YamlProperty(name = "startup-order", type = "number"),
-                  @YamlProperty(name = "stream-caching", type = "boolean"),
-                  @YamlProperty(name = "message-history", type = "boolean"),
-                  @YamlProperty(name = "log-mask", type = "boolean"),
+                  @YamlProperty(name = "routeConfigurationId", type = "string"),
+                  @YamlProperty(name = "autoStartup", type = "boolean"),
+                  @YamlProperty(name = "routePolicy", type = "string"),
+                  @YamlProperty(name = "startupOrder", type = "number"),
+                  @YamlProperty(name = "streamCache", type = "boolean"),
+                  @YamlProperty(name = "messageHistory", type = "boolean"),
+                  @YamlProperty(name = "logMask", type = "boolean"),
                   @YamlProperty(name = "trace", type = "boolean"),
+                  @YamlProperty(name = "errorHandlerRef", type = "string"),
+                  @YamlProperty(name = "errorHandler", type = "object:org.apache.camel.model.ErrorHandlerDefinition"),
+                  @YamlProperty(name = "shutdownRoute", type = "enum:Default,Defer",
+                                defaultValue = "Default",
+                                description = "To control how to shut down the route."),
+                  @YamlProperty(name = "shutdownRunningTask", type = "enum:CompleteCurrentTaskOnly,CompleteAllTasks",
+                                defaultValue = "CompleteCurrentTaskOnly",
+                                description = "To control how to shut down the route."),
+                  @YamlProperty(name = "inputType", type = "object:org.apache.camel.model.InputTypeDefinition"),
+                  @YamlProperty(name = "outputType", type = "object:org.apache.camel.model.OutputTypeDefinition"),
                   @YamlProperty(name = "from", type = "object:org.apache.camel.model.FromDefinition", required = true)
           })
 public class RouteDefinitionDeserializer extends YamlDeserializerBase<RouteDefinition> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RouteDefinitionDeserializer.class);
 
     public RouteDefinitionDeserializer() {
         super(RouteDefinition.class);
@@ -67,17 +83,18 @@ public class RouteDefinitionDeserializer extends YamlDeserializerBase<RouteDefin
         final YamlDeserializationContext dc = getDeserializationContext(node);
 
         for (NodeTuple tuple : node.getValue()) {
-            final String key = asText(tuple.getKeyNode());
-            final Node val = tuple.getValueNode();
+            String key = asText(tuple.getKeyNode());
+            Node val = tuple.getValueNode();
 
             setDeserializationContext(val, dc);
 
+            key = org.apache.camel.util.StringHelper.dashToCamelCase(key);
             switch (key) {
                 case "id":
                     target.setId(asText(val));
                     break;
                 case "description":
-                    target.setDescription(new DescriptionDefinition(asText(val)));
+                    target.setDescription(asText(val));
                     break;
                 case "precondition":
                     target.setPrecondition(asText(val));
@@ -86,39 +103,54 @@ public class RouteDefinitionDeserializer extends YamlDeserializerBase<RouteDefin
                     target.setGroup(asText(val));
                     break;
                 case "nodePrefixId":
-                case "node-prefix-id":
                     target.setNodePrefixId(asText(val));
                     break;
                 case "routeConfigurationId":
-                case "route-configuration-id":
                     target.setRouteConfigurationId(asText(val));
                     break;
                 case "autoStartup":
-                case "auto-startup":
                     target.setAutoStartup(asText(val));
                     break;
                 case "routePolicy":
-                case "route-policy":
                     target.setRoutePolicyRef(asText(val));
                     break;
                 case "startupOrder":
-                case "startup-order":
                     target.setStartupOrder(asInt(val));
                     break;
                 case "streamCaching":
-                case "stream-caching":
+                    // backwards compatible
+                    LOG.warn("Old option name detected! Option streamCaching should be renamed to streamCache");
+                    target.setStreamCache(asText(val));
+                    break;
+                case "streamCache":
                     target.setStreamCache(asText(val));
                     break;
                 case "logMask":
-                case "log-mask":
                     target.setLogMask(asText(val));
                     break;
                 case "messageHistory":
-                case "message-history":
                     target.setMessageHistory(asText(val));
+                    break;
+                case "shutdownRoute":
+                    target.setShutdownRoute(asText(val));
+                    break;
+                case "shutdownRunningTask":
+                    target.setShutdownRunningTask(asText(val));
                     break;
                 case "trace":
                     target.setTrace(asText(val));
+                    break;
+                case "errorHandlerRef":
+                    target.setErrorHandlerRef(asText(val));
+                    break;
+                case "errorHandler":
+                    target.setErrorHandler(asType(val, ErrorHandlerDefinition.class));
+                    break;
+                case "inputType":
+                    target.setInputType(asType(val, InputTypeDefinition.class));
+                    break;
+                case "outputType":
+                    target.setOutputType(asType(val, OutputTypeDefinition.class));
                     break;
                 case "from":
                     val.setProperty(RouteDefinition.class.getName(), target);

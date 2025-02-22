@@ -34,7 +34,6 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -51,8 +50,6 @@ import org.slf4j.LoggerFactory;
  * A number of useful helper methods for working with Objects
  */
 public final class ObjectHelper {
-
-    private static final Logger LOG = LoggerFactory.getLogger(ObjectHelper.class);
 
     /**
      * Utility classes should not have a public constructor.
@@ -87,8 +84,8 @@ public final class ObjectHelper {
         }
 
         if (ignoreCase) {
-            if (a instanceof String && b instanceof String) {
-                return ((String) a).equalsIgnoreCase((String) b);
+            if (a instanceof String strA && b instanceof String strB) {
+                return strA.equalsIgnoreCase(strB);
             }
         }
 
@@ -121,24 +118,23 @@ public final class ObjectHelper {
     }
 
     public static Boolean toBoolean(Object value) {
-        if (value instanceof Boolean) {
-            return (Boolean) value;
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
         }
-        if (value instanceof byte[]) {
-            String str = new String((byte[]) value);
-            if ("true".equalsIgnoreCase(str) || "false".equalsIgnoreCase(str)) {
+        if (value instanceof byte[] bytes) {
+            String str = new String(bytes);
+            if (isBoolean(str)) {
                 return Boolean.valueOf(str);
             }
         }
-        if (value instanceof String) {
+        if (value instanceof String str) {
             // we only want to accept true or false as accepted values
-            String str = (String) value;
-            if ("true".equalsIgnoreCase(str) || "false".equalsIgnoreCase(str)) {
+            if (isBoolean(str)) {
                 return Boolean.valueOf(str);
             }
         }
-        if (value instanceof Integer) {
-            return (Integer) value > 0 ? Boolean.TRUE : Boolean.FALSE;
+        if (value instanceof Integer integer) {
+            return integer > 0 ? Boolean.TRUE : Boolean.FALSE;
         }
         return null;
     }
@@ -156,6 +152,21 @@ public final class ObjectHelper {
             throw new IllegalArgumentException(name + " must be specified");
         }
 
+        return value;
+    }
+
+    /**
+     * Asserts that the given {@code value} is neither {@code null} nor an emptyString.
+     *
+     * @param  value                    the value to test
+     * @param  name                     the key that resolved the value
+     * @return                          the passed {@code value} as is
+     * @throws IllegalArgumentException is thrown if assertion fails
+     */
+    public static String notNullOrEmpty(String value, String name) {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException(name + " must be specified and non-empty");
+        }
         return value;
     }
 
@@ -186,7 +197,7 @@ public final class ObjectHelper {
      * @return       true if empty
      */
     public static boolean isEmpty(String value) {
-        return value == null || value.trim().isEmpty();
+        return value == null || value.isBlank();
     }
 
     /**
@@ -218,12 +229,12 @@ public final class ObjectHelper {
     public static <T> boolean isEmpty(T value) {
         if (value == null) {
             return true;
-        } else if (value instanceof String) {
-            return isEmpty((String) value);
-        } else if (value instanceof Collection) {
-            return isEmpty((Collection<?>) value);
-        } else if (value instanceof Map) {
-            return isEmpty((Map<?, ?>) value);
+        } else if (value instanceof String str) {
+            return isEmpty(str);
+        } else if (value instanceof Collection<?> collection) {
+            return isEmpty(collection);
+        } else if (value instanceof Map<?, ?> valueMap) {
+            return isEmpty(valueMap);
         } else {
             return false;
         }
@@ -316,13 +327,13 @@ public final class ObjectHelper {
      * Returns the predicate matching boolean on a {@link List} result set where if the first element is a boolean its
      * value is used otherwise this method returns true if the collection is not empty
      *
-     * @return <tt>true</tt> if the first element is a boolean and its value is true or if the list is non empty
+     * @return <tt>true</tt> if the first element is a boolean, and its value is true or if the list is non-empty
      */
     public static boolean matches(List<?> list) {
         if (!list.isEmpty()) {
             Object value = list.get(0);
-            if (value instanceof Boolean) {
-                return (Boolean) value;
+            if (value instanceof Boolean booleanValue) {
+                return booleanValue;
             } else {
                 // lets assume non-empty results are true
                 return true;
@@ -344,7 +355,7 @@ public final class ObjectHelper {
         try {
             return System.getProperty(name, defaultValue);
         } catch (Exception e) {
-            LOG.debug("Caught security exception accessing system property: {}. Will use default value: {}",
+            logger().debug("Caught security exception accessing system property: {}. Will use default value: {}",
                     name, defaultValue, e);
 
             return defaultValue;
@@ -458,9 +469,9 @@ public final class ObjectHelper {
 
         if (clazz == null) {
             if (needToWarn) {
-                LOG.warn("Cannot find class: {}", name);
+                logger().warn("Cannot find class: {}", name);
             } else {
-                LOG.debug("Cannot find class: {}", name);
+                logger().debug("Cannot find class: {}", name);
             }
         }
 
@@ -473,7 +484,6 @@ public final class ObjectHelper {
      * @param  name the name of the class to load
      * @return      the class or <tt>null</tt> if it could not be loaded
      */
-    //CHECKSTYLE:OFF
     public static Class<?> loadSimpleType(String name) {
         // special for byte[] or Object[] as its common to use
         if ("java.lang.byte[]".equals(name) || "byte[]".equals(name)) {
@@ -484,7 +494,7 @@ public final class ObjectHelper {
             return Object[].class;
         } else if ("java.lang.String[]".equals(name) || "String[]".equals(name)) {
             return String[].class;
-            // and these is common as well
+            // and these are common as well
         } else if ("java.lang.String".equals(name) || "String".equals(name)) {
             return String.class;
         } else if ("java.lang.Boolean".equals(name) || "Boolean".equals(name)) {
@@ -522,7 +532,6 @@ public final class ObjectHelper {
         }
         return null;
     }
-    //CHECKSTYLE:ON
 
     /**
      * Loads the given class with the provided classloader (may be null). Will ignore any class not found and return
@@ -539,11 +548,10 @@ public final class ObjectHelper {
         }
 
         try {
-            LOG.trace("Loading class: {} using classloader: {}", name, loader);
             return loader.loadClass(name);
         } catch (ClassNotFoundException e) {
-            if (LOG.isTraceEnabled()) {
-                LOG.trace("Cannot load class: {} using classloader: {}", name, loader, e);
+            if (logger().isTraceEnabled()) {
+                logger().trace("Cannot load class: {} using classloader: {}", name, loader, e);
             }
         }
 
@@ -599,7 +607,7 @@ public final class ObjectHelper {
      */
     public static URL loadResourceAsURL(String name, ClassLoader loader) {
 
-        URL url = null;
+        URL url;
         String resolvedName = resolveUriPath(name);
 
         // #1 First, try the given class loader
@@ -908,7 +916,8 @@ public final class ObjectHelper {
         if (objects == null) {
             return "null";
         } else {
-            StringBuilder buffer = new StringBuilder("{");
+            StringBuilder buffer = new StringBuilder(256);
+            buffer.append("{");
             int counter = 0;
             for (Object object : objects) {
                 if (counter++ > 0) {
@@ -982,6 +991,26 @@ public final class ObjectHelper {
     }
 
     /**
+     * Is the give type numeric
+     */
+    public static boolean isNumericType(Class<?> type) {
+        if (type == int.class || type == Integer.class) {
+            return true;
+        } else if (type == long.class || type == Long.class) {
+            return true;
+        } else if (type == double.class || type == Double.class) {
+            return true;
+        } else if (type == float.class || type == Float.class) {
+            return true;
+        } else if (type == short.class || type == Short.class) {
+            return true;
+        } else if (type == byte.class || type == Byte.class) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Converts primitive types such as int to its wrapper type like {@link Integer}
      */
     public static Class<?> convertPrimitiveTypeToWrapperType(Class<?> type) {
@@ -1046,7 +1075,7 @@ public final class ObjectHelper {
     public static String getPropertyName(Method method) {
         String propertyName = method.getName();
         if (propertyName.startsWith("set") && method.getParameterCount() == 1) {
-            propertyName = propertyName.substring(3, 4).toLowerCase(Locale.ENGLISH) + propertyName.substring(4);
+            propertyName = StringHelper.decapitalize(propertyName.substring(3));
         }
         return propertyName;
     }
@@ -1072,6 +1101,25 @@ public final class ObjectHelper {
      */
     public static <A extends java.lang.annotation.Annotation> A getAnnotation(Object instance, Class<A> type) {
         return instance.getClass().getAnnotation(type);
+    }
+
+    /**
+     * Gets the annotation from the given instance (searching super classes also).
+     *
+     * @param  instance the instance
+     * @param  type     the annotation
+     * @return          the annotation, or <tt>null</tt> if the instance does not have the given annotation
+     */
+    public static <A extends java.lang.annotation.Annotation> A getAnnotationDeep(Object instance, Class<A> type) {
+        Class<?> clazz = instance.getClass();
+        while (clazz != Object.class) {
+            A ann = clazz.getAnnotation(type);
+            if (ann != null) {
+                return ann;
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return null;
     }
 
     /**
@@ -1137,29 +1185,39 @@ public final class ObjectHelper {
      * the value is not null
      */
     public static boolean evaluateValuePredicate(Object value) {
-        if (value instanceof Boolean) {
-            return (Boolean) value;
-        } else if (value instanceof String) {
-            String str = ((String) value).trim();
-            if (str.isEmpty()) {
-                return false;
-            } else if ("true".equalsIgnoreCase(str)) {
-                return true;
-            } else if ("false".equalsIgnoreCase(str)) {
-                return false;
-            }
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        } else if (value instanceof String str) {
+            return evaluateString(str);
         } else if (value instanceof NodeList) {
-            // is it an empty dom with empty attributes
-            if (value instanceof Node && ((Node) value).hasAttributes()) {
-                return true;
-            }
-            NodeList list = (NodeList) value;
-            return list.getLength() > 0;
-        } else if (value instanceof Collection) {
+            return evaluateNodeList(value);
+        } else if (value instanceof Collection<?> collection) {
             // is it an empty collection
-            return !((Collection<?>) value).isEmpty();
+            return !collection.isEmpty();
         }
         return value != null;
+    }
+
+    private static boolean evaluateString(String value) {
+        final String str = value.trim();
+        if (str.isEmpty()) {
+            return false;
+        } else if ("true".equalsIgnoreCase(str)) {
+            return true;
+        } else if ("false".equalsIgnoreCase(str)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static boolean evaluateNodeList(Object value) {
+        // is it an empty dom with empty attributes
+        if (value instanceof Node node && node.hasAttributes()) {
+            return true;
+        }
+        NodeList list = (NodeList) value;
+        return list.getLength() > 0;
     }
 
     /**
@@ -1311,6 +1369,29 @@ public final class ObjectHelper {
             }
             list.add(idx, value);
         }
+    }
+
+    /**
+     * Checks whether the given string is a valid boolean value (i.e.; either "true" or "false") ignoring its case
+     *
+     * @param  str the string to evaluate
+     * @return     true if it is a valid boolean value or false otherwise
+     */
+    public static boolean isBoolean(String str) {
+        return "true".equalsIgnoreCase(str) || "false".equalsIgnoreCase(str);
+    }
+
+    /*
+     * NOTE: see CAMEL-19724. We log like this instead of using a statically declared logger in order to
+     * reduce the risk of dropping log messages due to slf4j log substitution behavior during its own
+     * initialization.
+     */
+    private static final class Holder {
+        static final Logger LOG = LoggerFactory.getLogger(Holder.class);
+    }
+
+    private static Logger logger() {
+        return Holder.LOG;
     }
 
 }

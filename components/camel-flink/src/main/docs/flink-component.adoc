@@ -5,6 +5,7 @@
 :description: Send DataSet jobs to an Apache Flink cluster.
 :since: 2.18
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: flink
@@ -15,9 +16,9 @@
 
 This documentation page covers the https://flink.apache.org[Apache Flink]
 component for the Apache Camel. The *camel-flink* component provides a
-bridge between Camel components and Flink tasks. +
-This Camel Flink component provides a way to route message from various
-transports, dynamically choosing a flink task to execute, use incoming
+bridge between Camel components and Flink tasks.
+This component provides a way to route a message from various
+transports, dynamically choosing a flink task to execute, use an incoming
 message as input data for the task and finally deliver the results back to
 the Camel pipeline.
 
@@ -60,7 +61,9 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Flink DataSet Callback
+== Examples
+
+=== Flink DataSet Callback
 
 [source,java]
 -----------------------------------
@@ -79,7 +82,7 @@ public DataSetCallback<Long> dataSetCallback() {
 }
 -----------------------------------
 
-== Flink DataStream Callback
+=== Flink DataStream Callback
 
 [source,java]
 ---------------------------
@@ -96,7 +99,7 @@ public VoidDataStreamCallback dataStreamCallback() {
 }
 ---------------------------
 
-== Camel-Flink Producer call
+=== Camel-Flink Producer call
 
 [source,java]
 -----------------------------------

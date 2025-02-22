@@ -35,10 +35,21 @@ import org.apache.camel.spi.Metadata;
 public class ToDefinition extends SendDefinition<ToDefinition> {
 
     @XmlAttribute
+    private String variableSend;
+    @XmlAttribute
+    private String variableReceive;
+    @XmlAttribute
     @Metadata(label = "advanced", javaType = "org.apache.camel.ExchangePattern", enums = "InOnly,InOut")
     private String pattern;
 
     public ToDefinition() {
+    }
+
+    protected ToDefinition(ToDefinition source) {
+        super(source);
+        this.variableSend = source.variableSend;
+        this.variableReceive = source.variableReceive;
+        this.pattern = source.pattern;
     }
 
     public ToDefinition(String uri) {
@@ -93,4 +104,38 @@ public class ToDefinition extends SendDefinition<ToDefinition> {
         this.pattern = pattern;
     }
 
+    public String getVariableSend() {
+        return variableSend;
+    }
+
+    /**
+     * To use a variable as the source for the message body to send. This makes it handy to use variables for user data
+     * and to easily control what data to use for sending and receiving.
+     *
+     * Important: When using send variable then the message body is taken from this variable instead of the current
+     * message, however the headers from the message will still be used as well. In other words, the variable is used
+     * instead of the message body, but everything else is as usual.
+     */
+    public void setVariableSend(String variableSend) {
+        this.variableSend = variableSend;
+    }
+
+    public String getVariableReceive() {
+        return variableReceive;
+    }
+
+    /**
+     * To use a variable to store the received message body (only body, not headers). This makes it handy to use
+     * variables for user data and to easily control what data to use for sending and receiving.
+     *
+     * Important: When using receive variable then the received body is stored only in this variable and not on the
+     * current message.
+     */
+    public void setVariableReceive(String variableReceive) {
+        this.variableReceive = variableReceive;
+    }
+
+    public ToDefinition copyDefinition() {
+        return new ToDefinition(this);
+    }
 }

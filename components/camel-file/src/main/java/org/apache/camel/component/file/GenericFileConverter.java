@@ -52,17 +52,20 @@ public final class GenericFileConverter {
         if (GenericFile.class.isAssignableFrom(value.getClass())) {
 
             GenericFile<?> file = (GenericFile<?>) value;
-            Class<?> from = file.getBody().getClass();
+            Object body = file.getBody();
+            if (body == null) {
+                return null;
+            }
+            Class<?> from = body.getClass();
 
             // maybe from is already the type we want
             if (from.isAssignableFrom(type)) {
-                return file.getBody();
+                return body;
             }
 
             // no then try to lookup a type converter
             TypeConverter tc = registry.lookup(type, from);
             if (tc != null) {
-                Object body = file.getBody();
                 // if its a file and we have a charset then use a reader to
                 // ensure we read the content using the given charset
                 // this is a bit complicated, but a file consumer can be
@@ -109,9 +112,8 @@ public final class GenericFileConverter {
 
     @Converter
     public static InputStream genericFileToInputStream(GenericFile<?> file, Exchange exchange) throws IOException {
-        if (file.getFile() instanceof File) {
+        if (file.getFile() instanceof File f) {
             // prefer to use a file input stream if its a java.io.File
-            File f = (File) file.getFile();
             // the file must exists
             if (f.exists()) {
                 // read the file using the specified charset
@@ -178,9 +180,8 @@ public final class GenericFileConverter {
 
     @Converter
     public static Reader genericFileToReader(GenericFile<?> file, Exchange exchange) throws IOException {
-        if (file.getFile() instanceof File) {
+        if (file.getFile() instanceof File f) {
             // prefer to use a file input stream if its a java.io.File
-            File f = (File) file.getFile();
             // the file must exists
             if (!f.exists()) {
                 return null;

@@ -45,22 +45,21 @@ public class LevelDBBigPayloadManualTest extends LevelDBTestSupport {
 
     @BeforeEach
     @Override
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         deleteDirectory("target/data");
-        super.setUp();
     }
 
     @Test
     public void testBigPayload() throws Exception {
 
-        log.info("Running test for " + TIME + " millis.");
+        log.info("Running test for {} millis.", TIME);
         Thread.sleep(60 * 1000);
 
         // assert the file size of the repo is not big < 32mb
         File file = new File("target/data/leveldb.dat");
         assertTrue(file.exists(), file + " should exists");
         long size = file.length();
-        log.info(file + " size is " + size);
+        log.info("{} size is {}", file, size);
         // should be about 32mb, so we say 34 just in case
         assertTrue(size < 34 * 1024 * 1024, file + " should not be so big in size, was: " + size);
     }

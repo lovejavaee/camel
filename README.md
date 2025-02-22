@@ -11,7 +11,7 @@
 
 ### Introduction
 
-Camel empowers you to define routing and mediation rules in a variety of domain-specific languages (DSL, such as Java, XML, Groovy, Kotlin, and YAML). This means you get smart completion of routing rules in your IDE, whether in a Java or XML editor.
+Camel empowers you to define routing and mediation rules in a variety of domain-specific languages (DSL, such as Java, XML, Groovy and YAML). This means you get smart completion of routing rules in your IDE, whether in a Java or XML editor.
 
 Apache Camel uses URIs to enable easier integration with all kinds of
 transport or messaging model including HTTP, ActiveMQ, JMS, JBI, SCA, MINA
@@ -30,7 +30,7 @@ unit test your routes.
 ## Components
 
 Apache Camel comes alongside several artifacts with components, data formats, languages, and kinds.
-The up to date list is available online at the Camel website:
+The up-to-date list is available online at the Camel website:
 
 * Components: <https://camel.apache.org/components/latest/>
 * Data Formats: <https://camel.apache.org/components/latest/dataformats/>
@@ -42,7 +42,7 @@ The up to date list is available online at the Camel website:
 Apache Camel comes with many examples.
 The up to date list is available online at GitHub:
 
-* Examples: <https://github.com/apache/camel-examples/tree/main/examples#welcome-to-the-apache-camel-examples>
+* Examples: <https://github.com/apache/camel-examples/tree/main#welcome-to-the-apache-camel-examples>
 
 ## Getting Started
 
@@ -54,11 +54,11 @@ To help you get started, try the following links:
 
 The beginner examples are another powerful alternative pathway for getting started with Apache Camel.
 
-* Examples: <https://github.com/apache/camel-examples/tree/main/examples#welcome-to-the-apache-camel-examples>
+* Examples: <https://github.com/apache/camel-examples/tree/main#welcome-to-the-apache-camel-examples>
 
 **Building**
 
-<https://camel.apache.org/building.html>
+<https://camel.apache.org/camel-core/contributing/>
 
 **Contributions**
 
@@ -72,7 +72,7 @@ email lists, GitHub, chat
 
 Website: <https://camel.apache.org/>
 
-Github (source): <https://github.com/apache/camel>
+GitHub (source): <https://github.com/apache/camel>
 
 Issue tracker: <https://issues.apache.org/jira/projects/CAMEL>
 
@@ -95,8 +95,7 @@ For additional help, support, we recommend referencing this page first:
 
 If you get stuck somewhere, please feel free to reach out to us on either StackOverflow, Chat, or the email mailing list.
 
-Please help us make Apache Camel better - we appreciate any feedback
-you may have.
+Please help us make Apache Camel better — we appreciate any feedback you may have.
 
 Enjoy!
 

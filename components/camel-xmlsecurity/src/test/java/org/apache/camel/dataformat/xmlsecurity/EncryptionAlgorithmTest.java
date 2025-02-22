@@ -29,7 +29,6 @@ import org.apache.camel.converter.jaxp.XmlConverter;
 import org.apache.camel.support.jsse.KeyStoreParameters;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.apache.xml.security.encryption.XMLCipher;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -59,9 +58,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() {
         context.getGlobalOptions().put(XmlConverter.OUTPUT_PROPERTIES_PREFIX + OutputKeys.ENCODING, "UTF-8");
     }
 
@@ -358,7 +355,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
 
         KeyStoreParameters tsParameters = new KeyStoreParameters();
         tsParameters.setPassword("password");
-        tsParameters.setResource("sender.ts");
+        tsParameters.setResource("sender.truststore");
         sendingDataFormat.setKeyOrTrustStoreParameters(tsParameters);
 
         final XMLSecurityDataFormat receivingDataFormat = new XMLSecurityDataFormat();
@@ -368,7 +365,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
 
         KeyStoreParameters ksParameters = new KeyStoreParameters();
         ksParameters.setPassword("password");
-        ksParameters.setResource("recipient.ks");
+        ksParameters.setResource("recipient.keystore");
         receivingDataFormat.setKeyOrTrustStoreParameters(ksParameters);
 
         context.addRoutes(new RouteBuilder() {
@@ -393,7 +390,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
 
         KeyStoreParameters tsParameters = new KeyStoreParameters();
         tsParameters.setPassword("password");
-        tsParameters.setResource("sender.ts");
+        tsParameters.setResource("sender.truststore");
         sendingDataFormat.setKeyOrTrustStoreParameters(tsParameters);
 
         final XMLSecurityDataFormat receivingDataFormat = new XMLSecurityDataFormat();
@@ -403,7 +400,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
 
         KeyStoreParameters ksParameters = new KeyStoreParameters();
         ksParameters.setPassword("password");
-        ksParameters.setResource("recipient.ks");
+        ksParameters.setResource("recipient.keystore");
         receivingDataFormat.setKeyOrTrustStoreParameters(ksParameters);
 
         context.addRoutes(new RouteBuilder() {
@@ -428,7 +425,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
 
         KeyStoreParameters tsParameters = new KeyStoreParameters();
         tsParameters.setPassword("password");
-        tsParameters.setResource("sender.ts");
+        tsParameters.setResource("sender.truststore");
         sendingDataFormat.setKeyOrTrustStoreParameters(tsParameters);
 
         final XMLSecurityDataFormat receivingDataFormat = new XMLSecurityDataFormat();
@@ -438,7 +435,7 @@ public class EncryptionAlgorithmTest extends CamelTestSupport {
 
         KeyStoreParameters ksParameters = new KeyStoreParameters();
         ksParameters.setPassword("password");
-        ksParameters.setResource("recipient.ks");
+        ksParameters.setResource("recipient.keystore");
         receivingDataFormat.setKeyOrTrustStoreParameters(ksParameters);
 
         context.addRoutes(new RouteBuilder() {

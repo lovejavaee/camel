@@ -16,6 +16,8 @@
  */
 package org.apache.camel.component.file;
 
+import java.util.UUID;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -23,23 +25,24 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
 
 public class FileProducerFileExistAppendNoFileBeforeTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME = "hello" + UUID.randomUUID() + ".txt";
 
     @Test
     public void testAppend() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedBodiesReceived("Bye World");
-        mock.expectedFileExists(testFile("hello.txt"), "Bye World");
+        mock.expectedFileExists(testFile(TEST_FILE_NAME), "Bye World");
 
-        template.sendBodyAndHeader(fileUri("?fileExist=Append"), "Bye World", Exchange.FILE_NAME, "hello.txt");
+        template.sendBodyAndHeader(fileUri("?fileExist=Append"), "Bye World", Exchange.FILE_NAME, TEST_FILE_NAME);
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("?noop=true&initialDelay=100&delay=10")).convertBodyTo(String.class).to("mock:result");
             }
         };

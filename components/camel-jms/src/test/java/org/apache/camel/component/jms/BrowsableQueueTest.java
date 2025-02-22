@@ -29,11 +29,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Isolated("Needs greater isolation due to CAMEL-20269")
 public class BrowsableQueueTest extends AbstractJMSTest {
     @Order(2)
     @RegisterExtension
@@ -113,7 +115,7 @@ public class BrowsableQueueTest extends AbstractJMSTest {
         JmsQueueEndpoint endpoint = getMandatoryEndpoint(queueName, JmsQueueEndpoint.class);
         assertEquals(-1, endpoint.getMaximumBrowseSize());
         List<Exchange> list = endpoint.getExchanges();
-        LOG.debug("Received: " + list);
+        LOG.debug("Received: {}", list);
         assertEquals(8, endpoint.getExchanges().size(), "Size of list");
 
         int index = -1;

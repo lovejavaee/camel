@@ -30,6 +30,8 @@ import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 import org.apache.camel.spi.UriPath;
 
+import static org.apache.camel.component.azure.storage.datalake.CredentialType.CLIENT_SECRET;
+
 @UriParams
 public class DataLakeConfiguration implements Cloneable {
 
@@ -37,7 +39,7 @@ public class DataLakeConfiguration implements Cloneable {
     private String accountName;
     @UriPath(description = "name of filesystem to be used")
     private String fileSystemName;
-    @UriParam(description = "shared key credential for azure datalake gen2")
+    @UriParam(description = "shared key credential for azure data lake gen2")
     private StorageSharedKeyCredential sharedKeyCredential;
     @UriParam(description = "directory of the file to be handled in component")
     private String directoryName;
@@ -45,7 +47,7 @@ public class DataLakeConfiguration implements Cloneable {
     private String fileName;
     @UriParam(label = "security", secret = true, description = "client secret credential for authentication")
     private ClientSecretCredential clientSecretCredential;
-    @UriParam(description = "datalake service client for azure storage datalake")
+    @UriParam(description = "data lake service client for azure storage data lake")
     @Metadata(autowired = true)
     private DataLakeServiceClient serviceClient;
     @UriParam(label = "security", secret = true, description = "account key for authentication")
@@ -58,7 +60,7 @@ public class DataLakeConfiguration implements Cloneable {
     private String tenantId;
     @UriParam(description = "Timeout for operation")
     private Duration timeout;
-    @UriParam(description = "path in azure datalake for operations")
+    @UriParam(description = "path in azure data lake for operations")
     private String path = "/";
     @UriParam(description = "recursively include all paths")
     private Boolean recursive = false;
@@ -98,12 +100,14 @@ public class DataLakeConfiguration implements Cloneable {
     private String sasSignature;
     @UriParam(label = "security", secret = true, description = "SAS token credential")
     private AzureSasCredential sasCredential;
-    @UriParam(label = "security", secret = false, description = "Use default identity")
-    private Boolean useDefaultIdentity = false;
 
     @UriParam(label = "producer", enums = "listFileSystem, listFiles", defaultValue = "listFileSystem",
               description = "operation to be performed")
     private DataLakeOperationsDefinition operation = DataLakeOperationsDefinition.listFileSystem;
+
+    @UriParam(label = "common", enums = "CLIENT_SECRET,SHARED_KEY_CREDENTIAL,AZURE_IDENTITY,AZURE_SAS,SERVICE_CLIENT_INSTANCE",
+              defaultValue = "CLIENT_SECRET")
+    private CredentialType credentialType = CLIENT_SECRET;
 
     public DataLakeOperationsDefinition getOperation() {
         return operation;
@@ -369,12 +373,15 @@ public class DataLakeConfiguration implements Cloneable {
         this.sasCredential = sasCredential;
     }
 
-    public Boolean getUseDefaultIdentity() {
-        return useDefaultIdentity;
+    public CredentialType getCredentialType() {
+        return credentialType;
     }
 
-    public void setUseDefaultIdentity(Boolean useDefaultIdentity) {
-        this.useDefaultIdentity = useDefaultIdentity;
+    /**
+     * Determines the credential strategy to adopt
+     */
+    public void setCredentialType(CredentialType credentialType) {
+        this.credentialType = credentialType;
     }
 
     public DataLakeConfiguration copy() {

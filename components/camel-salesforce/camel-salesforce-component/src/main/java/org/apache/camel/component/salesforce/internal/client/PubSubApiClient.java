@@ -73,6 +73,8 @@ public class PubSubApiClient extends ServiceSupport {
 
     public static final String PUBSUB_ERROR_AUTH_ERROR = "sfdc.platform.eventbus.grpc.service.auth.error";
     private static final String PUBSUB_ERROR_AUTH_REFRESH_INVALID = "sfdc.platform.eventbus.grpc.service.auth.refresh.invalid";
+    private static final String PUBSUB_ERROR_CORRUPTED_REPLAY_ID
+            = "sfdc.platform.eventbus.grpc.subscription.fetch.replayid.corrupted";
 
     protected PubSubGrpc.PubSubStub asyncStub;
     protected PubSubGrpc.PubSubBlockingStub blockingStub;
@@ -80,8 +82,10 @@ public class PubSubApiClient extends ServiceSupport {
 
     private final long backoffIncrement;
     private final long maxBackoff;
+    private long reconnectDelay;
     private final String pubSubHost;
     private final int pubSubPort;
+    private final boolean allowUseProxyServer;
 
     private final Logger LOG = LoggerFactory.getLogger(getClass());
     private final SalesforceLoginConfig loginConfig;
@@ -95,14 +99,19 @@ public class PubSubApiClient extends ServiceSupport {
     private ManagedChannel channel;
     private boolean usePlainTextConnection = false;
 
+    private ReplayPreset initialReplayPreset;
+    private String initialReplayId;
+
     public PubSubApiClient(SalesforceSession session, SalesforceLoginConfig loginConfig, String pubSubHost,
-                           int pubSubPort, long backoffIncrement, long maxBackoff) {
+                           int pubSubPort, long backoffIncrement, long maxBackoff, boolean allowUseProxyServer) {
         this.session = session;
         this.loginConfig = loginConfig;
         this.pubSubHost = pubSubHost;
         this.pubSubPort = pubSubPort;
         this.maxBackoff = maxBackoff;
         this.backoffIncrement = backoffIncrement;
+        this.reconnectDelay = backoffIncrement;
+        this.allowUseProxyServer = allowUseProxyServer;
     }
 
     public List<org.apache.camel.component.salesforce.api.dto.pubsub.PublishResult> publishMessage(
@@ -137,7 +146,9 @@ public class PubSubApiClient extends ServiceSupport {
     }
 
     public void subscribe(PubSubApiConsumer consumer, ReplayPreset replayPreset, String initialReplayId) {
-        LOG.error("Starting subscribe {}", consumer.getTopic());
+        LOG.debug("Starting subscribe {}", consumer.getTopic());
+        this.initialReplayPreset = replayPreset;
+        this.initialReplayId = initialReplayId;
         if (replayPreset == ReplayPreset.CUSTOM && initialReplayId == null) {
             throw new RuntimeException("initialReplayId is required for ReplayPreset.CUSTOM");
         }
@@ -196,6 +207,9 @@ public class PubSubApiClient extends ServiceSupport {
 
         final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
                 .forAddress(pubSubHost, pubSubPort);
+        if (!allowUseProxyServer) {
+            channelBuilder.proxyDetector(socketAddress -> null);
+        }
         if (usePlainTextConnection) {
             channelBuilder.usePlaintext();
         }
@@ -217,7 +231,7 @@ public class PubSubApiClient extends ServiceSupport {
 
     @Override
     protected void doStop() throws Exception {
-        LOG.warn("Stopping PubSubApiClient");
+        LOG.debug("Stopping PubSubApiClient");
         // stop each open stream
         observerMap.values().forEach(observer -> {
             LOG.debug("Stopping subscription");
@@ -235,8 +249,8 @@ public class PubSubApiClient extends ServiceSupport {
         }
         byte[] bytes;
         if (body instanceof IndexedRecord indexedRecord) {
-            if (body instanceof GenericRecord record) {
-                bytes = getBytes(body, new GenericDatumWriter<>(record.getSchema()));
+            if (body instanceof GenericRecord genericRecord) {
+                bytes = getBytes(body, new GenericDatumWriter<>(genericRecord.getSchema()));
             } else if (body instanceof SpecificRecord) {
                 bytes = getBytes(body, new SpecificDatumWriter<>());
             } else {
@@ -284,11 +298,14 @@ public class PubSubApiClient extends ServiceSupport {
 
         @Override
         public void onNext(FetchResponse fetchResponse) {
+            // reset reconnect delay in case we previously had errors
+            reconnectDelay = backoffIncrement;
+
             String topic = consumer.getTopic();
 
             LOG.debug("Received {} events on topic: {}", fetchResponse.getEventsList().size(), topic);
-            LOG.debug("rpcId: " + fetchResponse.getRpcId());
-            LOG.debug("pending_num_requested: " + fetchResponse.getPendingNumRequested());
+            LOG.debug("rpcId: {}", fetchResponse.getRpcId());
+            LOG.debug("pending_num_requested: {}", fetchResponse.getPendingNumRequested());
             for (ConsumerEvent ce : fetchResponse.getEventsList()) {
                 try {
                     processEvent(ce);
@@ -328,19 +345,38 @@ public class PubSubApiClient extends ServiceSupport {
                             session.attemptLoginUntilSuccessful(backoffIncrement, maxBackoff);
                             LOG.debug("logged in {}", consumer.getTopic());
                         }
+                        case PUBSUB_ERROR_CORRUPTED_REPLAY_ID -> {
+                            LOG.error("replay id: " + replayId
+                                      + " is corrupt. Trying to recover by resubscribing with LATEST replay preset");
+                            replayId = null;
+                            initialReplayPreset = ReplayPreset.LATEST;
+                        }
                         default -> LOG.error("unexpected errorCode: {}", errorCode);
                     }
                 }
             } else {
                 LOG.error("An unexpected error occurred.", throwable);
             }
-            LOG.debug("Attempting subscribe after error");
-            if (replayId == null) {
-                LOG.warn("Not re-subscribing after error because replayId is null. Topic: {}",
-                        consumer.getTopic());
-                return;
+            resubscribeOnError();
+        }
+
+        private void resubscribeOnError() {
+            try {
+                LOG.debug("Will attempt resubscribe in {} ms", reconnectDelay);
+                Thread.sleep(reconnectDelay);
+                reconnectDelay = reconnectDelay + backoffIncrement;
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-            subscribe(consumer, ReplayPreset.CUSTOM, replayId);
+            if (replayId != null) {
+                subscribe(consumer, ReplayPreset.CUSTOM, replayId);
+            } else {
+                if (initialReplayPreset == ReplayPreset.CUSTOM) {
+                    subscribe(consumer, initialReplayPreset, initialReplayId);
+                } else {
+                    subscribe(consumer, initialReplayPreset, null);
+                }
+            }
         }
 
         @Override
@@ -355,7 +391,7 @@ public class PubSubApiClient extends ServiceSupport {
 
         private void processEvent(ConsumerEvent ce) throws IOException {
             final Schema schema = getSchema(ce.getEvent().getSchemaId());
-            Object record = switch (consumer.getDeserializeType()) {
+            Object recordObj = switch (consumer.getDeserializeType()) {
                 case AVRO -> deserializeAvro(ce, schema);
                 case GENERIC_RECORD -> deserializeGenericRecord(ce, schema);
                 case SPECIFIC_RECORD -> deserializeSpecificRecord(ce, schema);
@@ -363,7 +399,7 @@ public class PubSubApiClient extends ServiceSupport {
                 case JSON -> deserializeJson(ce, schema);
             };
             String replayId = PubSubApiClient.base64EncodeByteString(ce.getReplayId());
-            consumer.processEvent(record, replayId);
+            consumer.processEvent(recordObj, replayId);
         }
 
         private Object deserializeAvro(ConsumerEvent ce, Schema schema) throws IOException {
@@ -376,9 +412,9 @@ public class PubSubApiClient extends ServiceSupport {
         }
 
         private Object deserializeJson(ConsumerEvent ce, Schema schema) throws IOException {
-            final GenericRecord record = deserializeGenericRecord(ce, schema);
+            final GenericRecord genericRecord = deserializeGenericRecord(ce, schema);
             JsonAvroConverter converter = new JsonAvroConverter();
-            final byte[] bytes = converter.convertToJson(record);
+            final byte[] bytes = converter.convertToJson(genericRecord);
             return new String(bytes);
         }
 

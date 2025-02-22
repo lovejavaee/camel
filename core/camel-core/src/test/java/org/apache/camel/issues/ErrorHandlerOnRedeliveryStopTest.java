@@ -27,7 +27,7 @@ import org.apache.camel.support.ExpressionAdapter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ErrorHandlerOnRedeliveryStopTest extends ContextTestSupport {
 
@@ -37,22 +37,21 @@ public class ErrorHandlerOnRedeliveryStopTest extends ContextTestSupport {
     public void testRetryWhile() throws Exception {
         getMockEndpoint("mock:result").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:start", "Hello World");
-            fail("Should throw an exception");
-        } catch (Exception e) {
-            RejectedExecutionException ree = assertIsInstanceOf(RejectedExecutionException.class, e.getCause());
-            Assertions.assertEquals("I do not want to do this anymore", ree.getMessage());
-        }
+        Exception e = assertThrows(Exception.class,
+                () -> template.sendBody("direct:start", "Hello World"),
+                "Should throw an exception");
+
+        RejectedExecutionException ree = assertIsInstanceOf(RejectedExecutionException.class, e.getCause());
+        Assertions.assertEquals("I do not want to do this anymore", ree.getMessage());
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
 
                 errorHandler(defaultErrorHandler()
                         .retryWhile(new ExpressionAdapter() {
@@ -74,7 +73,7 @@ public class ErrorHandlerOnRedeliveryStopTest extends ContextTestSupport {
     private class MyRedeliveryProcessor implements Processor {
 
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             if (counter.get() == 0) {
                 exchange.setException(new RejectedExecutionException("I do not want to do this anymore"));
                 exchange.setRouteStop(true); // stop redelivery

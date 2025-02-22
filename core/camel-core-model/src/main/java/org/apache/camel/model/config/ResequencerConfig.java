@@ -22,7 +22,11 @@ import jakarta.xml.bind.annotation.XmlType;
 
 @XmlType(name = "resequencerConfig")
 @XmlAccessorType(XmlAccessType.FIELD)
-@SuppressWarnings("rawtypes")
 public abstract class ResequencerConfig {
+
+    /**
+     * Makes a copy of this definition.
+     */
+    public abstract ResequencerConfig copyDefinition();
 
 }

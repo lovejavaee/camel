@@ -25,7 +25,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * PostgreSQL specific {@link JdbcAggregationRepository} that deals with SQL Violation Exceptions using special
- * {@code INSERT INTO .. ON CONFLICT DO NOTHING} claues.
+ * {@code INSERT INTO .. ON CONFLICT DO NOTHING} clause.
  */
 public class ClusteredPostgresAggregationRepository extends ClusteredJdbcAggregationRepository {
 
@@ -58,7 +58,7 @@ public class ClusteredPostgresAggregationRepository extends ClusteredJdbcAggrega
             throws Exception {
         // The default totalParameterIndex is 2 for ID and Exchange. Depending on logic this will be increased
         int totalParameterIndex = 2;
-        StringBuilder queryBuilder = new StringBuilder()
+        StringBuilder queryBuilder = new StringBuilder(256)
                 .append("INSERT INTO ").append(repositoryName)
                 .append('(')
                 .append(EXCHANGE).append(", ")

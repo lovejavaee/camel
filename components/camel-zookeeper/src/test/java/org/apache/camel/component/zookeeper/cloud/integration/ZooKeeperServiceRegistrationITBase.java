@@ -37,7 +37,6 @@ import org.apache.curator.x.discovery.ServiceDiscovery;
 import org.apache.curator.x.discovery.ServiceDiscoveryBuilder;
 import org.apache.curator.x.discovery.ServiceInstance;
 import org.apache.curator.x.discovery.details.JsonInstanceSerializer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.awaitility.Awaitility.await;
@@ -49,7 +48,7 @@ public abstract class ZooKeeperServiceRegistrationITBase extends CamelTestSuppor
     protected static final String SERVICE_NAME = "my-service";
     protected static final String SERVICE_HOST = "localhost";
     protected static final String SERVICE_PATH = "/camel";
-    protected static final int SERVICE_PORT = AvailablePortFinder.getNextAvailable();
+    protected static final int SERVICE_PORT = AvailablePortFinder.getNextRandomAvailable();
 
     protected ZooKeeperContainer container;
     protected CuratorFramework curator;
@@ -82,10 +81,7 @@ public abstract class ZooKeeperServiceRegistrationITBase extends CamelTestSuppor
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void doPostTearDown() {
         CloseableUtils.closeQuietly(discovery);
         CloseableUtils.closeQuietly(curator);
 

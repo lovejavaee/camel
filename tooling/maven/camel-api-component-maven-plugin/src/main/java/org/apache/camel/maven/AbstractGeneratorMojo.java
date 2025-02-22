@@ -40,9 +40,9 @@ import org.apache.velocity.app.VelocityEngine;
 import org.apache.velocity.exception.VelocityException;
 import org.apache.velocity.runtime.RuntimeConstants;
 import org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader;
+import org.codehaus.plexus.build.BuildContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.sonatype.plexus.build.incremental.BuildContext;
 
 /**
  * Base class for API based generation MOJOs.
@@ -79,8 +79,8 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
         static {
             // initialize velocity to load resources from class loader and use Log4J
             Properties velocityProperties = new Properties();
-            velocityProperties.setProperty(RuntimeConstants.RESOURCE_LOADER, "cloader");
-            velocityProperties.setProperty("cloader.resource.loader.class", ClasspathResourceLoader.class.getName());
+            velocityProperties.setProperty(RuntimeConstants.RESOURCE_LOADERS, "cloader");
+            velocityProperties.setProperty("resource.loader.cloader.class", ClasspathResourceLoader.class.getName());
             Logger velocityLogger = LoggerFactory.getLogger("org.apache.camel.maven.Velocity");
             velocityProperties.setProperty(RuntimeConstants.RUNTIME_LOG_NAME, velocityLogger.getName());
             ENGINE = new VelocityEngine(velocityProperties);

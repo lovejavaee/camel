@@ -18,7 +18,7 @@ package org.apache.camel.language.jq;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import org.apache.camel.NoSuchHeaderOrPropertyException;
+import org.apache.camel.NoSuchPropertyException;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
@@ -29,11 +29,13 @@ public class JqExpressionFromPropertyTest extends JqTestSupport {
         return new RouteBuilder() {
             @Override
             public void configure() {
+                var jq = expression().jq().expression(".foo").source("property:Content").end();
+
                 from("direct:start")
                         .doTry()
-                        .transform().jq(".foo", "Content")
+                        .transform(jq)
                         .to("mock:result")
-                        .doCatch(NoSuchHeaderOrPropertyException.class)
+                        .doCatch(NoSuchPropertyException.class)
                         .to("mock:fail");
 
             }

@@ -28,30 +28,32 @@ public class Sqs2Configuration implements Cloneable {
 
     // common properties
     private String queueName;
-    @UriParam
+    @UriParam(label = "advanced")
     @Metadata(autowired = true)
     private SqsClient amazonSQSClient;
     @UriParam(label = "security", secret = true)
     private String accessKey;
     @UriParam(label = "security", secret = true)
     private String secretKey;
+    @UriParam(label = "security", secret = true)
+    private String sessionToken;
     @UriParam(defaultValue = "amazonaws.com")
     private String amazonAWSHost = "amazonaws.com";
     @UriParam(secret = true)
     private String queueOwnerAWSAccountId;
-    @UriParam
+    @UriParam(enums = "ap-south-2,ap-south-1,eu-south-1,eu-south-2,us-gov-east-1,me-central-1,il-central-1,ca-central-1,eu-central-1,us-iso-west-1,eu-central-2,eu-isoe-west-1,us-west-1,us-west-2,af-south-1,eu-north-1,eu-west-3,eu-west-2,eu-west-1,ap-northeast-3,ap-northeast-2,ap-northeast-1,me-south-1,sa-east-1,ap-east-1,cn-north-1,ca-west-1,us-gov-west-1,ap-southeast-1,ap-southeast-2,us-iso-east-1,ap-southeast-3,ap-southeast-4,us-east-1,us-east-2,cn-northwest-1,us-isob-east-1,aws-global,aws-cn-global,aws-us-gov-global,aws-iso-global,aws-iso-b-global")
     private String region;
-    @UriParam(enums = "HTTP,HTTPS", defaultValue = "HTTPS")
+    @UriParam(label = "proxy", enums = "HTTP,HTTPS", defaultValue = "HTTPS")
     private Protocol proxyProtocol = Protocol.HTTPS;
     @UriParam(label = "proxy")
     private String proxyHost;
     @UriParam(label = "proxy")
     private Integer proxyPort;
-    @UriParam(defaultValue = "false")
+    @UriParam
     private boolean autoCreateQueue;
-    @UriParam(defaultValue = "false")
+    @UriParam(label = "security")
     private boolean trustAllCertificates;
-    @UriParam(defaultValue = "false")
+    @UriParam
     private boolean overrideEndpoint;
     @UriParam
     private String uriEndpointOverride;
@@ -85,6 +87,10 @@ public class Sqs2Configuration implements Cloneable {
     private boolean serverSideEncryptionEnabled;
     @UriParam(label = "consumer", defaultValue = "1")
     private int concurrentConsumers = 1;
+    @UriParam(label = "consumer", defaultValue = "50")
+    private int concurrentRequestLimit = 50;
+    @UriParam(label = "consumer")
+    private String sortAttributeName;
 
     // producer properties
     @UriParam(label = "producer", javaType = "java.lang.String", enums = "useConstant,useExchangeId,usePropertyValue")
@@ -107,6 +113,7 @@ public class Sqs2Configuration implements Cloneable {
     @UriParam(label = "queue")
     private Integer receiveMessageWaitTimeSeconds;
     @UriParam(label = "queue")
+    @Metadata(supportFileReference = true)
     private String policy;
     @UriParam(label = "queue")
     private String queueUrl;
@@ -119,16 +126,17 @@ public class Sqs2Configuration implements Cloneable {
     @UriParam(defaultValue = "https")
     private String protocol = "https";
 
-    @UriParam(defaultValue = "false")
+    @UriParam(label = "security")
     private boolean useDefaultCredentialsProvider;
-
-    @UriParam(defaultValue = "false")
+    @UriParam(label = "security")
     private boolean useProfileCredentialsProvider;
-    @UriParam
+    @UriParam(label = "security")
+    private boolean useSessionCredentials;
+    @UriParam(label = "security")
     private String profileCredentialsName;
 
     /**
-     * Whether or not the queue is a FIFO queue
+     * Whether the queue is a FIFO queue
      */
     boolean isFifoQueue() {
         // AWS docs suggest this is valid derivation.
@@ -152,7 +160,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Name of queue. The queue will be created if they don't already exists.
+     * Name of queue. The queue will be created if they don't already exist.
      */
     public void setQueueName(String queueName) {
         this.queueName = queueName;
@@ -180,6 +188,17 @@ public class Sqs2Configuration implements Cloneable {
         this.secretKey = secretKey;
     }
 
+    public String getSessionToken() {
+        return sessionToken;
+    }
+
+    /**
+     * Amazon AWS Session Token used when the user needs to assume an IAM role
+     */
+    public void setSessionToken(String sessionToken) {
+        this.sessionToken = sessionToken;
+    }
+
     public boolean isDeleteAfterRead() {
         return deleteAfterRead;
     }
@@ -196,7 +215,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * To use the AmazonSQS as client
+     * To use the AmazonSQS client
      */
     public void setAmazonSQSClient(SqsClient amazonSQSClient) {
         this.amazonSQSClient = amazonSQSClient;
@@ -209,7 +228,7 @@ public class Sqs2Configuration implements Cloneable {
     /**
      * The duration (in seconds) that the received messages are hidden from subsequent retrieve requests after being
      * retrieved by a ReceiveMessage request to set in the com.amazonaws.services.sqs.model.SetQueueAttributesRequest.
-     * This only make sense if its different from defaultVisibilityTimeout. It changes the queue visibility timeout
+     * This only makes sense if it's different from defaultVisibilityTimeout. It changes the queue visibility timeout
      * attribute permanently.
      */
     public void setVisibilityTimeout(Integer visibilityTimeout) {
@@ -321,7 +340,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * If enabled then a scheduled background task will keep extending the message visibility on SQS. This is needed if
+     * If enabled, then a scheduled background task will keep extending the message visibility on SQS. This is needed if
      * it takes a long time to process the message. If set to true defaultVisibilityTimeout must be set. See details at
      * Amazon docs.
      */
@@ -358,7 +377,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Specify the queue owner aws account id when you need to connect the queue with different account owner.
+     * Specify the queue owner aws account id when you need to connect the queue with a different account owner.
      */
     public void setQueueOwnerAWSAccountId(String queueOwnerAWSAccountId) {
         this.queueOwnerAWSAccountId = queueOwnerAWSAccountId;
@@ -369,7 +388,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Whether or not to send the DeleteMessage to the SQS queue if the exchange has property with key
+     * Whether to send the DeleteMessage to the SQS queue if the exchange has property with key
      * {@link Sqs2Constants#SQS_DELETE_FILTERED} (CamelAwsSqsDeleteFiltered) set to true.
      */
     public void setDeleteIfFiltered(boolean deleteIfFiltered) {
@@ -382,7 +401,7 @@ public class Sqs2Configuration implements Cloneable {
 
     /**
      * The region in which SQS client needs to work. When using this parameter, the configuration will expect the
-     * lowercase name of the region (for example ap-east-1) You'll need to use the name Region.EU_WEST_1.id()
+     * lowercase name of the region (for example, ap-east-1) You'll need to use the name Region.EU_WEST_1.id()
      */
     public void setRegion(String region) {
         this.region = region;
@@ -399,13 +418,38 @@ public class Sqs2Configuration implements Cloneable {
         this.concurrentConsumers = concurrentConsumers;
     }
 
+    public int getConcurrentRequestLimit() {
+        return concurrentRequestLimit;
+    }
+
+    /**
+     * The maximum number of concurrent receive request send to AWS in single consumer polling.
+     */
+    public void setConcurrentRequestLimit(int concurrentRequestLimit) {
+        this.concurrentRequestLimit = concurrentRequestLimit;
+    }
+
+    public String getSortAttributeName() {
+        return sortAttributeName;
+    }
+
+    /**
+     * The name of the message attribute used for sorting the messages. When specified, the messages polled by the
+     * consumer will be sorted by this attribute. This configuration may be of importance when you configure
+     * maxMessagesPerPoll parameter exceeding 10. In such cases, the messages will be fetched concurrently so the
+     * ordering is not guaranteed.
+     */
+    public void setSortAttributeName(String sortAttributeName) {
+        this.sortAttributeName = sortAttributeName;
+    }
+
     public String getQueueUrl() {
         return queueUrl;
     }
 
     /**
      * To define the queueUrl explicitly. All other parameters, which would influence the queueUrl, are ignored. This
-     * parameter is intended to be used, to connect to a mock implementation of SQS, for testing purposes.
+     * parameter is intended to be used to connect to a mock implementation of SQS, for testing purposes.
      */
     public void setQueueUrl(String queueUrl) {
         this.queueUrl = queueUrl;
@@ -480,7 +524,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Only for FIFO queues. Strategy for setting the messageGroupId on the message. Can be one of the following
+     * Only for FIFO queues. Strategy for setting the messageGroupId on the message. It can be one of the following
      * options: *useConstant*, *useExchangeId*, *usePropertyValue*. For the *usePropertyValue* option, the value of
      * property "CamelAwsMessageGroupId" will be used.
      */
@@ -509,9 +553,9 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Only for FIFO queues. Strategy for setting the messageDeduplicationId on the message. Can be one of the following
-     * options: *useExchangeId*, *useContentBasedDeduplication*. For the *useContentBasedDeduplication* option, no
-     * messageDeduplicationId will be set on the message.
+     * Only for FIFO queues. Strategy for setting the messageDeduplicationId on the message. It can be one of the
+     * following options: *useExchangeId*, *useContentBasedDeduplication*. For the *useContentBasedDeduplication*
+     * option, no messageDeduplicationId will be set on the message.
      */
     public void setMessageDeduplicationIdStrategy(String strategy) {
         if ("useExchangeId".equalsIgnoreCase(strategy)) {
@@ -543,7 +587,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Setting the autocreation of the queue
+     * Setting the auto-creation of the queue
      */
     public void setAutoCreateQueue(boolean autoCreateQueue) {
         this.autoCreateQueue = autoCreateQueue;
@@ -594,6 +638,18 @@ public class Sqs2Configuration implements Cloneable {
         return useProfileCredentialsProvider;
     }
 
+    public boolean isUseSessionCredentials() {
+        return useSessionCredentials;
+    }
+
+    /**
+     * Set whether the SQS client should expect to use Session Credentials. This is useful in a situation in which the
+     * user needs to assume an IAM role for doing operations in SQS.
+     */
+    public void setUseSessionCredentials(boolean useSessionCredentials) {
+        this.useSessionCredentials = useSessionCredentials;
+    }
+
     public String getBatchSeparator() {
         return batchSeparator;
     }
@@ -610,7 +666,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * What to do if sending to AWS SQS has more messages than AWS allows (currently only maximum 10 message headers is
+     * What to do if sending to AWS SQS has more messages than AWS allows (currently only maximum 10 message headers are
      * allowed).
      *
      * WARN will log a WARN about the limit is for each additional header, so the message can be sent to AWS. WARN_ONCE
@@ -627,8 +683,8 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * Set the need for overriding the endpoint. This option needs to be used in combination with uriEndpointOverride
-     * option
+     * Set the need for overriding the endpoint. This option needs to be used in combination with the
+     * uriEndpointOverride option
      */
     public void setOverrideEndpoint(boolean overrideEndpoint) {
         this.overrideEndpoint = overrideEndpoint;
@@ -650,7 +706,7 @@ public class Sqs2Configuration implements Cloneable {
     }
 
     /**
-     * If using a profile credentials provider this parameter will set the profile name
+     * If using a profile credentials provider, this parameter will set the profile name
      */
     public void setProfileCredentialsName(String profileCredentialsName) {
         this.profileCredentialsName = profileCredentialsName;

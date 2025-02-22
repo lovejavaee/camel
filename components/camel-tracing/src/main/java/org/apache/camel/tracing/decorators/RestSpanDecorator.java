@@ -16,8 +16,8 @@
  */
 package org.apache.camel.tracing.decorators;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,12 +25,8 @@ import java.util.List;
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.tracing.SpanAdapter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class RestSpanDecorator extends AbstractHttpSpanDecorator {
-
-    private static final Logger LOG = LoggerFactory.getLogger(RestSpanDecorator.class);
 
     @Override
     public String getComponent() {
@@ -79,11 +75,7 @@ public class RestSpanDecorator extends AbstractHttpSpanDecorator {
                     path = path.substring(0, index);
                 }
                 path = path.replace(":", "");
-                try {
-                    path = URLDecoder.decode(path, "UTF-8");
-                } catch (UnsupportedEncodingException e) {
-                    LOG.debug("Failed to decode URL path '" + path + "', ignoring exception", e);
-                }
+                path = URLDecoder.decode(path, StandardCharsets.UTF_8);
             }
         }
         return path;

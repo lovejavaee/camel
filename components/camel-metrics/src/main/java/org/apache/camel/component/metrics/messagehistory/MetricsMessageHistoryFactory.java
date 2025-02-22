@@ -151,7 +151,7 @@ public class MetricsMessageHistoryFactory extends ServiceSupport
     }
 
     @Override
-    public MessageHistory newMessageHistory(String routeId, NamedNode node, long timestamp, Exchange exchange) {
+    public MessageHistory newMessageHistory(String routeId, NamedNode node, Exchange exchange) {
         if (nodePattern != null) {
             String name = node.getShortName();
             String[] parts = nodePattern.split(",");
@@ -169,7 +169,7 @@ public class MetricsMessageHistoryFactory extends ServiceSupport
         }
 
         Timer timer = metricsRegistry.timer(createName("history", routeId, node.getId()));
-        return new MetricsMessageHistory(routeId, node, timer, timestamp, msg);
+        return new MetricsMessageHistory(routeId, node, timer, msg);
     }
 
     private String createName(String type, String routeId, String id) {

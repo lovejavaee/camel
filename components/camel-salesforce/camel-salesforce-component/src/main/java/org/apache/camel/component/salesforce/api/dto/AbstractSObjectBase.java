@@ -25,7 +25,6 @@ import com.fasterxml.jackson.annotation.JsonFilter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-//CHECKSTYLE:OFF
 @JsonFilter("fieldsToNull")
 public abstract class AbstractSObjectBase extends AbstractDTOBase {
 
@@ -58,12 +57,12 @@ public abstract class AbstractSObjectBase extends AbstractDTOBase {
      * Useful when reusing a DTO for a new record, or for update/upsert.
      * </p>
      * <p>
-     * This method does not clear {@code Name} to allow updating it, so it must
-     * be explicitly set to {@code null} if needed.
+     * This method does not clear {@code Name} to allow updating it, so it must be explicitly set to {@code null} if
+     * needed.
      * </p>
      */
     public final void clearBaseFields() {
-//
+        //
         attributes = null;
         Id = null;
         IsDeleted = null;
@@ -218,4 +217,3 @@ public abstract class AbstractSObjectBase extends AbstractDTOBase {
     }
 
 }
-//CHECKSTYLE:ON

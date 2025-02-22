@@ -20,7 +20,7 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.model.language.DatasonnetExpression;
 import org.apache.camel.model.language.ExpressionDefinition;
 
-public class DatasonnetExpressionReifier extends TypedExpressionReifier<DatasonnetExpression> {
+public class DatasonnetExpressionReifier extends SingleInputTypedExpressionReifier<DatasonnetExpression> {
 
     public DatasonnetExpressionReifier(CamelContext camelContext, ExpressionDefinition definition) {
         super(camelContext, definition);
@@ -28,10 +28,11 @@ public class DatasonnetExpressionReifier extends TypedExpressionReifier<Datasonn
 
     @Override
     protected Object[] createProperties() {
-        Object[] properties = new Object[3];
-        properties[0] = definition.getResultType();
-        properties[1] = parseString(definition.getBodyMediaType());
-        properties[2] = parseString(definition.getOutputMediaType());
+        Object[] properties = new Object[4];
+        properties[0] = asResultType();
+        properties[1] = parseString(definition.getSource());
+        properties[2] = parseString(definition.getBodyMediaType());
+        properties[3] = parseString(definition.getOutputMediaType());
         return properties;
     }
 }

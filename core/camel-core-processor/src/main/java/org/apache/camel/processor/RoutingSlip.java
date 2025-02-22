@@ -26,13 +26,11 @@ import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Expression;
 import org.apache.camel.FailedToCreateProducerException;
-import org.apache.camel.Message;
 import org.apache.camel.NoTypeConversionAvailableException;
 import org.apache.camel.Route;
 import org.apache.camel.Traceable;
 import org.apache.camel.spi.EndpointUtilizationStatistics;
 import org.apache.camel.spi.IdAware;
-import org.apache.camel.spi.NormalizedEndpointUri;
 import org.apache.camel.spi.ProducerCache;
 import org.apache.camel.spi.RouteIdAware;
 import org.apache.camel.support.AsyncProcessorSupport;
@@ -187,8 +185,8 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
         Expression exp = expression;
         Object slip = exchange.removeProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT);
         if (slip != null) {
-            if (slip instanceof Expression) {
-                exp = (Expression) slip;
+            if (slip instanceof Expression expression) {
+                exp = expression;
             } else {
                 exp = ExpressionBuilder.constantExpression(slip);
             }
@@ -288,7 +286,7 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
                 FailedToCreateProducerException e = current.getException(FailedToCreateProducerException.class);
                 if (e != null) {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("Endpoint uri is invalid: " + endpoint + ". This exception will be ignored.", e);
+                        LOG.debug("Endpoint uri is invalid: {}. This exception will be ignored.", endpoint, e);
                     }
                     current.setException(null);
                 }
@@ -318,42 +316,11 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
     }
 
     protected static Object prepareRecipient(Exchange exchange, Object recipient) throws NoTypeConversionAvailableException {
-        if (recipient instanceof Endpoint || recipient instanceof NormalizedEndpointUri) {
-            return recipient;
-        } else if (recipient instanceof String) {
-            // trim strings as end users might have added spaces between separators
-            recipient = ((String) recipient).trim();
-        }
-        if (recipient != null) {
-            CamelContext ecc = exchange.getContext();
-            String uri;
-            if (recipient instanceof String) {
-                uri = (String) recipient;
-            } else {
-                // convert to a string type we can work with
-                uri = ecc.getTypeConverter().mandatoryConvertTo(String.class, exchange, recipient);
-            }
-            // optimize and normalize endpoint
-            return ecc.getCamelContextExtension().normalizeUri(uri);
-        }
-        return null;
+        return ProcessorHelper.prepareRecipient(exchange, recipient);
     }
 
     protected static Endpoint getExistingEndpoint(Exchange exchange, Object recipient) {
-        if (recipient instanceof Endpoint) {
-            return (Endpoint) recipient;
-        }
-        if (recipient != null) {
-            if (recipient instanceof NormalizedEndpointUri) {
-                NormalizedEndpointUri nu = (NormalizedEndpointUri) recipient;
-                CamelContext ecc = exchange.getContext();
-                return ecc.getCamelContextExtension().hasEndpoint(nu);
-            } else {
-                String uri = recipient.toString();
-                return exchange.getContext().hasEndpoint(uri);
-            }
-        }
-        return null;
+        return ProcessorHelper.getExistingEndpoint(exchange, recipient);
     }
 
     protected Endpoint resolveEndpoint(Exchange exchange, Object recipient, boolean prototype) throws Exception {
@@ -364,7 +331,7 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
                     : ExchangeHelper.resolveEndpoint(exchange, recipient);
         } catch (Exception e) {
             if (isIgnoreInvalidEndpoints()) {
-                LOG.debug("Endpoint uri is invalid: " + recipient + ". This exception will be ignored.", e);
+                LOG.debug("Endpoint uri is invalid: {}. This exception will be ignored.", recipient, e);
             } else {
                 throw e;
             }
@@ -433,6 +400,7 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
             // set property which endpoint we send to and the producer that can do it
             ex.setProperty(ExchangePropertyKey.TO_ENDPOINT, endpoint.getEndpointUri());
             ex.setProperty(ExchangePropertyKey.SLIP_ENDPOINT, endpoint.getEndpointUri());
+            // routing slip needs to have access to the producer
             ex.setProperty(ExchangePropertyKey.SLIP_PRODUCER, p);
 
             return target.process(ex, new AsyncCallback() {
@@ -461,7 +429,7 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
                                 FailedToCreateProducerException e = current.getException(FailedToCreateProducerException.class);
                                 if (e != null) {
                                     if (LOG.isDebugEnabled()) {
-                                        LOG.debug("Endpoint uri is invalid: " + endpoint + ". This exception will be ignored.",
+                                        LOG.debug("Endpoint uri is invalid: {}. This exception will be ignored.", endpoint,
                                                 e);
                                     }
                                     current.setException(null);
@@ -498,14 +466,7 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
                             }
 
                             // prepare and process the routing slip
-                            final boolean prototypeEndpoint = prototype;
-                            AsyncCallback cbNext = doneNext -> {
-                                // and stop prototype endpoints
-                                if (prototypeEndpoint) {
-                                    ServiceHelper.stopAndShutdownService(nextEndpoint);
-                                }
-                                cb.done(doneNext);
-                            };
+                            final AsyncCallback cbNext = getNextCallback(prototype, nextEndpoint, cb);
                             boolean sync = processExchange(nextEndpoint, current, original, cbNext, iter, prototype);
                             current = prepareExchangeForRoutingSlip(current, nextEndpoint);
 
@@ -527,7 +488,7 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
 
                         // copy results back to the original exchange
                         ExchangeHelper.copyResults(original, current);
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
                         ex.setException(e);
                     }
 
@@ -537,6 +498,18 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
                 }
             });
         });
+    }
+
+    private static AsyncCallback getNextCallback(boolean prototype, Endpoint nextEndpoint, AsyncCallback cb) {
+        final boolean prototypeEndpoint = prototype;
+        AsyncCallback cbNext = doneNext -> {
+            // and stop prototype endpoints
+            if (prototypeEndpoint) {
+                ServiceHelper.stopAndShutdownService(nextEndpoint);
+            }
+            cb.done(doneNext);
+        };
+        return cbNext;
     }
 
     @Override
@@ -566,13 +539,6 @@ public class RoutingSlip extends AsyncProcessorSupport implements Traceable, IdA
 
     public EndpointUtilizationStatistics getEndpointUtilizationStatistics() {
         return producerCache.getEndpointUtilizationStatistics();
-    }
-
-    /**
-     * Returns the outbound message if available. Otherwise return the inbound message.
-     */
-    private Message getResultMessage(Exchange exchange) {
-        return exchange.getMessage();
     }
 
     /**

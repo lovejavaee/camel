@@ -23,9 +23,12 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class MulticastParallelStreamingTest extends ContextTestSupport {
 
     @Test
@@ -43,7 +46,7 @@ public class MulticastParallelStreamingTest extends ContextTestSupport {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedMessageCount(10);
         mock.whenAnyExchangeReceived(new Processor() {
-            public void process(Exchange exchange) throws Exception {
+            public void process(Exchange exchange) {
                 // they should all be BA as B is faster than A
                 assertEquals("BA", exchange.getIn().getBody(String.class));
             }
@@ -57,10 +60,10 @@ public class MulticastParallelStreamingTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").multicast(new AggregationStrategy() {
                     public Exchange aggregate(Exchange oldExchange, Exchange newExchange) {
                         if (oldExchange == null) {
@@ -75,7 +78,7 @@ public class MulticastParallelStreamingTest extends ContextTestSupport {
                         // use end to indicate end of multicast route
                         .end().to("mock:result");
 
-                from("direct:a").delay(250).asyncDelayed().setBody(constant("A"));
+                from("direct:a").delay(500).asyncDelayed().setBody(constant("A"));
 
                 from("direct:b").setBody(constant("B"));
             }

@@ -18,6 +18,8 @@ package org.apache.camel.component.arangodb;
 
 import java.util.Map;
 
+import com.arangodb.ArangoDB;
+import io.vertx.core.Vertx;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
@@ -28,6 +30,10 @@ import org.apache.camel.util.ObjectHelper;
 @Component("arangodb")
 public class ArangoDbComponent extends DefaultComponent {
 
+    @Metadata(label = "advanced", autowired = true)
+    private ArangoDB arangoDB;
+    @Metadata(label = "advanced", autowired = true)
+    private Vertx vertx;
     @Metadata
     private ArangoDbConfiguration configuration = new ArangoDbConfiguration();
 
@@ -47,9 +53,33 @@ public class ArangoDbComponent extends DefaultComponent {
         final ArangoDbConfiguration configurationClone
                 = this.configuration != null ? this.configuration.copy() : new ArangoDbConfiguration();
         configurationClone.setDatabase(remaining);
-        Endpoint endpoint = new ArangoDbEndpoint(uri, this, configurationClone);
+        ArangoDbEndpoint endpoint = new ArangoDbEndpoint(uri, this, configurationClone);
+        endpoint.setArangoDB(arangoDB);
+        endpoint.setVertx(vertx);
         setProperties(endpoint, parameters);
         return endpoint;
+    }
+
+    public ArangoDB getArangoDB() {
+        return arangoDB;
+    }
+
+    /**
+     * To use an existing ArangDB client.
+     */
+    public void setArangoDB(ArangoDB arangoDB) {
+        this.arangoDB = arangoDB;
+    }
+
+    public Vertx getVertx() {
+        return vertx;
+    }
+
+    /**
+     * To use an existing Vertx in the ArangoDB client.
+     */
+    public void setVertx(Vertx vertx) {
+        this.vertx = vertx;
     }
 
     public ArangoDbConfiguration getConfiguration() {
@@ -58,8 +88,6 @@ public class ArangoDbComponent extends DefaultComponent {
 
     /**
      * Component configuration
-     *
-     * @param configuration
      */
     public void setConfiguration(ArangoDbConfiguration configuration) {
         this.configuration = configuration;

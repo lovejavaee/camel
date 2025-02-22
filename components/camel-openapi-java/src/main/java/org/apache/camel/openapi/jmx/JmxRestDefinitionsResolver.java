@@ -17,7 +17,6 @@
 package org.apache.camel.openapi.jmx;
 
 import java.lang.management.ManagementFactory;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -28,7 +27,6 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.model.rest.RestDefinition;
 import org.apache.camel.model.rest.RestsDefinition;
 import org.apache.camel.openapi.RestDefinitionsResolver;
-import org.apache.camel.openapi.RestOpenApiSupport;
 import org.apache.camel.spi.Resource;
 import org.apache.camel.spi.annotations.JdkService;
 import org.apache.camel.support.PluginHelper;
@@ -44,7 +42,7 @@ import static org.apache.camel.openapi.RestDefinitionsResolver.JMX_REST_DEFINITI
 @JdkService(JMX_REST_DEFINITION_RESOLVER)
 public class JmxRestDefinitionsResolver implements RestDefinitionsResolver {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RestOpenApiSupport.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JmxRestDefinitionsResolver.class);
 
     @Override
     public List<RestDefinition> getRestDefinitions(CamelContext camelContext, String camelId) throws Exception {
@@ -77,23 +75,6 @@ public class JmxRestDefinitionsResolver implements RestDefinitionsResolver {
         }
 
         return null;
-    }
-
-    @Override
-    public List<String> findCamelContexts() throws Exception {
-        List<String> answer = new ArrayList<>();
-
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        Set<ObjectName> names = server.queryNames(new ObjectName("*:type=context,*"), null);
-        for (ObjectName on : names) {
-
-            String id = on.getKeyProperty("name");
-            if (id.startsWith("\"") && id.endsWith("\"")) {
-                id = id.substring(1, id.length() - 1);
-            }
-            answer.add(id);
-        }
-        return answer;
     }
 
 }

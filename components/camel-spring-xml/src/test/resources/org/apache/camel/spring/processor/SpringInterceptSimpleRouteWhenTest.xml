@@ -26,14 +26,15 @@
 
     <!-- START SNIPPET: e1 -->
     <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
         <!-- here we intercept each processing step in the routing and do a detour
              routing where we route the exhange to the mock:intercepted endpoint.
              We have applied a when predicate so the interceptor only applies
              if the message body contains the string word 'Hello' -->
         <intercept>
-            <when>
+            <onWhen>
                 <simple>${in.body} contains 'Hello'</simple>
-            </when>
+            </onWhen>
             <to uri="mock:intercepted"/>
         </intercept>
 

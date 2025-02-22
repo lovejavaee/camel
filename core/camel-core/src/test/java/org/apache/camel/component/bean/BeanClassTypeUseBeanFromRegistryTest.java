@@ -21,7 +21,7 @@ import org.apache.camel.FailedToCreateRouteException;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BeanClassTypeUseBeanFromRegistryTest extends ContextTestSupport {
 
@@ -35,7 +35,7 @@ public class BeanClassTypeUseBeanFromRegistryTest extends ContextTestSupport {
         context.getRegistry().bind("foo", new MyFooBean());
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(FooService.class).to("mock:result");
             }
         });
@@ -54,32 +54,30 @@ public class BeanClassTypeUseBeanFromRegistryTest extends ContextTestSupport {
         context.getRegistry().bind("bar", new MyFooBean());
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(FooService.class).to("mock:result");
             }
         });
-        try {
-            context.start();
-            fail("Should throw exception");
-        } catch (FailedToCreateRouteException e) {
-            assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-        }
+
+        FailedToCreateRouteException e = assertThrows(FailedToCreateRouteException.class,
+                () -> context.start(),
+                "Should throw exception");
+        assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
     }
 
     @Test
     public void testZeroInstancesInRegistry() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(FooService.class).to("mock:result");
             }
         });
-        try {
-            context.start();
-            fail("Should throw exception");
-        } catch (FailedToCreateRouteException e) {
-            assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-        }
+
+        FailedToCreateRouteException e = assertThrows(FailedToCreateRouteException.class,
+                () -> context.start(),
+                "Should throw exception");
+        assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
     }
 
 }

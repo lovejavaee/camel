@@ -25,8 +25,6 @@ import org.apache.camel.spi.Metadata;
 
 /**
  * A key value pair where the value is a literal value
- *
- * @see PropertyExpressionDefinition
  */
 @Metadata(label = "configuration")
 @XmlRootElement(name = "property")
@@ -41,13 +39,22 @@ public class PropertyDefinition {
     public PropertyDefinition() {
     }
 
+    protected PropertyDefinition(PropertyDefinition source) {
+        this.key = source.key;
+        this.value = source.value;
+    }
+
     public PropertyDefinition(String key, String value) {
         this.key = key;
         this.value = value;
     }
 
+    public PropertyDefinition copyDefinition() {
+        return new PropertyDefinition(this);
+    }
+
     /**
-     * Property key
+     * The name of the property
      */
     public void setKey(String key) {
         this.key = key;
@@ -58,7 +65,7 @@ public class PropertyDefinition {
     }
 
     /**
-     * Property value
+     * The property value.
      */
     public void setValue(String value) {
         this.value = value;

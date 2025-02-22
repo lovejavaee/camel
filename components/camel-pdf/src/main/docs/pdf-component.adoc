@@ -5,6 +5,7 @@
 :description: Create, modify or extract content from PDF documents.
 :since: 2.16
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: pdf
@@ -13,12 +14,12 @@
 
 *{component-header}*
 
-The PDF components provides the ability to create, modify or extract
+The PDF component provides the ability to create, modify or extract
 content from PDF documents. This component uses
-https://pdfbox.apache.org/[Apache PDFBox] as underlying library to work
+https://pdfbox.apache.org/[Apache PDFBox] as the underlying library to work
 with PDF documents.
 
-In order to use the PDF component, Maven users will need to add the
+To use the PDF component, Maven users will need to add the
 following dependency to their `pom.xml`:
 
 *pom.xml*
@@ -58,5 +59,26 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
+== Usage
+
+=== Type converter
+
+Since Camel 4.8, the component is capable of doing simple document conversions. For instance,
+suppose you are receiving a PDF byte as a byte array:
+
+
+[source,java]
+----
+from("direct:start")
+    .to("pdf:extractText")
+    .to("mock:result");
+----
+
+
+It is now possible to get the body as a PD Document by using `PDDocument doc = exchange.getIn().getBody(PDDocument.class);`,
+which saves the trouble of converting the byte-array to a document.
+
+NOTE: this only works for unprotected PDF files. For password-protected, the files still need to be converted
+manually.
 
 include::spring-boot:partial$starter.adoc[]

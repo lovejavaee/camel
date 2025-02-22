@@ -37,8 +37,8 @@ public class CreateEndpointManualIssueTest {
         CamelContext camelContext = new DefaultCamelContext();
         camelContext.start();
 
-        org.apache.http.entity.ContentType contentTypeEdifact
-                = org.apache.http.entity.ContentType.create("application/edifact", (Charset) null);
+        org.apache.hc.core5.http.ContentType contentTypeEdifact
+                = org.apache.hc.core5.http.ContentType.create("application/edifact", (Charset) null);
 
         String methodName = "send";
         AS2ApiName as2ApiNameClient = AS2ApiName.CLIENT;
@@ -54,7 +54,6 @@ public class CreateEndpointManualIssueTest {
         endpointConfiguration.setAs2From("mycompanyAS2");
         endpointConfiguration.setEdiMessageType(contentTypeEdifact);
         endpointConfiguration.setFrom("dk2kEdi");
-        endpointConfiguration.setSubject("mysubject");
         endpointConfiguration.setSubject("mysubject");
         endpointConfiguration.setSigningAlgorithm(AS2SignatureAlgorithm.MD2WITHRSA);
         endpointConfiguration.setEdiMessageTransferEncoding("7bit");
@@ -78,7 +77,7 @@ public class CreateEndpointManualIssueTest {
         Throwable cause = out.getException();
         Assertions.assertNotNull(cause);
 
-        Assertions.assertTrue(cause.getMessage().contains("Missing properties for send, need one or more from (9 args)"));
+        Assertions.assertTrue(cause.getMessage().contains("Missing properties for send, need one or more from (10 args)"));
         Assertions.assertFalse(cause.getMessage().contains("ediMessageType"));
     }
 }

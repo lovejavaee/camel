@@ -22,10 +22,11 @@ import org.apache.camel.impl.cloud.DefaultServiceDiscovery;
 /**
  * Discovers where services are running on which servers in Kubernetes.
  */
+@Deprecated
 public abstract class KubernetesServiceDiscovery extends DefaultServiceDiscovery {
     private final KubernetesConfiguration configuration;
 
-    public KubernetesServiceDiscovery(KubernetesConfiguration configuration) {
+    protected KubernetesServiceDiscovery(KubernetesConfiguration configuration) {
         this.configuration = configuration;
     }
 

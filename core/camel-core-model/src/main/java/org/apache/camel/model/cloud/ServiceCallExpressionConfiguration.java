@@ -41,7 +41,7 @@ import org.apache.camel.support.PropertyBindingSupport;
 @XmlRootElement(name = "serviceExpression")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Configurer(extended = true)
-@Deprecated
+@Deprecated(since = "3.19.0")
 public class ServiceCallExpressionConfiguration extends ServiceCallConfiguration implements ServiceExpressionFactory {
     @XmlTransient
     private final ServiceCallDefinition parent;
@@ -170,8 +170,7 @@ public class ServiceCallExpressionConfiguration extends ServiceCallConfiguration
                     = CamelContextHelper.lookup(camelContext, factoryKey, ServiceExpressionFactory.class);
             if (factory != null) {
                 // If a factory is found in the registry do not re-configure it
-                // as
-                // it should be pre-configured.
+                // as it should be pre-configured.
                 answer = factory.newInstance(camelContext);
             } else {
 
@@ -179,32 +178,30 @@ public class ServiceCallExpressionConfiguration extends ServiceCallConfiguration
                 try {
                     // Then use Service factory.
                     type = camelContext.getCamelContextExtension()
-                            .getFactoryFinder(ServiceCallDefinitionConstants.RESOURCE_PATH).findClass(factoryKey).orElse(null);
+                            .getFactoryFinder(ServiceCallDefinitionConstants.RESOURCE_PATH).findClass(factoryKey).orElseThrow();
                 } catch (Exception e) {
                     throw new NoFactoryAvailableException(ServiceCallDefinitionConstants.RESOURCE_PATH + factoryKey, e);
                 }
 
-                if (type != null) {
-                    if (ServiceExpressionFactory.class.isAssignableFrom(type)) {
-                        factory = (ServiceExpressionFactory) camelContext.getInjector().newInstance(type, false);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "Resolving Expression: " + factoryKey
-                                                           + " detected type conflict: Not a ExpressionFactory implementation. Found: "
-                                                           + type.getName());
-                    }
+                if (ServiceExpressionFactory.class.isAssignableFrom(type)) {
+                    factory = (ServiceExpressionFactory) camelContext.getInjector().newInstance(type, false);
+                } else {
+                    throw new IllegalArgumentException(
+                            "Resolving Expression: " + factoryKey
+                                                       + " detected type conflict: Not a ExpressionFactory implementation. Found: "
+                                                       + type.getName());
                 }
 
                 try {
                     Map<String, Object> parameters = getConfiguredOptions(camelContext, this);
 
                     parameters.replaceAll((k, v) -> {
-                        if (v instanceof String) {
+                        if (v instanceof String str) {
                             try {
-                                v = camelContext.resolvePropertyPlaceholders((String) v);
+                                v = camelContext.resolvePropertyPlaceholders(str);
                             } catch (Exception e) {
                                 throw new IllegalArgumentException(
-                                        String.format("Exception while resolving %s (%s)", k, v.toString()), e);
+                                        String.format("Exception while resolving %s (%s)", k, v), e);
                             }
                         }
 

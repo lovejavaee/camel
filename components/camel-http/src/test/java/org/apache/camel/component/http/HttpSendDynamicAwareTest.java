@@ -21,8 +21,6 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.handler.DrinkValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -33,23 +31,19 @@ public class HttpSendDynamicAwareTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/moes", new DrinkValidationHandler(GET.name(), null, null, "drink"))
                 .register("/joes", new DrinkValidationHandler(GET.name(), null, null, "drink")).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() {
 
         if (localServer != null) {
             localServer.stop();
@@ -57,10 +51,10 @@ public class HttpSendDynamicAwareTest extends BaseHttpTest {
     }
 
     @Override
-    protected RoutesBuilder createRouteBuilder() throws Exception {
+    protected RoutesBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:moes")
                         .toD("http://localhost:" + localServer.getLocalPort()
                              + "/moes?throwExceptionOnFailure=false&drink=${header.drink}");
@@ -73,7 +67,7 @@ public class HttpSendDynamicAwareTest extends BaseHttpTest {
     }
 
     @Test
-    public void testDynamicAware() throws Exception {
+    public void testDynamicAware() {
         String out = fluentTemplate.to("direct:moes").withHeader("drink", "beer").request(String.class);
         assertEquals("Drinking beer", out);
 

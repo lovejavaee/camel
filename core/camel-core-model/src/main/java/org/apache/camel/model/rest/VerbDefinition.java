@@ -79,11 +79,17 @@ public abstract class VerbDefinition extends OptionalIdentifiedDefinition<VerbDe
     @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "false")
     private String enableCORS;
     @XmlAttribute
+    @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "false")
+    private String enableNoContentResponse;
+    @XmlAttribute
     @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "true")
     private String apiDocs;
     @XmlAttribute
     @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "false")
     private String deprecated;
+    @XmlAttribute
+    @Metadata(label = "advanced", javaType = "java.lang.Boolean")
+    private String streamCache;
     @XmlAttribute
     private String routeId;
     @XmlElement(required = true)
@@ -117,6 +123,31 @@ public abstract class VerbDefinition extends OptionalIdentifiedDefinition<VerbDe
 
     public String getRouteId() {
         return routeId;
+    }
+
+    /**
+     * Whether stream caching is enabled on this rest operation.
+     */
+    public String getStreamCache() {
+        return streamCache;
+    }
+
+    /**
+     * Whether stream caching is enabled on this rest operation.
+     */
+    public void setStreamCache(String streamCache) {
+        this.streamCache = streamCache;
+    }
+
+    /**
+     * Enable or disables stream caching for this rest operation.
+     *
+     * @param  streamCache whether to use stream caching (true or false), the value can be a property placeholder
+     * @return             the builder
+     */
+    public VerbDefinition streamCache(String streamCache) {
+        setStreamCache(streamCache);
+        return this;
     }
 
     /**
@@ -262,6 +293,19 @@ public abstract class VerbDefinition extends OptionalIdentifiedDefinition<VerbDe
         this.enableCORS = enableCORS;
     }
 
+    public String getEnableNoContentResponse() {
+        return enableNoContentResponse;
+    }
+
+    /**
+     * Whether to return HTTP 204 with an empty body when a response contains an empty JSON object or XML root object.
+     * <p/>
+     * The default value is false.
+     */
+    public void setEnableNoContentResponse(String enableNoContentResponse) {
+        this.enableNoContentResponse = enableNoContentResponse;
+    }
+
     public String getType() {
         return type;
     }
@@ -338,6 +382,10 @@ public abstract class VerbDefinition extends OptionalIdentifiedDefinition<VerbDe
      * handles this REST call.
      */
     public void setTo(ToDefinition to) {
+        if (this.to != null) {
+            throw new IllegalArgumentException(
+                    "This verb has already set to endpoint. It is not possible to configure multiple 'to' with Rest DSL.");
+        }
         this.to = to;
     }
 

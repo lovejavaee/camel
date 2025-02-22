@@ -18,6 +18,8 @@ package org.apache.camel.component.aws2.athena.client;
 
 import org.apache.camel.component.aws2.athena.Athena2Configuration;
 import org.apache.camel.component.aws2.athena.client.impl.Athena2ClientIAMOptimizedImpl;
+import org.apache.camel.component.aws2.athena.client.impl.Athena2ClientIAMProfileOptimizedImpl;
+import org.apache.camel.component.aws2.athena.client.impl.Athena2ClientSessionTokenImpl;
 import org.apache.camel.component.aws2.athena.client.impl.Athena2ClientStandardImpl;
 
 /**
@@ -35,7 +37,14 @@ public final class Athena2ClientFactory {
      * @return               AthenaClient
      */
     public static Athena2InternalClient getAWSAthenaClient(Athena2Configuration configuration) {
-        return Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())
-                ? new Athena2ClientIAMOptimizedImpl(configuration) : new Athena2ClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new Athena2ClientIAMOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new Athena2ClientIAMProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new Athena2ClientSessionTokenImpl(configuration);
+        } else {
+            return new Athena2ClientStandardImpl(configuration);
+        }
     }
 }

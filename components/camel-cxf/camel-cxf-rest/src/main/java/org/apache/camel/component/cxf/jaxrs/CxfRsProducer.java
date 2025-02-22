@@ -24,6 +24,7 @@ import java.lang.reflect.Type;
 import java.net.CookieStore;
 import java.net.HttpCookie;
 import java.net.URLDecoder;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -153,11 +154,7 @@ public class CxfRsProducer extends DefaultAsyncProducer {
 
         // set the path
         if (path != null) {
-            if (ObjectHelper.isNotEmpty(pathValues) && pathValues.length > 0) {
-                client.path(path, pathValues);
-            } else {
-                client.path(path);
-            }
+            setupPath(pathValues, client, path);
         }
 
         CxfRsEndpoint cxfRsEndpoint = (CxfRsEndpoint) getEndpoint();
@@ -246,7 +243,7 @@ public class CxfRsProducer extends DefaultAsyncProducer {
             insertQueryParametersFromMap(client, maps);
         } else {
             String queryString = inMessage.getHeader(CxfConstants.HTTP_QUERY, String.class);
-            if (queryString != null) {
+            if (queryString != null && !queryString.isEmpty()) {
                 // Insert QueryParameters from HTTP_QUERY header
                 insertQueryParametersFromQueryString(client, queryString, ExchangeHelper.getCharsetName(exchange));
             } else {
@@ -305,27 +302,21 @@ public class CxfRsProducer extends DefaultAsyncProducer {
         if (bus != null) {
             cfb.setBus(bus);
         }
-        WebClient client = cfb.createWebClient();
+        final WebClient client = cfb.createWebClient();
         ((CxfRsEndpoint) getEndpoint()).getChainedCxfRsEndpointConfigurer().configureClient(client);
-        String httpMethod = inMessage.getHeader(CxfConstants.HTTP_METHOD, String.class);
-        Class<?> responseClass = inMessage.getHeader(CxfConstants.CAMEL_CXF_RS_RESPONSE_CLASS, Class.class);
-        Type genericType = inMessage.getHeader(CxfConstants.CAMEL_CXF_RS_RESPONSE_GENERIC_TYPE, Type.class);
-        Object[] pathValues = inMessage.getHeader(CxfConstants.CAMEL_CXF_RS_VAR_VALUES, Object[].class);
-        String path = inMessage.getHeader(CxfConstants.HTTP_PATH, String.class);
+        final String httpMethod = inMessage.getHeader(CxfConstants.HTTP_METHOD, String.class);
+        final Class<?> responseClass = inMessage.getHeader(CxfConstants.CAMEL_CXF_RS_RESPONSE_CLASS, Class.class);
+        final Type genericType = inMessage.getHeader(CxfConstants.CAMEL_CXF_RS_RESPONSE_GENERIC_TYPE, Type.class);
+        final Object[] pathValues = inMessage.getHeader(CxfConstants.CAMEL_CXF_RS_VAR_VALUES, Object[].class);
+        final String path = inMessage.getHeader(CxfConstants.HTTP_PATH, String.class);
 
         if (LOG.isTraceEnabled()) {
-            LOG.trace("HTTP method = {}", httpMethod);
-            LOG.trace("path = {}", path);
-            LOG.trace("responseClass = {}", responseClass);
+            logInvokation(httpMethod, path, responseClass);
         }
 
         // set the path
         if (path != null) {
-            if (ObjectHelper.isNotEmpty(pathValues) && pathValues.length > 0) {
-                client.path(path, pathValues);
-            } else {
-                client.path(path);
-            }
+            setupPath(pathValues, client, path);
         }
 
         CxfRsEndpoint cxfRsEndpoint = (CxfRsEndpoint) getEndpoint();
@@ -361,32 +352,64 @@ public class CxfRsProducer extends DefaultAsyncProducer {
                 response = client.invoke(httpMethod, body, responseClass);
             }
         }
+        // remove pseudo headers, Undertow transport add these headers
+        List<String> pseudoHeaders = new ArrayList<>();
+        client.getResponse().getHeaders().forEach((k, v) -> {
+            if (k.startsWith(":")) {
+                pseudoHeaders.add(k);
+            }
+        });
+        for (String pseudoHeader : pseudoHeaders) {
+            client.getResponse().getHeaders().remove(pseudoHeader);
+        }
         int statesCode = client.getResponse().getStatus();
         // handle cookies
         saveCookies(exchange, client, cookieHandler);
         //Throw exception on a response > 207
         //http://en.wikipedia.org/wiki/List_of_HTTP_status_codes
         if (throwException) {
-            if (response instanceof Response) {
-                int respCode = ((Response) response).getStatus();
-                if (respCode > 207) {
-                    throw populateCxfRsProducerException(exchange, (Response) response, respCode);
-                }
-            }
+            evalException(exchange, response);
         }
         // set response
         if (exchange.getPattern().isOutCapable()) {
-            LOG.trace("Response body = {}", response);
-            exchange.getOut().getHeaders().putAll(exchange.getIn().getHeaders());
-            exchange.getMessage().setBody(binding.bindResponseToCamelBody(response, exchange));
-            exchange.getMessage().getHeaders().putAll(binding.bindResponseHeadersToCamelHeaders(response, exchange));
-            exchange.getMessage().setHeader(CxfConstants.HTTP_RESPONSE_CODE, statesCode);
+            setResponse(exchange, response, binding, statesCode);
         } else {
             // just close the input stream of the response object
             if (response instanceof Response) {
                 ((Response) response).close();
             }
         }
+    }
+
+    private static void setResponse(Exchange exchange, Object response, CxfRsBinding binding, int statesCode) throws Exception {
+        LOG.trace("Response body = {}", response);
+        exchange.getOut().getHeaders().putAll(exchange.getIn().getHeaders());
+        exchange.getMessage().setBody(binding.bindResponseToCamelBody(response, exchange));
+        exchange.getMessage().getHeaders().putAll(binding.bindResponseHeadersToCamelHeaders(response, exchange));
+        exchange.getMessage().setHeader(CxfConstants.HTTP_RESPONSE_CODE, statesCode);
+    }
+
+    private void evalException(Exchange exchange, Object response) throws CxfOperationException {
+        if (response instanceof Response) {
+            int respCode = ((Response) response).getStatus();
+            if (respCode > 207) {
+                throw populateCxfRsProducerException(exchange, (Response) response, respCode);
+            }
+        }
+    }
+
+    private static void setupPath(Object[] pathValues, WebClient client, String path) {
+        if (ObjectHelper.isNotEmpty(pathValues) && pathValues.length > 0) {
+            client.path(path, pathValues);
+        } else {
+            client.path(path);
+        }
+    }
+
+    private static void logInvokation(String httpMethod, String path, Class<?> responseClass) {
+        LOG.trace("HTTP method = {}", httpMethod);
+        LOG.trace("path = {}", path);
+        LOG.trace("responseClass = {}", responseClass);
     }
 
     private void saveCookies(Exchange exchange, Client client, CookieHandler cookieHandler) {
@@ -462,22 +485,13 @@ public class CxfRsProducer extends DefaultAsyncProducer {
         // handle cookies
         saveCookies(exchange, target, cookieHandler);
         if (throwException) {
-            if (response instanceof Response) {
-                int respCode = ((Response) response).getStatus();
-                if (respCode > 207) {
-                    throw populateCxfRsProducerException(exchange, (Response) response, respCode);
-                }
-            }
+            evalException(exchange, response);
         }
         CxfRsEndpoint cxfRsEndpoint = (CxfRsEndpoint) getEndpoint();
         CxfRsBinding binding = cxfRsEndpoint.getBinding();
 
         if (exchange.getPattern().isOutCapable()) {
-            LOG.trace("Response body = {}", response);
-            exchange.getOut().getHeaders().putAll(exchange.getIn().getHeaders());
-            exchange.getMessage().setBody(binding.bindResponseToCamelBody(response, exchange));
-            exchange.getMessage().getHeaders().putAll(binding.bindResponseHeadersToCamelHeaders(response, exchange));
-            exchange.getMessage().setHeader(CxfConstants.HTTP_RESPONSE_CODE, statesCode);
+            setResponse(exchange, response, binding, statesCode);
         } else {
             // just close the input stream of the response object
             if (response instanceof Response) {
@@ -701,7 +715,7 @@ public class CxfRsProducer extends DefaultAsyncProducer {
                 exchange.getMessage().getHeaders().putAll(binding.bindResponseHeadersToCamelHeaders(response, exchange));
 
                 if (genericType != null && !genericType.equals(Void.TYPE)) {
-                    GenericType genericTypeClone = new GenericType(this.genericType);
+                    GenericType<?> genericTypeClone = new GenericType<>(this.genericType);
                     exchange.getMessage()
                             .setBody(binding.bindResponseToCamelBody(response.readEntity(genericTypeClone), exchange));
                 } else if (responseClass != null && !responseClass.equals(Void.TYPE)) {
@@ -865,15 +879,15 @@ public class CxfRsProducer extends DefaultAsyncProducer {
      * Cache contains {@link org.apache.cxf.jaxrs.client.JAXRSClientFactoryBean}
      */
     class ClientFactoryBeanCache {
-        private Map<String, JAXRSClientFactoryBean> cache;
+        private final Map<String, JAXRSClientFactoryBean> cache;
 
         ClientFactoryBeanCache(final int maxCacheSize) {
             this.cache = LRUCacheFactory.newLRUSoftCache(maxCacheSize);
         }
 
         public void start() {
-            if (cache instanceof LRUCache) {
-                ((LRUCache) cache).resetStatistics();
+            if (cache instanceof LRUCache<?, ?> lruCache) {
+                lruCache.resetStatistics();
             }
         }
 
@@ -882,22 +896,16 @@ public class CxfRsProducer extends DefaultAsyncProducer {
         }
 
         public JAXRSClientFactoryBean get(String address) {
-            JAXRSClientFactoryBean retVal = null;
-            synchronized (cache) {
-                retVal = cache.get(address);
-
-                if (retVal == null) {
-                    retVal = ((CxfRsEndpoint) getEndpoint()).createJAXRSClientFactoryBean(address);
-
-                    cache.put(address, retVal);
-
-                    LOG.trace("Created client factory bean and add to cache for address '{}'", address);
-
-                } else {
-                    LOG.trace("Retrieved client factory bean from cache for address '{}'", address);
-                }
-            }
-            return retVal;
+            return cache.compute(address,
+                    (key, value) -> {
+                        if (value == null) {
+                            value = ((CxfRsEndpoint) getEndpoint()).createJAXRSClientFactoryBean(address);
+                            LOG.trace("Created client factory bean and add to cache for address '{}'", address);
+                        } else {
+                            LOG.trace("Retrieved client factory bean from cache for address '{}'", address);
+                        }
+                        return value;
+                    });
         }
     }
 }

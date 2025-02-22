@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -39,22 +40,15 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class FluentProducerTemplateTest extends ContextTestSupport {
 
     @Test
-    public void testNoEndpoint() throws Exception {
+    public void testNoEndpoint() {
         FluentProducerTemplate fluent = context.createFluentProducerTemplate();
 
-        try {
-            fluent.withBody("Hello World").send();
-            fail("Should have thrown exception");
-        } catch (IllegalArgumentException e) {
-            // expected
-        }
+        FluentProducerTemplate helloWorld = fluent.withBody("Hello World");
+        assertThrows(IllegalArgumentException.class, () -> helloWorld.send(),
+                "Should have thrown exception");
 
-        try {
-            fluent.withBody("Hello World").request();
-            fail("Should have thrown exception");
-        } catch (IllegalArgumentException e) {
-            // expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> helloWorld.request(),
+                "Should have thrown exception");
     }
 
     @Test
@@ -239,15 +233,10 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testExceptionUsingProcessorAndBody() throws Exception {
-        try {
-            DefaultFluentProducerTemplate.on(context)
-                    .withBody("World")
-                    .withProcessor(exchange -> exchange.getIn().setHeader("foo", 123)).to("direct:async").send();
-            fail();
-        } catch (IllegalArgumentException e) {
-            // expected
-        }
+    public void testExceptionUsingProcessorAndBody() {
+        assertThrows(IllegalArgumentException.class, () -> DefaultFluentProducerTemplate.on(context)
+                .withBody("World")
+                .withProcessor(exchange -> exchange.getIn().setHeader("foo", 123)).to("direct:async").send(), "");
     }
 
     @Test
@@ -257,7 +246,6 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
 
         try {
             DefaultFluentProducerTemplate.on(context).withBody("Hello World").to("direct:exception").request();
-
             fail("Should have thrown RuntimeCamelException");
         } catch (RuntimeCamelException e) {
             boolean b = e.getCause() instanceof IllegalArgumentException;
@@ -301,24 +289,26 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testWithExchange() throws Exception {
+    public void testWithExchange() {
         Exchange exchange = ExchangeBuilder.anExchange(context).withBody("Hello!").withPattern(ExchangePattern.InOut).build();
 
         exchange = context.createFluentProducerTemplate().withExchange(exchange).to("direct:in").send();
 
         assertEquals("Bye World", exchange.getMessage().getBody());
 
-        try {
-            String out = context.createFluentProducerTemplate().withExchange(exchange).to("direct:in").request(String.class);
-            fail("Should throw exception");
-        } catch (IllegalArgumentException e) {
-            assertEquals("withExchange not supported on FluentProducerTemplate.request method. Use send method instead.",
-                    e.getMessage());
-        }
+        String str = "withExchange not supported on FluentProducerTemplate.request method. Use send method instead.";
+
+        Exchange finalExchange = exchange;
+        Exception e = assertThrows(IllegalArgumentException.class, () -> context.createFluentProducerTemplate()
+                .withExchange(finalExchange)
+                .to("direct:in")
+                .request(String.class), "Should throw exception");
+
+        assertEquals(str, e.getMessage());
     }
 
     @Test
-    public void testRequestBody() throws Exception {
+    public void testRequestBody() {
         // with endpoint as string uri
         FluentProducerTemplate template = DefaultFluentProducerTemplate.on(context);
 
@@ -341,6 +331,30 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
 
         assertEquals(expectedResult, template.withBody("Hello")
                 .to(context.getEndpoint("direct:inout")).request(Integer.class));
+    }
+
+    @Test
+    public void testWithVariable() {
+        FluentProducerTemplate template = DefaultFluentProducerTemplate.on(context);
+
+        assertEquals("Hello World", template.withVariable("foo", "World").withBody("Hello")
+                .to("direct:var").request(String.class));
+
+        assertEquals("Hello Moon", template.withVariable("foo", "Moon").withVariable("global:planet", "Mars").withBody("Hello")
+                .to("direct:var").request(String.class));
+        assertEquals("Mars", context.getVariable("planet"));
+    }
+
+    @Test
+    public void testWithExchangeProperty() {
+        FluentProducerTemplate template = DefaultFluentProducerTemplate.on(context);
+
+        assertEquals("Hello World", template.withExchangeProperty("foo", "World").withBody("Hello")
+                .to("direct:ep").request(String.class));
+
+        assertEquals("Hello Moon",
+                template.withExchangeProperty("foo", "Moon").withExchangeProperty("planet", "Mars").withBody("Hello")
+                        .to("direct:ep").request(String.class));
     }
 
     @Test
@@ -443,7 +457,7 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testPerformance() throws Exception {
+    public void testPerformance() {
         FluentProducerTemplate fluent = context.createFluentProducerTemplate();
         for (int i = 0; i < 1000; i++) {
             Object result = fluent.withBody("Camel").withHeader("foo", "" + i).to("direct:echo").request();
@@ -452,17 +466,17 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 // for faster unit test
                 errorHandler(noErrorHandler());
 
                 from("direct:in").process(exchange -> exchange.getIn().setBody("Bye World")).to("mock:result");
                 from("direct:sum").process(exchange -> {
                     Object body = exchange.getIn().getBody();
-                    if (body instanceof Integer) {
-                        exchange.getIn().setBody((Integer) body + 1);
+                    if (body instanceof Integer integer) {
+                        exchange.getIn().setBody(integer + 1);
                     } else {
                         throw new IllegalArgumentException("Expected body of type Integer");
                     }
@@ -483,6 +497,9 @@ public class FluentProducerTemplateTest extends ContextTestSupport {
 
                 from("direct:red").setBody().simple("Red ${body}");
 
+                from("direct:var").transform().simple("${body} ${variable.foo}");
+
+                from("direct:ep").transform().simple("${body} ${exchangeProperty.foo}");
             }
         };
     }

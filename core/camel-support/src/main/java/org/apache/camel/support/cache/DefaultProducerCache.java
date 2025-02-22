@@ -57,7 +57,9 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
     private EndpointUtilizationStatistics statistics;
     private boolean eventNotifierEnabled = true;
     private boolean extendedStatistics;
-    private int maxCacheSize;
+    private final int maxCacheSize;
+
+    private AsyncProducer lastUsedProducer;
 
     public DefaultProducerCache(Object source, CamelContext camelContext, int cacheSize) {
         this.source = source;
@@ -120,13 +122,24 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
 
     @Override
     public AsyncProducer acquireProducer(Endpoint endpoint) {
+        // Try to favor thread locality as some data in the producer's cache may be shared among threads,
+        // triggering cases of false sharing
+        // copy reference to avoid need for synchronization and be thread safe
+        AsyncProducer lastUsedProducerRef = lastUsedProducer;
+        if (lastUsedProducerRef != null && endpoint == lastUsedProducerRef.getEndpoint() && endpoint.isSingletonProducer()) {
+            return lastUsedProducerRef;
+        }
+
         try {
             AsyncProducer producer = producers.acquire(endpoint);
             if (statistics != null) {
                 statistics.onHit(endpoint.getEndpointUri());
             }
+
+            lastUsedProducer = producer;
+
             return producer;
-        } catch (Throwable e) {
+        } catch (Exception e) {
             throw new FailedToCreateProducerException(endpoint, e);
         }
     }
@@ -164,7 +177,7 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
                 // invoke the synchronous method
                 sharedInternalProcessor.process(exchange, producer, resultProcessor);
 
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 // ensure exceptions is caught and set on the exchange
                 exchange.setException(e);
             } finally {
@@ -203,8 +216,8 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
         CompletableFuture<Exchange> future = f != null ? f : new CompletableFuture<>();
         AsyncProducerCallback cb = (p, e, c) -> asyncDispatchExchange(endpoint, p, resultProcessor, e, c);
         try {
-            if (processor instanceof AsyncProcessor) {
-                ((AsyncProcessor) processor).process(exchange,
+            if (processor instanceof AsyncProcessor asyncProcessor) {
+                asyncProcessor.process(exchange,
                         doneSync -> doInAsyncProducer(endpoint, exchange, ds -> future.complete(exchange), cb));
             } else {
                 if (processor != null) {
@@ -212,7 +225,7 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
                 }
                 doInAsyncProducer(endpoint, exchange, ds -> future.complete(exchange), cb);
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // populate failed so return
             exchange.setException(e);
             future.complete(exchange);
@@ -244,7 +257,7 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
                     return true;
                 }
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             exchange.setException(e);
             callback.done(true);
             return true;
@@ -279,7 +292,7 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
                     callback.done(doneSync);
                 }
             });
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ensure exceptions is caught and set on the exchange
             if (exchange != null) {
                 exchange.setException(e);
@@ -305,7 +318,7 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
             }
             // invoke the asynchronous method
             return sharedInternalProcessor.process(exchange, callback, producer, resultProcessor);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ensure exceptions is caught and set on the exchange
             exchange.setException(e);
             callback.done(true);
@@ -359,17 +372,22 @@ public class DefaultProducerCache extends ServiceSupport implements ProducerCach
     }
 
     @Override
-    public synchronized void purge() {
+    public void purge() {
+        lock.lock();
         try {
-            if (producers != null) {
-                producers.stop();
-                producers.start();
+            try {
+                if (producers != null) {
+                    producers.stop();
+                    producers.start();
+                }
+            } catch (Exception e) {
+                LOG.debug("Error restarting producers", e);
             }
-        } catch (Exception e) {
-            LOG.debug("Error restarting producers", e);
-        }
-        if (statistics != null) {
-            statistics.clear();
+            if (statistics != null) {
+                statistics.clear();
+            }
+        } finally {
+            lock.unlock();
         }
     }
 

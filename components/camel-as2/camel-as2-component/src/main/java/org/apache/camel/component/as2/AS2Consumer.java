@@ -24,8 +24,10 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.apache.camel.component.as2.api.AS2ServerConnection;
 import org.apache.camel.component.as2.api.AS2ServerManager;
-import org.apache.camel.component.as2.api.entity.ApplicationEDIEntity;
+import org.apache.camel.component.as2.api.entity.ApplicationEntity;
 import org.apache.camel.component.as2.api.entity.EntityParser;
+import org.apache.camel.component.as2.api.exception.AS2ErrorDispositionException;
+import org.apache.camel.component.as2.api.protocol.ResponseMDN;
 import org.apache.camel.component.as2.api.util.HttpMessageUtils;
 import org.apache.camel.component.as2.internal.AS2ApiName;
 import org.apache.camel.component.as2.internal.AS2Constants;
@@ -33,13 +35,13 @@ import org.apache.camel.support.component.AbstractApiConsumer;
 import org.apache.camel.support.component.ApiConsumerHelper;
 import org.apache.camel.support.component.ApiMethod;
 import org.apache.camel.support.component.ApiMethodHelper;
-import org.apache.http.HttpEntityEnclosingRequest;
-import org.apache.http.HttpException;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
-import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpCoreContext;
-import org.apache.http.protocol.HttpRequestHandler;
+import org.apache.hc.core5.http.ClassicHttpRequest;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.HttpEntityContainer;
+import org.apache.hc.core5.http.HttpException;
+import org.apache.hc.core5.http.io.HttpRequestHandler;
+import org.apache.hc.core5.http.protocol.HttpContext;
+import org.apache.hc.core5.http.protocol.HttpCoreContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,25 +104,20 @@ public class AS2Consumer extends AbstractApiConsumer<AS2ApiName, AS2Configuratio
 
     @Override
     protected void doStop() throws Exception {
-        if (apiProxy != null) {
-            String requestUri = (String) properties.get(REQUEST_URI_PROPERTY);
-            apiProxy.stopListening(requestUri);
-        }
-
         super.doStop();
     }
 
     @Override
-    public void handle(HttpRequest request, HttpResponse response, HttpContext context)
+    public void handle(ClassicHttpRequest request, ClassicHttpResponse response, HttpContext context)
             throws HttpException {
-        Exception exception;
+        Exception exception = null;
         try {
-            if (request instanceof HttpEntityEnclosingRequest) {
+            if (request instanceof HttpEntityContainer) {
                 EntityParser.parseAS2MessageEntity(request);
                 apiProxy.handleMDNResponse(context, getEndpoint().getSubject(),
                         ofNullable(getEndpoint().getFrom()).orElse(getEndpoint().getConfiguration().getServer()));
             }
-            ApplicationEDIEntity ediEntity
+            ApplicationEntity ediEntity
                     = HttpMessageUtils.extractEdiPayload(request,
                             new HttpMessageUtils.DecrpytingAndSigningInfo(
                                     as2ServerConnection.getValidateSigningCertificateChain(),
@@ -140,6 +137,9 @@ public class AS2Consumer extends AbstractApiConsumer<AS2ApiName, AS2Configuratio
                 exception = exchange.getException();
                 releaseExchange(exchange, false);
             }
+        } catch (AS2ErrorDispositionException e) {
+            LOG.warn("Failed to process AS2 message", e);
+            context.setAttribute(ResponseMDN.DISPOSITION_MODIFIER, e.getDispositionModifier());
         } catch (Exception e) {
             LOG.warn("Failed to process AS2 message", e);
             exception = e;

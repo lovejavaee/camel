@@ -31,6 +31,7 @@ import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,10 +65,10 @@ public class ManagedFromRestGetTest extends ManagementTestSupport {
         assertTrue(xml.contains("application/json"));
         assertTrue(xml.contains("</rests>"));
 
-        assertTrue(xml.contains("<param defaultValue=\"1\" dataType=\"integer\" name=\"header_count\""
-                                + " description=\"header param description1\" type=\"header\" required=\"true\">"));
-        assertTrue(xml.contains("<param defaultValue=\"b\" dataType=\"string\" name=\"header_letter\""
-                                + " description=\"header param description2\" type=\"query\" collectionFormat=\"multi\" required=\"false\">"));
+        assertTrue(xml.contains(
+                "<param defaultValue=\"1\" dataType=\"integer\" name=\"header_count\" description=\"header param description1\" type=\"header\""));
+        assertTrue(xml.contains(
+                "<param defaultValue=\"b\" name=\"header_letter\" description=\"header param description2\" type=\"query\" collectionFormat=\"multi\" required=\"false\""));
         assertTrue(xml.contains("<value>1</value>"));
         assertTrue(xml.contains("<value>a</value>"));
 
@@ -78,19 +79,20 @@ public class ManagedFromRestGetTest extends ManagementTestSupport {
         // and we should have rest in the routes that indicate its from a rest dsl
         assertTrue(xml2.contains("rest=\"true\""));
 
-        assertTrue(xml2.matches("[\\S\\s]* <to id=\"to[0-9]+\" uri=\"direct:hello\"/>[\\S\\s]*"));
-        assertTrue(xml2.matches("[\\S\\s]*<to id=\"to[0-9]+\" uri=\"direct:bye\"/>[\\S\\s]*"));
+        // routes are inlined
+        assertFalse(xml2.matches("[\\S\\s]* <to id=\"to[0-9]+\" uri=\"direct:hello\"/>[\\S\\s]*"));
+        assertFalse(xml2.matches("[\\S\\s]*<to id=\"to[0-9]+\" uri=\"direct:bye\"/>[\\S\\s]*"));
         assertTrue(xml2.matches("[\\S\\s]*<to id=\"to[0-9]+\" uri=\"mock:update\"/>[\\S\\s]*"));
 
-        // there should be 3 + 2 routes
-        assertEquals(3 + 2, context.getRouteDefinitions().size());
+        // there should be 3 routes
+        assertEquals(3, context.getRouteDefinitions().size());
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 restConfiguration().host("localhost");
                 rest("/say/hello")
                         .get().to("direct:hello");
@@ -98,11 +100,12 @@ public class ManagedFromRestGetTest extends ManagementTestSupport {
                 rest("/say/bye")
                         .get().consumes("application/json")
                         .param().type(RestParamType.header).description("header param description1").dataType("integer")
-                        .allowableValues(Arrays.asList("1", "2", "3", "4"))
-                        .defaultValue("1").name("header_count").required(true)
-                        .endParam().param().type(RestParamType.query).description("header param description2")
-                        .dataType("string").allowableValues(Arrays.asList("a", "b", "c", "d"))
-                        .defaultValue("b").collectionFormat(CollectionFormat.multi).name("header_letter").required(false)
+                            .allowableValues(Arrays.asList("1", "2", "3", "4"))
+                            .defaultValue("1").name("header_count").required(true)
+                        .endParam()
+                        .param().type(RestParamType.query).description("header param description2")
+                            .dataType("string").allowableValues(Arrays.asList("a", "b", "c", "d"))
+                            .defaultValue("b").collectionFormat(CollectionFormat.multi).name("header_letter").required(false)
                         .endParam()
                         .responseMessage().code(300).message("test msg").responseModel(Integer.class).endResponseMessage()
                         .to("direct:bye")

@@ -20,9 +20,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.spi.Registry;
-import org.apache.camel.support.SimpleRegistry;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
@@ -35,9 +33,7 @@ public class SqlStoredDataSourceTest extends CamelTestSupport {
     private EmbeddedDatabase db;
 
     @Override
-    protected Registry createCamelRegistry() {
-        Registry reg = new SimpleRegistry();
-
+    protected void bindToRegistry(Registry registry) throws Exception {
         // START SNIPPET: e2
         // this is the database we create with some initial data for our unit test
         db = new EmbeddedDatabaseBuilder()
@@ -46,15 +42,11 @@ public class SqlStoredDataSourceTest extends CamelTestSupport {
                 .addScript("sql/storedProcedureTest.sql").build();
         // END SNIPPET: e2
 
-        reg.bind("jdbc/myDataSource", db);
-
-        return reg;
+        registry.bind("jdbc/myDataSource", db);
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void doPostTearDown() throws Exception {
         if (db != null) {
             db.shutdown();
         }

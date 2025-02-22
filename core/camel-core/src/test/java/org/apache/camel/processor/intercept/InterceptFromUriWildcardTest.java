@@ -39,7 +39,7 @@ public class InterceptFromUriWildcardTest extends ContextTestSupport {
     @Test
     public void testInterceptFoo() throws Exception {
         getMockEndpoint("mock:intercept").expectedMessageCount(1);
-        getMockEndpoint("mock:intercept").expectedHeaderReceived(Exchange.INTERCEPTED_ENDPOINT, "seda://foo");
+        getMockEndpoint("mock:intercept").expectedPropertyReceived(Exchange.INTERCEPTED_ENDPOINT, "seda://foo");
         getMockEndpoint("mock:result").expectedMessageCount(1);
 
         template.sendBody("seda:foo", "Hello World");
@@ -58,9 +58,9 @@ public class InterceptFromUriWildcardTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 // START SNIPPET: e1
                 // only trigger when incoming from any seda endpoint as we use
                 // the * wildcard

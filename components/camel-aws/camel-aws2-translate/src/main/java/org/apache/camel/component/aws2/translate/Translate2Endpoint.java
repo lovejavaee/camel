@@ -22,8 +22,7 @@ import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.component.aws2.translate.client.Translate2ClientFactory;
-import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.impl.health.ComponentsHealthCheckRepository;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.ScheduledPollEndpoint;
@@ -35,12 +34,9 @@ import software.amazon.awssdk.services.translate.TranslateClient;
  */
 @UriEndpoint(firstVersion = "3.1.0", scheme = "aws2-translate", title = "AWS Translate", syntax = "aws2-translate:label",
              producerOnly = true, category = { Category.CLOUD, Category.MANAGEMENT }, headersClass = Translate2Constants.class)
-public class Translate2Endpoint extends ScheduledPollEndpoint {
+public class Translate2Endpoint extends ScheduledPollEndpoint implements EndpointServiceLocation {
 
     private TranslateClient translateClient;
-
-    private ComponentsHealthCheckRepository healthCheckRepository;
-    private Translate2ClientHealthCheck clientHealthCheck;
 
     @UriParam
     private Translate2Configuration configuration;
@@ -61,6 +57,11 @@ public class Translate2Endpoint extends ScheduledPollEndpoint {
     }
 
     @Override
+    public Translate2Component getComponent() {
+        return (Translate2Component) super.getComponent();
+    }
+
+    @Override
     public void doStart() throws Exception {
         super.doStart();
 
@@ -68,24 +69,10 @@ public class Translate2Endpoint extends ScheduledPollEndpoint {
                 = configuration.getTranslateClient() != null
                         ? configuration.getTranslateClient()
                         : Translate2ClientFactory.getTranslateClient(configuration).getTranslateClient();
-
-        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(getCamelContext(),
-                ComponentsHealthCheckRepository.REPOSITORY_ID, ComponentsHealthCheckRepository.class);
-
-        if (healthCheckRepository != null) {
-            // Do not register the health check until we resolve CAMEL-18992
-            // clientHealthCheck = new Translate2ClientHealthCheck(this, getId());
-            // healthCheckRepository.addHealthCheck(clientHealthCheck);
-        }
     }
 
     @Override
     public void doStop() throws Exception {
-        if (healthCheckRepository != null && clientHealthCheck != null) {
-            healthCheckRepository.removeHealthCheck(clientHealthCheck);
-            clientHealthCheck = null;
-        }
-
         if (ObjectHelper.isEmpty(configuration.getTranslateClient())) {
             if (translateClient != null) {
                 translateClient.close();
@@ -100,5 +87,22 @@ public class Translate2Endpoint extends ScheduledPollEndpoint {
 
     public TranslateClient getTranslateClient() {
         return translateClient;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (ObjectHelper.isNotEmpty(configuration.getRegion())) {
+                return configuration.getRegion();
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "translate";
     }
 }

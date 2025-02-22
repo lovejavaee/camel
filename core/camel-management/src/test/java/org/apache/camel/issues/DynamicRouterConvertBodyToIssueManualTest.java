@@ -46,10 +46,10 @@ public class DynamicRouterConvertBodyToIssueManualTest extends ContextTestSuppor
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("seda:foo")
                         .dynamicRouter().method(DynamicRouterConvertBodyToIssueManualTest.class, "slip")
                         .to("mock:result");
@@ -63,12 +63,12 @@ public class DynamicRouterConvertBodyToIssueManualTest extends ContextTestSuppor
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        log.info("Some: " + counter);
+        log.info("Some: {}", counter);
 
         exchange.setProperty("EXIT", "NO");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 10000; i++) {
-            sb.append(UUID.randomUUID().toString());
+            sb.append(UUID.randomUUID());
         }
         exchange.getIn().setBody(sb);
 
@@ -80,9 +80,9 @@ public class DynamicRouterConvertBodyToIssueManualTest extends ContextTestSuppor
     }
 
     public String slip(String body, @ExchangeProperties Map<String, Object> properties) {
-        log.info("slip " + properties.get("EXIT"));
+        log.info("slip {}", properties.get("EXIT"));
         if (properties.get("EXIT") != null && properties.get("EXIT").equals("PLEASE")) {
-            log.info("Exiting after " + MAX_ITERATIONS + " iterations");
+            log.info("Exiting after {} iterations", MAX_ITERATIONS);
             return null;
         } else {
             return "direct:while_body";

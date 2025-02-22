@@ -32,8 +32,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class InfinispanEmbeddedProducerTest extends InfinispanEmbeddedTestSupport implements InfinispanProducerTestSupport {
+
     @BindToRegistry("mappingFunction")
-    public static BiFunction<String, String, String> mappingFunction() {
+    public BiFunction<String, String, String> mappingFunction() {
         return (k, v) -> v + "replay";
     }
 
@@ -71,7 +72,7 @@ public class InfinispanEmbeddedProducerTest extends InfinispanEmbeddedTestSuppor
                         .to("direct:start")
                         .withHeader(InfinispanConstants.OPERATION, InfinispanOperation.STATS)
                         .request(Stats.class)
-                        .getTotalNumberOfEntries());
+                        .getApproximateEntries());
     }
 
     // *****************************

@@ -21,7 +21,7 @@ import org.apache.camel.dsl.jbang.core.commands.CamelJBangMain;
 import org.apache.camel.dsl.jbang.core.common.CommandLineHelper;
 import picocli.CommandLine;
 
-@CommandLine.Command(name = "list", description = "Displays user configuration")
+@CommandLine.Command(name = "list", description = "Displays user configuration", sortOptions = false, showDefaultValues = true)
 public class ConfigList extends CamelCommand {
 
     public ConfigList(CamelJBangMain main) {
@@ -34,7 +34,7 @@ public class ConfigList extends CamelCommand {
                 .loadProperties(p -> {
                     for (String k : p.stringPropertyNames()) {
                         String v = p.getProperty(k);
-                        System.out.printf("%s = %s%n", k, v);
+                        printer().printf("%s = %s%n", k, v);
                     }
                 });
         return 0;

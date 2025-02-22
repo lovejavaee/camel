@@ -141,27 +141,37 @@ public final class KameletCatalogHelper {
     }
 
     public static Map<String, Object> loadKamelets(String version) throws Exception {
-        ClassLoader cl = createClassLoader();
-        MavenDependencyDownloader downloader = new MavenDependencyDownloader();
-        downloader.setClassLoader(cl);
-        downloader.start();
-        downloader.downloadDependency("org.apache.camel.kamelets", "camel-kamelets-catalog", version);
+        var tccLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            ClassLoader cl = createClassLoader();
+            MavenDependencyDownloader downloader = new MavenDependencyDownloader();
+            downloader.setClassLoader(cl);
+            downloader.start();
+            downloader.downloadDependency("org.apache.camel.kamelets", "camel-kamelets-catalog", version);
 
-        Thread.currentThread().setContextClassLoader(cl);
-        Class<?> clazz = cl.loadClass("org.apache.camel.kamelets.catalog.KameletsCatalog");
-        Object catalog = clazz.getDeclaredConstructor().newInstance();
-        Method m = clazz.getMethod("getKamelets");
-        return (Map<String, Object>) ObjectHelper.invokeMethod(m, catalog);
+            Thread.currentThread().setContextClassLoader(cl);
+            Class<?> clazz = cl.loadClass("org.apache.camel.kamelets.catalog.KameletsCatalog");
+            Object catalog = clazz.getDeclaredConstructor().newInstance();
+            Method m = clazz.getMethod("getKamelets");
+            return (Map<String, Object>) ObjectHelper.invokeMethod(m, catalog);
+        } finally {
+            Thread.currentThread().setContextClassLoader(tccLoader);
+        }
     }
 
     public static InputStream loadKameletYamlSchema(String name, String version) throws Exception {
-        ClassLoader cl = createClassLoader();
-        MavenDependencyDownloader downloader = new MavenDependencyDownloader();
-        downloader.setClassLoader(cl);
-        downloader.start();
-        downloader.downloadDependency("org.apache.camel.kamelets", "camel-kamelets-catalog", version);
-        Thread.currentThread().setContextClassLoader(cl);
-        return cl.getResourceAsStream("kamelets/" + name + ".kamelet.yaml");
+        var tccLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            ClassLoader cl = createClassLoader();
+            MavenDependencyDownloader downloader = new MavenDependencyDownloader();
+            downloader.setClassLoader(cl);
+            downloader.start();
+            downloader.downloadDependency("org.apache.camel.kamelets", "camel-kamelets-catalog", version);
+            Thread.currentThread().setContextClassLoader(cl);
+            return cl.getResourceAsStream("kamelets/" + name + ".kamelet.yaml");
+        } finally {
+            Thread.currentThread().setContextClassLoader(tccLoader);
+        }
     }
 
     public static KameletModel loadKameletModel(String name, String version) throws Exception {
@@ -184,9 +194,10 @@ public final class KameletCatalogHelper {
         Method m = kamelet.getClass().getMethod("getMetadata");
         Object meta = ObjectHelper.invokeMethod(m, kamelet);
         m = meta.getClass().getMethod("getLabels");
-        Map labels = (Map) ObjectHelper.invokeMethod(m, meta);
+        @SuppressWarnings("unchecked")
+        Map<String, String> labels = (Map<String, String>) ObjectHelper.invokeMethod(m, meta);
         if (labels != null) {
-            return (String) labels.get("camel.apache.org/kamelet.type");
+            return labels.get("camel.apache.org/kamelet.type");
         }
         return null;
     }
@@ -195,9 +206,10 @@ public final class KameletCatalogHelper {
         Method m = kamelet.getClass().getMethod("getMetadata");
         Object meta = ObjectHelper.invokeMethod(m, kamelet);
         m = meta.getClass().getMethod("getAnnotations");
-        Map anns = (Map) ObjectHelper.invokeMethod(m, meta);
+        @SuppressWarnings("unchecked")
+        Map<String, String> anns = (Map<String, String>) ObjectHelper.invokeMethod(m, meta);
         if (anns != null) {
-            return (String) anns.get("camel.apache.org/kamelet.support.level");
+            return anns.get("camel.apache.org/kamelet.support.level");
         }
         return null;
     }
@@ -225,6 +237,7 @@ public final class KameletCatalogHelper {
         Method m = kamelet.getClass().getMethod("getSpec");
         Object spec = ObjectHelper.invokeMethod(m, kamelet);
         m = spec.getClass().getMethod("getDependencies");
+        @SuppressWarnings("unchecked")
         List<Object> list = (List<Object>) ObjectHelper.invokeMethod(m, spec);
         if (list != null && !list.isEmpty()) {
             for (var en : list) {

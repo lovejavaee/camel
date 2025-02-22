@@ -104,18 +104,14 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
                     // add method name alias
                     String alias = matcher.replaceAll(aliasEntry.getValue());
                     // convert first character to lowercase
-                    ObjectHelper.isNotEmpty(alias);
+                    ObjectHelper.notNullOrEmpty(alias, "alias");
                     final char firstChar = alias.charAt(0);
                     if (!Character.isLowerCase(firstChar)) {
-                        final StringBuilder builder = new StringBuilder();
+                        final StringBuilder builder = new StringBuilder(alias.length() + 2);
                         builder.append(Character.toLowerCase(firstChar)).append(alias, 1, alias.length());
                         alias = builder.toString();
                     }
-                    Set<String> names = tmpAliasesMap.get(alias);
-                    if (names == null) {
-                        names = new HashSet<>();
-                        tmpAliasesMap.put(alias, names);
-                    }
+                    Set<String> names = tmpAliasesMap.computeIfAbsent(alias, k -> new HashSet<>());
                     names.add(name);
                 }
             }
@@ -165,7 +161,7 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
         if (!tmpValidArguments.keySet().containsAll(this.nullableArguments)) {
             List<String> unknowns = new ArrayList<>(this.nullableArguments);
             unknowns.removeAll(tmpValidArguments.keySet());
-            throw new IllegalArgumentException("Unknown nullable arguments " + unknowns.toString());
+            throw new IllegalArgumentException("Unknown nullable arguments " + unknowns);
         }
 
         // validate aliases
@@ -310,16 +306,18 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
 
         for (ApiMethod method : methods) {
             final List<String> methodArgs = method.getArgNames();
+            final HashSet<String> stringHashSet = new HashSet<>(methodArgs);
+
             switch (matchType) {
                 case EXACT:
                     // method must take all args, and no more
-                    if (methodArgs.containsAll(argNames) && argNames.containsAll(methodArgs)) {
+                    if (stringHashSet.containsAll(argNames) && argNames.containsAll(methodArgs)) {
                         result.add(method);
                     }
                     break;
                 case SUBSET:
                     // all args are required, method may take more
-                    if (methodArgs.containsAll(argNames)) {
+                    if (stringHashSet.containsAll(argNames)) {
                         result.add(method);
                     }
                     break;
@@ -327,7 +325,7 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
                 case SUPER_SET:
                     // all method args must be present
                     if (argNames.containsAll(methodArgs)) {
-                        if (methodArgs.containsAll(argNames)) {
+                        if (stringHashSet.containsAll(argNames)) {
                             // prefer exact match to avoid unused args
                             result.add(method);
                         } else if (result.isEmpty()) {
@@ -340,7 +338,7 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
                         }
                     } else if (result.isEmpty() && extraArgs == null) {
                         // avoid looking for nullable args by checking for empty result and extraArgs
-                        if (withNullableArgsList != null && withNullableArgsList.containsAll(methodArgs)) {
+                        if (withNullableArgsList != null && new HashSet<>(withNullableArgsList).containsAll(methodArgs)) {
                             if (nullArgs == null) {
                                 nullArgs = new ArrayList<>();
                             }
@@ -487,12 +485,11 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
             if (value != null && types[index].isArray()) {
                 Class<?> type = types[index];
 
-                if (value instanceof Collection) {
+                if (value instanceof Collection<?> collection) {
                     // convert collection to array
-                    Collection<?> collection = (Collection<?>) value;
                     Object array = Array.newInstance(type.getComponentType(), collection.size());
-                    if (array instanceof Object[]) {
-                        collection.toArray((Object[]) array);
+                    if (array instanceof Object[] objects) {
+                        collection.toArray(objects);
                     } else {
                         int i = 0;
                         for (Object el : collection) {
@@ -530,7 +527,7 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
             throw new RuntimeCamelException(
                     String.format("Error invoking %s with %s: %s", method.getName(), properties, message),
                     cause != null ? cause : e);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             throw new RuntimeCamelException(
                     String.format("Error invoking %s with %s: %s", method.getName(), properties, e.getMessage()), e);
         }

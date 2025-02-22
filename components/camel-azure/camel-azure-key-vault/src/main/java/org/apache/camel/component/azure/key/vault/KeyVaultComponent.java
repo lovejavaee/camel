@@ -43,7 +43,7 @@ public class KeyVaultComponent extends DefaultComponent {
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
 
-        if (remaining == null || remaining.trim().length() == 0) {
+        if (remaining == null || remaining.isBlank()) {
             throw new IllegalArgumentException("A vault name must be specified.");
         }
 
@@ -56,11 +56,11 @@ public class KeyVaultComponent extends DefaultComponent {
         final KeyVaultEndpoint endpoint = new KeyVaultEndpoint(uri, this, epConfiguration);
         setProperties(endpoint, parameters);
 
-        if (epConfiguration.getSecretClient() == null
+        if (CredentialType.CLIENT_SECRET == epConfiguration.getCredentialType() && epConfiguration.getSecretClient() == null
                 && (epConfiguration.getClientId() == null || epConfiguration.getClientSecret() == null
                         || epConfiguration.getTenantId() == null)) {
             throw new IllegalArgumentException(
-                    "Azure Secret Client or client Id, client secret and tenant Id must be specified");
+                    "Azure Secret Client or client Id, client secret and tenant Id must be specified if credential type is set to clientSecret");
         }
 
         return endpoint;

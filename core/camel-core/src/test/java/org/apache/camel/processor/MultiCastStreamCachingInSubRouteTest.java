@@ -18,7 +18,7 @@ package org.apache.camel.processor;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.camel.AggregationStrategy;
 import org.apache.camel.ContextTestSupport;
@@ -32,10 +32,10 @@ import org.junit.jupiter.api.Test;
 public class MultiCastStreamCachingInSubRouteTest extends ContextTestSupport {
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.setStreamCaching(true);
                 context.getStreamCachingStrategy().setEnabled(true);
                 context.getStreamCachingStrategy().setSpoolDirectory(testDirectory().toFile());
@@ -89,7 +89,7 @@ public class MultiCastStreamCachingInSubRouteTest extends ContextTestSupport {
 
             CachedOutputStream cos = new CachedOutputStream(exchange);
             String s = "Test Message " + number;
-            cos.write(s.getBytes(Charset.forName("UTF-8")));
+            cos.write(s.getBytes(StandardCharsets.UTF_8));
             cos.close();
             InputStream is = (InputStream) cos.newStreamCache();
             exchange.getMessage().setBody(is);
@@ -111,7 +111,7 @@ public class MultiCastStreamCachingInSubRouteTest extends ContextTestSupport {
                 String merged = oldBody + newBody;
                 // also do stream caching in the aggregation strategy
                 CachedOutputStream cos = new CachedOutputStream(newExchange);
-                cos.write(merged.getBytes("UTF-8"));
+                cos.write(merged.getBytes(StandardCharsets.UTF_8));
                 cos.close();
                 oldExchange.getIn().setBody(cos.newStreamCache());
                 return oldExchange;

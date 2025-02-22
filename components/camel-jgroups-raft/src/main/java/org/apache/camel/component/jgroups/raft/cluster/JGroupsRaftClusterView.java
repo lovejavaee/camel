@@ -81,15 +81,33 @@ public class JGroupsRaftClusterView extends AbstractCamelClusterView {
             raftHandle = new RaftHandle(new JChannel(JGroupsRaftConstants.DEFAULT_JGROUPSRAFT_CONFIG), new NopStateMachine())
                     .raftId(raftId);
         }
-        fireLeadershipChangedEvent(Optional.empty());
-        raftHandle.addRoleListener(new ClusterRoleChangeListener(this));
-        raftHandle.channel().connect(jgroupsClusterName);
+        fireLeadershipChangedEvent((CamelClusterMember) null);
+
+        // it may take a while for event to trigger and allow us to join so retry a while
+        Exception cause = null;
+        for (int i = 1; i < 11; i++) {
+            LOG.debug("Attempt #{} for raft {} to join {}", i, raftId, jgroupsClusterName);
+            try {
+                raftHandle.addRoleListener(new ClusterRoleChangeListener(this));
+                raftHandle.channel().connect(jgroupsClusterName);
+                LOG.debug("Joined and connected to {} with raft id: {}", jgroupsClusterName, raftId);
+                cause = null;
+                break;
+            } catch (Exception e) {
+                cause = e;
+            }
+            // wait for next attempt
+            Thread.sleep(5000);
+        }
+        if (cause != null) {
+            throw cause;
+        }
     }
 
     @Override
     protected void doStop() throws Exception {
         isMaster = false;
-        fireLeadershipChangedEvent(Optional.empty());
+        fireLeadershipChangedEvent((CamelClusterMember) null);
         LOG.info("Disconnecting JGroupsraft Channel for JGroupsRaftClusterView with Id {}", raftId);
         raftHandle.channel().disconnect();
         if (raftHandle != null && raftHandle.log() != null) {
@@ -101,7 +119,7 @@ public class JGroupsRaftClusterView extends AbstractCamelClusterView {
     @Override
     protected void doShutdown() throws Exception {
         isMaster = false;
-        fireLeadershipChangedEvent(Optional.empty());
+        fireLeadershipChangedEvent((CamelClusterMember) null);
         if (raftHandle != null) {
 
             if (raftHandle.channel() != null) {
@@ -129,7 +147,7 @@ public class JGroupsRaftClusterView extends AbstractCamelClusterView {
     }
 
     @Override
-    protected void fireLeadershipChangedEvent(Optional<CamelClusterMember> leader) {
+    protected void fireLeadershipChangedEvent(CamelClusterMember leader) {
         super.fireLeadershipChangedEvent(leader);
     }
 

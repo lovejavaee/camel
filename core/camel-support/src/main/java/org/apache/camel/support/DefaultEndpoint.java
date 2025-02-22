@@ -70,8 +70,11 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
                             + " then creating and starting the producer may take a little time and prolong the total processing time of the processing.")
     private boolean lazyStartProducer;
     @UriParam(label = "consumer,advanced",
-              description = "Allows for bridging the consumer to the Camel routing Error Handler, which mean any exceptions occurred while"
-                            + " the consumer is trying to pickup incoming messages, or the likes, will now be processed as a message and handled by the routing Error Handler."
+              description = "Allows for bridging the consumer to the Camel routing Error Handler, which mean any exceptions (if possible) occurred while"
+                            + " the Camel consumer is trying to pickup incoming messages, or the likes, will now be processed as a message and handled by the routing Error Handler."
+                            + " Important: This is only possible if the 3rd party component allows Camel to be alerted if an exception was thrown. Some components handle this internally only,"
+                            + " and therefore bridgeErrorHandler is not possible. In other situations we may improve the Camel component to hook into the 3rd party component"
+                            + " and make this possible for future releases."
                             + " By default the consumer will use the org.apache.camel.spi.ExceptionHandler to deal with exceptions, that will be logged at WARN or ERROR level and ignored.")
     private boolean bridgeErrorHandler;
     @UriParam(label = "consumer,advanced", optionalPrefix = "consumer.",
@@ -124,8 +127,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
 
     @Override
     public boolean equals(Object object) {
-        if (object instanceof DefaultEndpoint) {
-            DefaultEndpoint that = (DefaultEndpoint) object;
+        if (object instanceof DefaultEndpoint that) {
             // must also match the same CamelContext in case we compare endpoints from different contexts
             String thisContextName = this.getCamelContext() != null ? this.getCamelContext().getName() : null;
             String thatContextName = that.getCamelContext() != null ? that.getCamelContext().getName() : null;
@@ -176,11 +178,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
         if (isLenientProperties()) {
             // only use the endpoint uri without parameters as the properties are lenient
             String uri = getEndpointUri();
-            if (uri.indexOf('?') != -1) {
-                return StringHelper.before(uri, "?");
-            } else {
-                return uri;
-            }
+            return StringHelper.before(uri, "?", uri);
         } else {
             // use the full endpoint uri
             return getEndpointUri();
@@ -239,7 +237,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
 
     @Override
     public Exchange createExchange(ExchangePattern pattern) {
-        Exchange answer = new DefaultExchange(this, pattern);
+        Exchange answer = DefaultExchange.newFromEndpoint(this, pattern);
         configureExchange(answer);
         return answer;
     }
@@ -299,9 +297,12 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
     }
 
     /**
-     * Allows for bridging the consumer to the Camel routing Error Handler, which mean any exceptions occurred while the
-     * consumer is trying to pickup incoming messages, or the likes, will now be processed as a message and handled by
-     * the routing Error Handler.
+     * Allows for bridging the consumer to the Camel routing Error Handler, which mean any exceptions (if possible)
+     * occurred while the Camel consumer is trying to pickup incoming messages, or the likes, will now be processed as a
+     * message and handled by the routing Error Handler. Important: This is only possible if the 3rd party component
+     * allows Camel to be alerted if an exception was thrown. Some components handle this internally only, and therefore
+     * bridgeErrorHandler is not possible. In other situations we may improve the Camel component to hook into the 3rd
+     * party component and make this possible for future releases.
      * <p/>
      * By default the consumer will use the org.apache.camel.spi.ExceptionHandler to deal with exceptions, that will be
      * logged at WARN/ERROR level and ignored.
@@ -412,8 +413,8 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
             configurer = getComponent().getComponentPropertyConfigurer();
         } else if (bean instanceof Endpoint) {
             configurer = getComponent().getEndpointPropertyConfigurer();
-        } else if (bean instanceof PropertyConfigurerAware) {
-            configurer = ((PropertyConfigurerAware) bean).getPropertyConfigurer(bean);
+        } else if (bean instanceof PropertyConfigurerAware propertyConfigurerAware) {
+            configurer = propertyConfigurerAware.getPropertyConfigurer(bean);
         }
         // use configurer and ignore case as end users may type an option name with mixed case
         PropertyBindingSupport.build().withConfigurer(configurer).withIgnoreCase(true)
@@ -467,8 +468,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
         CamelContextAware.trySetCamelContext(consumer, camelContext);
 
         if (bridgeErrorHandler) {
-            if (consumer instanceof DefaultConsumer) {
-                DefaultConsumer defaultConsumer = (DefaultConsumer) consumer;
+            if (consumer instanceof DefaultConsumer defaultConsumer) {
                 defaultConsumer.setExceptionHandler(new BridgeExceptionHandlerToErrorHandler(defaultConsumer));
             } else {
                 throw new IllegalArgumentException(
@@ -478,8 +478,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
             }
         }
         if (exceptionHandler != null) {
-            if (consumer instanceof DefaultConsumer) {
-                DefaultConsumer defaultConsumer = (DefaultConsumer) consumer;
+            if (consumer instanceof DefaultConsumer defaultConsumer) {
                 defaultConsumer.setExceptionHandler(exceptionHandler);
             }
         }
@@ -495,8 +494,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
 
         if (autowiredEnabled && getComponent() != null && getComponent().isAutowiredEnabled()) {
             PropertyConfigurer configurer = getComponent().getEndpointPropertyConfigurer();
-            if (configurer instanceof PropertyConfigurerGetter) {
-                PropertyConfigurerGetter getter = (PropertyConfigurerGetter) configurer;
+            if (configurer instanceof PropertyConfigurerGetter getter) {
                 String[] names = getter.getAutowiredNames();
                 if (names != null) {
                     for (String name : names) {
@@ -505,10 +503,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
                         if (value == null) {
                             Class<?> type = getter.getOptionType(name, true);
                             if (type != null) {
-                                Set<?> set = camelContext.getRegistry().findByType(type);
-                                if (set.size() == 1) {
-                                    value = set.iterator().next();
-                                }
+                                value = camelContext.getRegistry().findSingleByType(type);
                             }
                             if (value != null) {
                                 boolean hit = configurer.configure(camelContext, this, name, value, true);
@@ -516,7 +511,7 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
                                     if (LOG.isDebugEnabled()) {
                                         LOG.debug(
                                                 "Autowired property: {} on endpoint: {} as exactly one instance of type: {} ({}) found in the registry",
-                                                name, toString(), type.getName(), value.getClass().getName());
+                                                name, this, type.getName(), value.getClass().getName());
                                     }
                                 }
                             }
@@ -525,15 +520,5 @@ public abstract class DefaultEndpoint extends ServiceSupport implements Endpoint
                 }
             }
         }
-    }
-
-    @Override
-    protected void doStart() throws Exception {
-        // noop
-    }
-
-    @Override
-    protected void doStop() throws Exception {
-        // noop
     }
 }

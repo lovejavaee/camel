@@ -35,7 +35,7 @@ public final class Hl7Util {
 
     public static final Map<Character, String> CHARACTER_REPLACEMENTS;
 
-    public static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddHHmmssSSSZZZZ");
+    public static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddHHmmss.SSSZZZZ");
 
     static final int STRING_BUFFER_PAD_SIZE = 100;
 
@@ -311,7 +311,7 @@ public final class Hl7Util {
     public String convertToPrintFriendlyString(String phiString) {
         if (null == phiString) {
             return NULL_REPLACEMENT_VALUE;
-        } else if (phiString.length() == 0) {
+        } else if (phiString.isEmpty()) {
             return EMPTY_REPLACEMENT_VALUE;
         }
 

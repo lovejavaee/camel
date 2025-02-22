@@ -16,8 +16,6 @@
  */
 package org.apache.camel.itest.jms;
 
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.builder.NotifyBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.jms.JmsComponent;
@@ -26,6 +24,7 @@ import org.apache.camel.spi.Registry;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static org.apache.camel.Exchange.CONTENT_TYPE;
@@ -37,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Based on user forum.
  */
+@Timeout(30)
 public class JmsHttpPostIssueTest extends CamelTestSupport {
 
     @RegisterExtension
@@ -72,16 +72,13 @@ public class JmsHttpPostIssueTest extends CamelTestSupport {
                         .to("http://localhost:" + port + "/myservice");
 
                 from("jetty:http://0.0.0.0:" + port + "/myservice")
-                        .process(new Processor() {
-                            @Override
-                            public void process(Exchange exchange) {
-                                String body = exchange.getIn().getBody(String.class);
-                                assertEquals("name=Hello World", body);
+                        .process(exchange -> {
+                            String body = exchange.getIn().getBody(String.class);
+                            assertEquals("name=Hello World", body);
 
-                                exchange.getMessage().setBody("OK");
-                                exchange.getMessage().setHeader(CONTENT_TYPE, "text/plain");
-                                exchange.getMessage().setHeader(HTTP_RESPONSE_CODE, 200);
-                            }
+                            exchange.getMessage().setBody("OK");
+                            exchange.getMessage().setHeader(CONTENT_TYPE, "text/plain");
+                            exchange.getMessage().setHeader(HTTP_RESPONSE_CODE, 200);
                         });
             }
         };

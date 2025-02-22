@@ -35,6 +35,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -48,6 +50,7 @@ import static org.awaitility.Awaitility.await;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisabledIfSystemProperty(named = "kafka.instance.type", matches = "local-strimzi-container",
                           disabledReason = "Test infra Kafka runs the Strimzi containers in a way that conflicts with multiple concurrent images")
+@Tags({ @Tag("health") })
 public class KafkaConsumerBadPortSupervisingHealthCheckIT extends KafkaHealthCheckTestSupport {
     public static final String TOPIC = "test-health";
 
@@ -67,6 +70,9 @@ public class KafkaConsumerBadPortSupervisingHealthCheckIT extends KafkaHealthChe
         KafkaComponent kafka = new KafkaComponent(context);
         kafka.init();
         kafka.getConfiguration().setBrokers(service.getBootstrapServers() + 123);
+        // turn of pre validation so we startup and let supervising route controller handle this
+        // and we can see failure in health checks
+        kafka.getConfiguration().setPreValidateHostAndPort(false);
         context.addComponent("kafka", kafka);
     }
 

@@ -27,19 +27,13 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.component.sjms.SjmsComponent;
-import org.apache.camel.test.infra.artemis.services.ArtemisService;
-import org.apache.camel.test.infra.artemis.services.ArtemisServiceFactory;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class TransactedConsumerSupport extends CamelTestSupport {
 
     protected final Logger log = LoggerFactory.getLogger(getClass());
-
-    @RegisterExtension
-    protected ArtemisService service = ArtemisServiceFactory.createVMService();
 
     public abstract String getBrokerUri();
 
@@ -51,7 +45,7 @@ public abstract class TransactedConsumerSupport extends CamelTestSupport {
         // unit all the messages have been processed. It is also
         // set to time out on the await. Our values are multiplied
         // by the number of routes we have.
-        CountDownLatch latch = new CountDownLatch((totalRedeliverdFalse * routeCount) + (totalRedeliveredTrue * routeCount));
+        CountDownLatch latch = new CountDownLatch((totalRedeliverdFalse * routeCount));
 
         for (int i = 1; i <= routeCount; i++) {
             // We add a route here so we can pass our latch into it.
@@ -68,13 +62,16 @@ public abstract class TransactedConsumerSupport extends CamelTestSupport {
         // Send only 10 messages
         for (int i = 1; i <= messageCount; i++) {
             String message = "Hello World " + i;
-            template.sendBody("direct:start", message);
+            template.sendBody("direct:start?block=false", message);
             log.trace("Sending message: {}", message);
         }
 
-        // Await on our countdown for 30 seconds at most then move on
-        latch.await(30, TimeUnit.SECONDS);
-        MockEndpoint.assertIsSatisfied(context, 30, TimeUnit.SECONDS);
+        // Await on our countdown for 20 seconds at most then move on
+        log.info("Waiting for latch to count down from: {}", latch.getCount());
+        boolean zero = latch.await(20, TimeUnit.SECONDS);
+        log.info("Latch wait done: {} with count: {}", zero, latch.getCount());
+
+        MockEndpoint.assertIsSatisfied(context);
     }
 
     @Override

@@ -29,13 +29,13 @@ public class StringAggregationStrategyTest extends ContextTestSupport {
         Object objectBody = new Object();
         Object objectHeader = new Object();
 
-        getMockEndpoint("mock:aggregatedBody").expectedBodiesReceived("bodyAbodyB" + objectBody.toString());
-        getMockEndpoint("mock:aggregatedBodyComma").expectedBodiesReceived("bodyA, bodyB, " + objectBody.toString());
-        getMockEndpoint("mock:aggregatedBodyLines").expectedBodiesReceived("bodyA\nbodyB\n" + objectBody.toString());
+        getMockEndpoint("mock:aggregatedBody").expectedBodiesReceived("bodyAbodyB" + objectBody);
+        getMockEndpoint("mock:aggregatedBodyComma").expectedBodiesReceived("bodyA, bodyB, " + objectBody);
+        getMockEndpoint("mock:aggregatedBodyLines").expectedBodiesReceived("bodyA\nbodyB\n" + objectBody);
 
-        getMockEndpoint("mock:aggregatedHeader").expectedBodiesReceived("headerAheaderB" + objectHeader.toString());
-        getMockEndpoint("mock:aggregatedHeaderComma").expectedBodiesReceived("headerA, headerB, " + objectHeader.toString());
-        getMockEndpoint("mock:aggregatedHeaderLines").expectedBodiesReceived("headerA\nheaderB\n" + objectHeader.toString());
+        getMockEndpoint("mock:aggregatedHeader").expectedBodiesReceived("headerAheaderB" + objectHeader);
+        getMockEndpoint("mock:aggregatedHeaderComma").expectedBodiesReceived("headerA, headerB, " + objectHeader);
+        getMockEndpoint("mock:aggregatedHeaderLines").expectedBodiesReceived("headerA\nheaderB\n" + objectHeader);
 
         template.sendBodyAndHeader("direct:start", "bodyA", "header", "headerA");
         template.sendBodyAndHeader("direct:start", "bodyB", "header", "headerB");
@@ -45,10 +45,10 @@ public class StringAggregationStrategyTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("direct:aggregateBody", "direct:aggregateBodyComma", "direct:aggregateBodyLines",
                         "direct:aggregateHeader", "direct:aggregateHeaderComma",
                         "direct:aggregateHeaderLines");

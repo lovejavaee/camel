@@ -26,17 +26,28 @@ import org.apache.camel.ExchangePattern;
 import org.apache.camel.NoSuchBeanException;
 import org.apache.camel.NoSuchHeaderException;
 import org.apache.camel.NoSuchPropertyException;
+import org.apache.camel.converter.stream.InputStreamCache;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.support.ExchangeHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ExchangeHelperTest extends ContextTestSupport {
 
     protected Exchange exchange;
+
+    @Test
+    public void testGetDummy() {
+        Exchange one = ExchangeHelper.getDummy(context);
+        Exchange two = ExchangeHelper.getDummy(context);
+        assertSame(one, two);
+        assertNotSame(exchange, one);
+        assertNotSame(exchange, two);
+    }
 
     @Test
     public void testValidProperty() throws Exception {
@@ -45,7 +56,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testMissingProperty() throws Exception {
+    public void testMissingProperty() {
         try {
             String value = ExchangeHelper.getMandatoryProperty(exchange, "bar", String.class);
             fail("Should have failed but got: " + value);
@@ -55,7 +66,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testPropertyOfIncompatibleType() throws Exception {
+    public void testPropertyOfIncompatibleType() {
         try {
             List<?> value = ExchangeHelper.getMandatoryProperty(exchange, "foo", List.class);
             fail("Should have failed but got: " + value);
@@ -65,7 +76,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testMissingHeader() throws Exception {
+    public void testMissingHeader() {
         try {
             String value = ExchangeHelper.getMandatoryHeader(exchange, "unknown", String.class);
             fail("Should have failed but got: " + value);
@@ -75,7 +86,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testHeaderOfIncompatibleType() throws Exception {
+    public void testHeaderOfIncompatibleType() {
         exchange.getIn().setHeader("foo", 123);
         try {
             List<?> value = ExchangeHelper.getMandatoryHeader(exchange, "foo", List.class);
@@ -86,7 +97,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testNoSuchBean() throws Exception {
+    public void testNoSuchBean() {
         try {
             ExchangeHelper.lookupMandatoryBean(exchange, "foo");
             fail("Should have thrown an exception");
@@ -97,7 +108,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testNoSuchBeanType() throws Exception {
+    public void testNoSuchBeanType() {
         try {
             ExchangeHelper.lookupMandatoryBean(exchange, "foo", String.class);
             fail("Should have thrown an exception");
@@ -108,7 +119,7 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testPopulateVariableMapBodyAndHeaderOnly() throws Exception {
+    public void testPopulateVariableMapBodyAndHeaderOnly() {
         exchange.setPattern(ExchangePattern.InOut);
         exchange.getMessage().setBody("bar");
         exchange.getMessage().setHeader("quote", "Camel rocks");
@@ -116,19 +127,22 @@ public class ExchangeHelperTest extends ContextTestSupport {
         Map<String, Object> map = new HashMap<>();
         ExchangeHelper.populateVariableMap(exchange, map, false);
 
-        assertEquals(2, map.size());
+        assertEquals(6, map.size());
         assertNull(map.get("exchange"));
         assertNull(map.get("in"));
         assertNull(map.get("request"));
         assertNull(map.get("out"));
         assertNull(map.get("response"));
+        assertNull(map.get("exception"));
+        assertSame(exchange.getIn().getHeaders(), map.get("header"));
         assertSame(exchange.getIn().getHeaders(), map.get("headers"));
         assertSame(exchange.getIn().getBody(), map.get("body"));
+        assertSame(exchange.getVariable("cheese"), map.get("cheese"));
         assertNull(map.get("camelContext"));
     }
 
     @Test
-    public void testPopulateVariableMap() throws Exception {
+    public void testPopulateVariableMap() {
         exchange.setPattern(ExchangePattern.InOut);
         exchange.getMessage().setBody("bar");
         exchange.getMessage().setHeader("quote", "Camel rocks");
@@ -136,38 +150,44 @@ public class ExchangeHelperTest extends ContextTestSupport {
         Map<String, Object> map = new HashMap<>();
         ExchangeHelper.populateVariableMap(exchange, map, true);
 
-        assertEquals(8, map.size());
+        assertEquals(14, map.size());
         assertSame(exchange, map.get("exchange"));
         assertSame(exchange.getIn(), map.get("in"));
         assertSame(exchange.getIn(), map.get("request"));
         assertSame(exchange.getMessage(), map.get("out"));
         assertSame(exchange.getMessage(), map.get("response"));
         assertSame(exchange.getIn().getHeaders(), map.get("headers"));
+        assertSame(exchange.getIn().getHeaders(), map.get("header"));
+        assertSame(exchange.getVariables(), map.get("variable"));
+        assertSame(exchange.getVariables(), map.get("variables"));
         assertSame(exchange.getIn().getBody(), map.get("body"));
         assertSame(exchange.getContext(), map.get("camelContext"));
     }
 
     @Test
-    public void testCreateVariableMap() throws Exception {
+    public void testCreateVariableMap() {
         exchange.setPattern(ExchangePattern.InOut);
         exchange.getMessage().setBody("bar");
         exchange.getMessage().setHeader("quote", "Camel rocks");
+        exchange.setVariable("cheese", "gauda");
 
         Map<?, ?> map = ExchangeHelper.createVariableMap(exchange, true);
 
-        assertEquals(8, map.size());
+        assertEquals(14, map.size());
         assertSame(exchange, map.get("exchange"));
         assertSame(exchange.getIn(), map.get("in"));
         assertSame(exchange.getIn(), map.get("request"));
         assertSame(exchange.getMessage(), map.get("out"));
         assertSame(exchange.getMessage(), map.get("response"));
+        assertSame(exchange.getIn().getHeaders(), map.get("header" +
+                                                          ""));
         assertSame(exchange.getIn().getHeaders(), map.get("headers"));
         assertSame(exchange.getIn().getBody(), map.get("body"));
         assertSame(exchange.getContext(), map.get("camelContext"));
     }
 
     @Test
-    public void testCreateVariableMapNoExistingOut() throws Exception {
+    public void testCreateVariableMapNoExistingOut() {
         exchange.setPattern(ExchangePattern.InOut);
         exchange.getIn().setBody("bar");
         exchange.getIn().setHeader("quote", "Camel rocks");
@@ -175,15 +195,17 @@ public class ExchangeHelperTest extends ContextTestSupport {
 
         Map<?, ?> map = ExchangeHelper.createVariableMap(exchange, true);
 
-        // there should still be 8 in the map
-        assertEquals(8, map.size());
+        // there should still be 14 in the map
+        assertEquals(14, map.size());
         assertSame(exchange, map.get("exchange"));
         assertSame(exchange.getIn(), map.get("in"));
         assertSame(exchange.getIn(), map.get("request"));
         assertSame(exchange.getIn(), map.get("out"));
         assertSame(exchange.getIn(), map.get("response"));
+        assertSame(exchange.getIn().getHeaders(), map.get("header"));
         assertSame(exchange.getIn().getHeaders(), map.get("headers"));
         assertSame(exchange.getIn().getBody(), map.get("body"));
+        assertSame(exchange.getVariable("cheese"), map.get("cheese"));
         assertSame(exchange.getContext(), map.get("camelContext"));
 
         // but the Exchange does still not have an OUT message to avoid
@@ -192,22 +214,39 @@ public class ExchangeHelperTest extends ContextTestSupport {
     }
 
     @Test
-    public void testGetContentType() throws Exception {
+    public void testGetContentType() {
         exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "text/xml");
         assertEquals("text/xml", ExchangeHelper.getContentType(exchange));
     }
 
     @Test
-    public void testGetContentEncoding() throws Exception {
+    public void testGetContentEncoding() {
         exchange.getIn().setHeader(Exchange.CONTENT_ENCODING, "iso-8859-1");
         assertEquals("iso-8859-1", ExchangeHelper.getContentEncoding(exchange));
     }
 
     @Test
-    public void testIsStreamCaching() throws Exception {
+    public void testIsStreamCaching() {
         assertFalse(ExchangeHelper.isStreamCachingEnabled(exchange));
         exchange.getContext().getStreamCachingStrategy().setEnabled(true);
         assertTrue(ExchangeHelper.isStreamCachingEnabled(exchange));
+    }
+
+    @Test
+    public void testGetBodyAndResetStreamCache() {
+        InputStreamCache body = new InputStreamCache("Hello Camel Rider!".getBytes(UTF_8));
+        exchange.getMessage().setBody(body);
+
+        String first = ExchangeHelper.getBodyAndResetStreamCache(exchange, String.class);
+        String second = ExchangeHelper.getBodyAndResetStreamCache(exchange, String.class);
+
+        assertFalse(ObjectHelper.isEmpty(second), "second should not be null or empty");
+        assertEquals(first, second);
+
+        // Null checks..
+        exchange.getMessage().setBody(null);
+        String third = ExchangeHelper.getBodyAndResetStreamCache(exchange, String.class);
+        assertNull(third);
     }
 
     @Override

@@ -4,8 +4,9 @@
 :description: Sets a named property on the message exchange
 :since: 
 :supportlevel: Stable
+:tabs-sync-option:
 
-The SetProperty EIP is used for setting a xref:manual:ROOT:exchange.adoc[Exchange] property.
+The SetProperty EIP is used for setting an xref:manual:ROOT:exchange.adoc[Exchange] property.
 
 NOTE: An `Exchange` property is a key/value set as a `Map` on the `org.apache.camel.Exchange` instance.
 This is *not* for setting xref:manual:ROOT:using-propertyplaceholder.adoc[property placeholders].
@@ -16,10 +17,20 @@ This is *not* for setting xref:manual:ROOT:using-propertyplaceholder.adoc[proper
 include::partial$eip-options.adoc[]
 // eip options: END
 
+== Exchange properties
+
+// eip exchangeProperties: START
+include::partial$eip-exchangeProperties.adoc[]
+// eip exchangeProperties: END
+
 == Example
 
 The following example shows how to set a property on the exchange in a Camel route:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("direct:a")
@@ -27,8 +38,8 @@ from("direct:a")
     .to("direct:b");
 ----
 
-And the same example using XML:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -39,13 +50,18 @@ And the same example using XML:
     <to uri="direct:b"/>
 </route>
 ----
+====
 
 === Setting an exchange property from another exchange property
 
 You can also set an exchange property with the value from another exchange property.
 
-In the example we set the exchange property foo with the value from an existing exchange property named bar.
+In the example, we set the exchange property foo with the value from an existing exchange property named bar.
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("direct:a")
@@ -53,8 +69,8 @@ from("direct:a")
     .to("direct:b");
 ----
 
-And in XML:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -65,12 +81,17 @@ And in XML:
     <to uri="direct:b"/>
 </route>
 ----
+====
 
 === Setting an exchange property with the current message body
 
-It is of course also possible to set an exchange property with a value
+It is also possible to set an exchange property with a value
 from anything on the `Exchange` such as the message body:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("direct:a")
@@ -78,9 +99,11 @@ from("direct:a")
     .to("direct:b");
 ----
 
-And in XML we use the xref:components:languages:simple-language.adoc[Simple] language
+XML::
++
+We use the xref:components:languages:simple-language.adoc[Simple] language
 to refer to the message body:
-
++
 [source,xml]
 ----
 <route>
@@ -91,3 +114,4 @@ to refer to the message body:
     <to uri="direct:b"/>
 </route>
 ----
+====

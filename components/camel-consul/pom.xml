@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-consul</artifactId>
@@ -33,6 +33,9 @@
     <description>Camel Consul support</description>
 
     <properties>
+        <!-- Consul container is not available on these platforms -->
+        <skipTests.s390x>true</skipTests.s390x>
+        <skipITs.s390x>true</skipITs.s390x>
     </properties>
 
     <dependencies>
@@ -54,7 +57,7 @@
         </dependency>
 
         <dependency>
-            <groupId>com.orbitz.consul</groupId>
+            <groupId>org.kiwiproject</groupId>
             <artifactId>consul-client</artifactId>
             <version>${consul-client-version}</version>
         </dependency>
@@ -118,7 +121,6 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj-version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -145,7 +147,7 @@
         </dependency>
         
         <!-- test infra -->
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-consul</artifactId>
             <version>${project.version}</version>
@@ -154,5 +156,4 @@
         </dependency>
 
     </dependencies>
-
 </project>

@@ -34,7 +34,7 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
 @Command(name = "circuit-breaker",
-         description = "Get status of Circuit Breaker EIPs")
+         description = "Get status of Circuit Breaker EIPs", sortOptions = false, showDefaultValues = true)
 public class ListCircuitBreaker extends ProcessWatchCommand {
 
     @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
@@ -108,6 +108,23 @@ public class ListCircuitBreaker extends ProcessWatchCommand {
                                 }
                             }
                         }
+                        mo = (JsonObject) root.get("circuit-breaker");
+                        if (mo != null) {
+                            JsonArray arr = (JsonArray) mo.get("circuitBreakers");
+                            if (arr != null) {
+                                for (int i = 0; i < arr.size(); i++) {
+                                    row = baseRow.copy();
+                                    JsonObject jo = (JsonObject) arr.get(i);
+                                    row.component = "core";
+                                    row.id = jo.getString("routeId");
+                                    row.routeId = jo.getString("routeId");
+                                    row.state = jo.getString("state");
+                                    row.successfulCalls = jo.getInteger("successfulCalls");
+                                    row.failedCalls = jo.getInteger("failedCalls");
+                                    rows.add(row);
+                                }
+                            }
+                        }
                     }
                 });
 
@@ -115,7 +132,7 @@ public class ListCircuitBreaker extends ProcessWatchCommand {
         rows.sort(this::sortRow);
 
         if (!rows.isEmpty()) {
-            System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+            printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                     new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                     new Column().header("NAME").dataAlign(HorizontalAlign.LEFT).maxWidth(30, OverflowBehaviour.ELLIPSIS_RIGHT)
                             .with(r -> r.name),
@@ -159,7 +176,7 @@ public class ListCircuitBreaker extends ProcessWatchCommand {
         if (r.failedCalls <= 0) {
             return "";
         } else if (r.failureRate > 0) {
-            return +r.failedCalls + " (" + String.format("%.0f", r.failureRate) + "%)";
+            return r.failedCalls + " (" + String.format("%.0f", r.failureRate) + "%)";
         } else {
             return Integer.toString(r.failedCalls);
         }
@@ -173,7 +190,7 @@ public class ListCircuitBreaker extends ProcessWatchCommand {
     }
 
     private String getSuccess(Row r) {
-        if ("resilience4j".equals(r.component)) {
+        if ("resilience4j".equals(r.component) || "core".equals(r.component)) {
             return Integer.toString(r.successfulCalls);
         }
         return "";

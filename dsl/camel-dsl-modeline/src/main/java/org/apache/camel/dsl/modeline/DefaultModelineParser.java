@@ -23,22 +23,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.camel.CamelContext;
 import org.apache.camel.spi.CamelContextCustomizer;
 import org.apache.camel.spi.Resource;
 import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.StringQuoteHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+@Deprecated(since = "4.10")
 public class DefaultModelineParser implements ModelineParser {
 
-    public static final String MODELINE_START = "camel-k:";
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultModelineParser.class);
 
-    private final CamelContext camelContext;
+    public static final String MODELINE_START = "camel-k:";
+    public static final String JBANG_DEPS_START = "//DEPS";
+
     private final Map<String, Trait> traits = new HashMap<>();
 
-    public DefaultModelineParser(CamelContext camelContext) {
-        this.camelContext = camelContext;
-
+    public DefaultModelineParser() {
         // add known traits
         Trait trait = new DependencyTrait();
         this.traits.put(trait.getName(), trait);
@@ -81,6 +83,8 @@ public class DefaultModelineParser implements ModelineParser {
         List<CamelContextCustomizer> answer = new ArrayList<>();
 
         if (line.startsWith(MODELINE_START)) {
+            LOG.warn("Using modeline is deprecated. {}: {}", resource.getLocation(), line);
+
             line = line.substring(MODELINE_START.length()).trim();
             // split into key value pairs
             String[] parts = StringQuoteHelper.splitSafeQuote(line, ' ', false);
@@ -94,6 +98,41 @@ public class DefaultModelineParser implements ModelineParser {
                     if (customizer != null) {
                         answer.add(customizer);
                     }
+                }
+            }
+        }
+
+        if (line.startsWith(JBANG_DEPS_START)) {
+            line = line.substring(JBANG_DEPS_START.length()).trim();
+            line = line.trim();
+            Trait dep = traits.get("dependency");
+            String[] parts = StringQuoteHelper.splitSafeQuote(line, ' ', false);
+            for (String part : parts) {
+                part = part.trim();
+                if (part.endsWith("@pom")) {
+                    // skip @pom
+                    continue;
+                }
+                // in case DEPS uses jbang ${ } style that refer to JVM system properties
+                if (part.contains("${") && part.contains("}")) {
+                    String target = StringHelper.between(part, "${", "}");
+                    String value = StringHelper.before(target, ":", target);
+                    if (target.contains(":")) {
+                        String def = StringHelper.after(target, ":");
+                        value = System.getProperty(value, def);
+                    } else {
+                        String found = System.getProperty(value);
+                        if (found == null) {
+                            throw new IllegalArgumentException(
+                                    "Cannot find JVM system property: " + value + " for dependency: " + part);
+                        }
+                        value = found;
+                    }
+                    part = part.replace("${" + target + "}", value);
+                }
+                CamelContextCustomizer customizer = dep.parseTrait(resource, part);
+                if (customizer != null) {
+                    answer.add(customizer);
                 }
             }
         }
@@ -113,7 +152,7 @@ public class DefaultModelineParser implements ModelineParser {
             return false;
         }
         line = removeLeadingComments(line);
-        return line.startsWith(MODELINE_START);
+        return line.startsWith(MODELINE_START) || line.startsWith(JBANG_DEPS_START);
     }
 
     private static String removeLeadingComments(String line) {
@@ -122,7 +161,7 @@ public class DefaultModelineParser implements ModelineParser {
         }
 
         line = line.trim();
-        while (line.startsWith("/") || line.startsWith("#")) {
+        while (!line.startsWith(JBANG_DEPS_START) && line.startsWith("/") || line.startsWith("#")) {
             line = line.substring(1);
         }
 

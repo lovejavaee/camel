@@ -17,12 +17,16 @@
 package org.apache.camel.converter.jaxb;
 
 import java.lang.reflect.Method;
+import java.util.Map;
 
 import jakarta.xml.bind.annotation.XmlElementDecl;
 
 import org.apache.camel.CamelContext;
+import org.apache.camel.support.LRUCacheFactory;
 
 public final class JaxbHelper {
+
+    private static final Map<Class<?>, Method> JAXB_ELEMENT_FACTORY_METHODS = LRUCacheFactory.newLRUSoftCache(10, 100, true);
 
     private JaxbHelper() {
     }
@@ -32,8 +36,12 @@ public final class JaxbHelper {
             return null;
         }
 
+        return JAXB_ELEMENT_FACTORY_METHODS.computeIfAbsent(type, t -> findJaxbElementFactoryMethod(camelContext, t));
+    }
+
+    private static <T> Method findJaxbElementFactoryMethod(CamelContext camelContext, Class<T> type) {
         // find the first method that has @XmlElementDecl with one parameter that matches the type
-        Class factory = getObjectFactory(camelContext, type);
+        Class<?> factory = getObjectFactory(camelContext, type);
         if (factory != null) {
             for (Method m : factory.getMethods()) {
                 final XmlElementDecl a = m.getAnnotation(XmlElementDecl.class);
@@ -50,7 +58,7 @@ public final class JaxbHelper {
         return null;
     }
 
-    public static <T> Class getObjectFactory(CamelContext camelContext, Class<T> type) {
+    public static <T> Class<?> getObjectFactory(CamelContext camelContext, Class<T> type) {
         if (camelContext == null) {
             return null;
         }

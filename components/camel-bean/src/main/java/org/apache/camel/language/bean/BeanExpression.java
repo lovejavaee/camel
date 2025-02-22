@@ -59,13 +59,14 @@ public class BeanExpression implements Expression, Predicate {
     private BeanComponent beanComponent;
     private Language simple;
     private Class<?> resultType;
-    private Object bean;
+    private final Object bean;
     private String beanName;
     private Class<?> type;
-    private String method;
+    private final String method;
     private BeanHolder beanHolder;
     private boolean ognlMethod;
     private BeanScope scope = BeanScope.Singleton;
+    private boolean validate = true;
 
     public BeanExpression(Object bean, String method) {
         this.bean = bean;
@@ -110,6 +111,14 @@ public class BeanExpression implements Expression, Predicate {
 
     public void setScope(BeanScope scope) {
         this.scope = scope;
+    }
+
+    public boolean isValidate() {
+        return validate;
+    }
+
+    public void setValidate(boolean validate) {
+        this.validate = validate;
     }
 
     public ParameterMappingStrategy getParameterMappingStrategy() {
@@ -169,22 +178,24 @@ public class BeanExpression implements Expression, Predicate {
         // lets see if we can do additional validation that the bean has valid method during creation of the expression
         Object target = beanHolder.getBean(null);
         if (method != null) {
-            validateHasMethod(context, target, type, method);
-
-            // validate OGNL if its invalid syntax
-            if (OgnlHelper.isInvalidValidOgnlExpression(method)) {
-                throw new ExpressionIllegalSyntaxException(method);
+            if (validate) {
+                validateHasMethod(context, target, type, method);
+                // validate OGNL if its invalid syntax
+                if (OgnlHelper.isInvalidValidOgnlExpression(method)) {
+                    throw new ExpressionIllegalSyntaxException(method);
+                }
             }
-
             ognlMethod = OgnlHelper.isValidOgnlExpression(method);
         }
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("BeanExpression[");
+        StringBuilder sb = new StringBuilder(256);
+
+        sb.append("BeanExpression[");
         if (bean != null) {
-            sb.append(bean.toString());
+            sb.append(bean);
         } else if (beanName != null) {
             sb.append(beanName);
         } else if (type != null) {
@@ -338,13 +349,15 @@ public class BeanExpression implements Expression, Predicate {
     private static Object invokeBean(BeanHolder beanHolder, String beanName, String methodName, Exchange exchange) {
         Object result;
 
-        BeanExpressionProcessor processor = new BeanExpressionProcessor(beanHolder);
-        if (methodName != null) {
-            processor.setMethod(methodName);
-            // enable OGNL like invocation
-            processor.setShorthandMethod(true);
-        }
         try {
+            // do not close BeanExpressionProcessor as beanHolder should not be closed
+            BeanExpressionProcessor processor = new BeanExpressionProcessor(beanHolder);
+
+            if (methodName != null) {
+                processor.setMethod(methodName);
+                // enable OGNL like invocation
+                processor.setShorthandMethod(true);
+            }
             // copy the original exchange to avoid side effects on it
             Exchange resultExchange = ExchangeHelper.createCopy(exchange, true);
             // remove any existing exception in case we do OGNL on the exception

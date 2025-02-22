@@ -22,13 +22,14 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 /**
  * For working with Amazon Athena SDK v2.
  */
 @Component("aws2-athena")
-public class Athena2Component extends DefaultComponent {
+public class Athena2Component extends HealthCheckComponent {
+
     @Metadata
     private Athena2Configuration configuration = new Athena2Configuration();
 
@@ -47,11 +48,13 @@ public class Athena2Component extends DefaultComponent {
         Athena2Endpoint endpoint = new Athena2Endpoint(uri, this, configurationClone);
         setProperties(endpoint, parameters);
         if (Boolean.FALSE.equals(configurationClone.isUseDefaultCredentialsProvider())
+                && Boolean.FALSE.equals(configurationClone.isUseProfileCredentialsProvider())
+                && Boolean.FALSE.equals(configurationClone.isUseSessionCredentials())
                 && configurationClone.getAmazonAthenaClient() == null
                 && (configurationClone.getAccessKey() == null
                         || configurationClone.getSecretKey() == null)) {
             throw new IllegalArgumentException(
-                    "useDefaultCredentialsProvider is set to false, accessKey/secretKey or amazonAthenaClient must be specified");
+                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, useSessionCredentials is set to false, accessKey/secretKey or amazonAthenaClient must be specified");
         }
         return endpoint;
     }

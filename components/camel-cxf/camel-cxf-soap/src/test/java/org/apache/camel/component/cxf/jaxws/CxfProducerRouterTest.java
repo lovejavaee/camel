@@ -36,7 +36,6 @@ import org.apache.cxf.helpers.CastUtils;
 import org.apache.cxf.message.MessageContentsList;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfProducerRouterTest extends CamelTestSupport {
     private static final Logger LOG = LoggerFactory.getLogger(CxfProducerRouterTest.class);
     private static final String SIMPLE_SERVER_ADDRESS
@@ -81,7 +79,7 @@ public class CxfProducerRouterTest extends CamelTestSupport {
                 from("direct:start")
                         .doTry()
                         .to("cxf://http://localhost:10000/false?serviceClass=org.apache.camel.component.cxf.jaxws.HelloService")
-                        .doCatch(org.apache.cxf.interceptor.Fault.class)
+                        .doCatch(java.net.ConnectException.class)
                         .to("mock:error");
             }
         };
@@ -130,7 +128,7 @@ public class CxfProducerRouterTest extends CamelTestSupport {
         // If there are some holder parameters, the holder parameter will be filled in the reset of List.
         // The result will be extract from the MessageContentsList with the String class type
         MessageContentsList result = (MessageContentsList) out.getBody();
-        LOG.info("Received output text: " + result.get(0));
+        LOG.info("Received output text: {}", result.get(0));
         Map<String, Object> responseContext = CastUtils.cast((Map<?, ?>) out.getHeader(Client.RESPONSE_CONTEXT));
         assertNotNull(responseContext);
         assertEquals("UTF-8", responseContext.get(org.apache.cxf.message.Message.ENCODING),
@@ -150,6 +148,18 @@ public class CxfProducerRouterTest extends CamelTestSupport {
         assertTrue(response.indexOf("echo " + TEST_MESSAGE) > 0, "It should has the echo message");
         assertTrue(response.indexOf("echoResponse") > 0, "It should has the echoResponse tag");
 
+    }
+
+    @Test
+    public void testIgnorePseudoHeaders() throws Exception {
+        Exchange senderExchange = new DefaultExchange(context, ExchangePattern.InOut);
+        senderExchange.getIn().setBody(REQUEST_MESSAGE);
+        Exchange exchange = template.send("direct:EndpointB", senderExchange);
+
+        org.apache.camel.Message out = exchange.getMessage();
+        final List<String> pseudoHeaders
+                = out.getHeaders().keySet().stream().filter(key -> key.startsWith(":")).toList();
+        assertTrue(pseudoHeaders.isEmpty(), "Pseudo-headers such as :status should be filtered out; found: " + pseudoHeaders);
     }
 
     @Test

@@ -49,7 +49,7 @@ public class ManagedPollEnricher extends ManagedProcessor implements ManagedPoll
     @Override
     public void init(ManagementStrategy strategy) {
         super.init(strategy);
-        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : false;
+        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : true;
         uri = getDefinition().getExpression().getExpression();
         if (sanitize) {
             uri = URISupport.sanitizeUri(uri);
@@ -90,6 +90,11 @@ public class ManagedPollEnricher extends ManagedProcessor implements ManagedPoll
     }
 
     @Override
+    public String getVariableReceive() {
+        return processor.getVariableReceive();
+    }
+
+    @Override
     public Long getTimeout() {
         return processor.getTimeout();
     }
@@ -107,6 +112,16 @@ public class ManagedPollEnricher extends ManagedProcessor implements ManagedPoll
     @Override
     public Boolean isAggregateOnException() {
         return processor.isAggregateOnException();
+    }
+
+    @Override
+    public Boolean isAllowOptimisedComponents() {
+        return processor.isAllowOptimisedComponents();
+    }
+
+    @Override
+    public Boolean isOptimised() {
+        return processor.getDynamicAware() != null;
     }
 
     @Override

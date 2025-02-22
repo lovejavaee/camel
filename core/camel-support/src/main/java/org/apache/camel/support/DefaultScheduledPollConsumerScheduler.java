@@ -45,7 +45,7 @@ public class DefaultScheduledPollConsumerScheduler extends ServiceSupport implem
     private Consumer consumer;
     private ScheduledExecutorService scheduledExecutorService;
     private boolean shutdownExecutor;
-    private volatile List<ScheduledFuture<?>> futures = new ArrayList<>();
+    private final List<ScheduledFuture<?>> futures = new ArrayList<>();
     private Runnable task;
     private int poolSize = 1;
     private int concurrentConsumers = 1;
@@ -201,7 +201,7 @@ public class DefaultScheduledPollConsumerScheduler extends ServiceSupport implem
 
     @Override
     public boolean isSchedulerStarted() {
-        return futures != null && !futures.isEmpty();
+        return !futures.isEmpty();
     }
 
     @Override

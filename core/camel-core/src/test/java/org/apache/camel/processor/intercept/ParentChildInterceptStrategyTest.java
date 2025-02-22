@@ -52,20 +52,20 @@ public class ParentChildInterceptStrategyTest extends ContextTestSupport {
 
         assertEquals(7, LIST.size());
         assertEquals("Parent route -> target task-a", LIST.get(0));
-        assertEquals("Parent when -> target task-b", LIST.get(1));
-        assertEquals("Parent when -> target task-c", LIST.get(2));
-        assertEquals("Parent when2 -> target task-d", LIST.get(3));
-        assertEquals("Parent otherwise -> target task-e", LIST.get(4));
+        assertEquals("Parent choice -> target task-b", LIST.get(1));
+        assertEquals("Parent choice -> target task-c", LIST.get(2));
+        assertEquals("Parent choice -> target task-d", LIST.get(3));
+        assertEquals("Parent choice -> target task-e", LIST.get(4));
         assertEquals("Parent route -> target choice", LIST.get(5));
         // the last one has no custom id so its using its label instead
         assertEquals("Parent route -> target mock:done", LIST.get(6));
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.getCamelContextExtension().addInterceptStrategy(new MyParentChildInterceptStrategy());
 
                 from("direct:start").routeId("route").to("mock:a").id("task-a").choice().id("choice")
@@ -81,8 +81,7 @@ public class ParentChildInterceptStrategyTest extends ContextTestSupport {
 
         @Override
         public Processor wrapProcessorInInterceptors(
-                final CamelContext context, final NamedNode node, final Processor target, final Processor nextTarget)
-                throws Exception {
+                final CamelContext context, final NamedNode node, final Processor target, final Processor nextTarget) {
             ProcessorDefinition<?> definition = (ProcessorDefinition<?>) node;
             String targetId = definition.hasCustomIdAssigned() ? definition.getId() : definition.getLabel();
             ProcessorDefinition<?> parent = definition.getParent();

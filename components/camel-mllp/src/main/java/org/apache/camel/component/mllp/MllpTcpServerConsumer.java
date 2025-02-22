@@ -87,6 +87,11 @@ public class MllpTcpServerConsumer extends DefaultConsumer {
                 new SynchronousQueue<>());
     }
 
+    @Override
+    public boolean isHostedService() {
+        return true;
+    }
+
     @ManagedAttribute(description = "Last activity time")
     public Map<String, Date> getLastActivityTimes() {
         Map<String, Date> answer = new HashMap<>();
@@ -150,7 +155,7 @@ public class MllpTcpServerConsumer extends DefaultConsumer {
     @Override
     protected void doStart() throws Exception {
         if (bindThread == null || !bindThread.isAlive()) {
-            bindThread = new TcpServerBindThread(this);
+            bindThread = new TcpServerBindThread(this, getEndpoint().getSslContextParameters());
 
             if (getConfiguration().isLenientBind()) {
                 log.debug("doStart() - starting bind thread");

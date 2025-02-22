@@ -41,6 +41,8 @@ import org.apache.camel.util.ObjectHelper;
 
 public class SlackConsumer extends ScheduledBatchPollingConsumer {
 
+    public static final long DEFAULT_CONSUMER_DELAY = 10 * 1000L;
+
     private static final int CONVERSATIONS_LIST_LIMIT = 200;
     private final SlackEndpoint slackEndpoint;
     private Slack slack;
@@ -82,6 +84,9 @@ public class SlackConsumer extends ScheduledBatchPollingConsumer {
         if (!response.isOk()) {
             throw new RuntimeCamelException("API request conversations.history to Slack failed: " + response);
         }
+
+        // okay we have some response from slack so lets mark the consumer as ready
+        forceConsumerAsReady();
 
         Queue<Exchange> exchanges = createExchanges(response.getMessages());
         return processBatch(CastUtils.cast(exchanges));

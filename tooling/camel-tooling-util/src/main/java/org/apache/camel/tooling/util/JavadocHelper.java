@@ -37,7 +37,7 @@ public final class JavadocHelper {
         }
 
         // lets just use what java accepts as identifiers
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(javadoc.length());
 
         // split into lines
         String[] lines = javadoc.split("\n");
@@ -76,7 +76,7 @@ public final class JavadocHelper {
 
             boolean empty = isNullOrEmpty(s);
             boolean endWithDot = s.endsWith(".");
-            boolean haveText = sb.length() > 0;
+            boolean haveText = !sb.isEmpty();
 
             if (haveText && summary && (empty || endWithDot)) {
                 // if we only want a summary, then skip at first empty line we encounter, or if the sentence ends with a dot
@@ -101,7 +101,7 @@ public final class JavadocHelper {
         s = s.replaceAll("\\{@\\w+\\s#?([\\w.#(\\d,)]+)}", "$1");
 
         // create a new line
-        StringBuilder cb = new StringBuilder();
+        StringBuilder cb = new StringBuilder(s.length() + 16);
         for (char c : s.toCharArray()) {
             if (Character.isJavaIdentifierPart(c) || VALID_CHARS.indexOf(c) != -1) {
                 cb.append(c);
@@ -120,7 +120,7 @@ public final class JavadocHelper {
     }
 
     /**
-     * Encodes the text into safe XML by replacing < > and & with XML tokens
+     * Encodes the text into safe XML by replacing &lt; $gt; and &amp; with XML tokens
      *
      * @param  text the text
      * @return      the encoded text

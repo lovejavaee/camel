@@ -74,6 +74,15 @@ public class ExpressionDefinition
     public ExpressionDefinition() {
     }
 
+    public ExpressionDefinition(ExpressionDefinition source) {
+        this.predicate = source.predicate;
+        this.expressionValue = source.expressionValue;
+        this.expressionType = source.expressionType != null ? source.expressionType.copyDefinition() : null;
+        this.id = source.id;
+        this.expression = source.expression;
+        this.trim = source.trim;
+    }
+
     public ExpressionDefinition(String expression) {
         this.expression = expression;
     }
@@ -93,6 +102,10 @@ public class ExpressionDefinition
         this.predicate = builder.predicate;
     }
 
+    public ExpressionDefinition copyDefinition() {
+        return new ExpressionDefinition(this);
+    }
+
     public static String getLabel(List<ExpressionDefinition> expressions) {
         StringJoiner buffer = new StringJoiner(", ");
         for (ExpressionDefinition expression : expressions) {
@@ -108,7 +121,7 @@ public class ExpressionDefinition
             return getExpressionValue().toString();
         }
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(256);
         if (getLanguage() != null) {
             sb.append(getLanguage()).append("{");
         }
@@ -274,7 +287,7 @@ public class ExpressionDefinition
      */
     @XmlTransient
     @SuppressWarnings("unchecked")
-    abstract static class AbstractBuilder<T extends AbstractBuilder<T, E>, E extends ExpressionDefinition>
+    protected abstract static class AbstractBuilder<T extends AbstractBuilder<T, E>, E extends ExpressionDefinition>
             implements LanguageBuilder<E> {
 
         private String id;

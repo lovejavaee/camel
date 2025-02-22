@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-dhis2-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-dhis2</artifactId>
@@ -46,20 +46,24 @@
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
+            <artifactId>camel-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.camel</groupId>
             <artifactId>camel-dhis2-api</artifactId>
             <version>${project.version}</version>
         </dependency>
 
         <!-- testing -->
         <dependency>
-            <groupId>org.apache.camel</groupId>
-            <artifactId>camel-jackson</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <version>${testcontainers-version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -98,6 +102,7 @@
                                         <nullableOption>skipAggregate</nullableOption>
                                         <nullableOption>lastYears</nullableOption>
                                         <nullableOption>interval</nullableOption>
+                                        <nullableOption>async</nullableOption>
                                     </nullableOptions>
                                 </api>
                                 <api>
@@ -105,10 +110,28 @@
                                     <proxyClass>org.apache.camel.component.dhis2.api.Dhis2Get</proxyClass>
                                     <fromJavasource />
                                     <nullableOptions>
-                                        <nullableOption>itemType</nullableOption>
                                         <nullableOption>paging</nullableOption>
                                         <nullableOption>fields</nullableOption>
                                         <nullableOption>filter</nullableOption>
+                                        <nullableOption>rootJunction</nullableOption>
+                                        <nullableOption>queryParams</nullableOption>
+                                    </nullableOptions>
+                                </api>
+                                <api>
+                                    <apiName>delete</apiName>
+                                    <proxyClass>org.apache.camel.component.dhis2.api.Dhis2Delete</proxyClass>
+                                    <fromJavasource />
+                                    <nullableOptions>
+                                        <nullableOption>resource</nullableOption>
+                                        <nullableOption>queryParams</nullableOption>
+                                    </nullableOptions>
+                                </api>
+                                <api>
+                                    <apiName>put</apiName>
+                                    <proxyClass>org.apache.camel.component.dhis2.api.Dhis2Put</proxyClass>
+                                    <fromJavasource />
+                                    <nullableOptions>
+                                        <nullableOption>resource</nullableOption>
                                         <nullableOption>queryParams</nullableOption>
                                     </nullableOptions>
                                 </api>

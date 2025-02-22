@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BeanInfoSingleMethodServiceTest extends ContextTestSupport {
 
-    private SingleMethodService myService = new SingleMethodServiceImpl();
+    private final SingleMethodService<String, String> myService = new SingleMethodServiceImpl();
 
     @Test
     public void testBeanInfoSingleMethodRoute() throws Exception {
@@ -39,7 +39,7 @@ public class BeanInfoSingleMethodServiceTest extends ContextTestSupport {
     }
 
     @Test
-    public void testBeanInfoSingleMethod() throws Exception {
+    public void testBeanInfoSingleMethod() {
         BeanInfo beaninfo = new BeanInfo(context, SingleMethodService.class);
         assertEquals(1, beaninfo.getMethods().size());
         assertEquals("doSomething", beaninfo.getMethods().get(0).getMethod().getName());
@@ -58,10 +58,10 @@ public class BeanInfoSingleMethodServiceTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(myService, "doSomething").to("mock:result");
             }
         };

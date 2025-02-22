@@ -16,13 +16,15 @@
  */
 package org.apache.camel.impl.event;
 
+import java.io.Serial;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.spi.CamelEvent;
 
 public class CamelContextStopFailureEvent extends AbstractContextEvent implements CamelEvent.CamelContextStopFailureEvent {
-    private static final long serialVersionUID = -802046840118188292L;
+    private static final @Serial long serialVersionUID = -802046840118188292L;
 
-    private Throwable cause;
+    private final Throwable cause;
 
     public CamelContextStopFailureEvent(CamelContext context, Throwable cause) {
         super(context);

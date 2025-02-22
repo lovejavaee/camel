@@ -31,17 +31,15 @@ import org.apache.cxf.Bus;
 import org.apache.cxf.BusFactory;
 import org.apache.cxf.jaxws.JaxWsServerFactoryBean;
 import org.apache.cxf.jaxws.support.JaxWsServiceFactoryBean;
-import org.apache.cxf.transport.http_jetty.JettyHTTPServerEngineFactory;
+import org.apache.cxf.transport.http_undertow.UndertowHTTPServerEngineFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfProducerSessionTest extends CamelTestSupport {
     private static final int PORT = CXFTestSupport.getPort1();
     private static final String SIMPLE_SERVER_ADDRESS = "http://127.0.0.1:" + PORT + "/CxfProducerSessionTest/test";
@@ -69,10 +67,11 @@ public class CxfProducerSessionTest extends CamelTestSupport {
         svrBean.setAddress(SIMPLE_SERVER_ADDRESS);
         svrBean.setServiceClass(EchoService.class);
         svrBean.setServiceBean(new EchoServiceSessionImpl());
-        // make the Jetty server support sessions
+        // make the Undertow server support sessions
         Bus bus = BusFactory.newInstance().createBus();
-        JettyHTTPServerEngineFactory jettyFactory = bus.getExtension(JettyHTTPServerEngineFactory.class);
-        jettyFactory.createJettyHTTPServerEngine(PORT, "http").setSessionSupport(true);
+        UndertowHTTPServerEngineFactory undertowFactory = bus.getExtension(UndertowHTTPServerEngineFactory.class);
+        undertowFactory.createUndertowHTTPServerEngine(PORT, "http");
+        //.setSessionSupport(true);
         svrBean.setBus(bus);
         svrBean.create();
     }
@@ -81,7 +80,7 @@ public class CxfProducerSessionTest extends CamelTestSupport {
     public static void destroyServer() {
         // If we don't destroy this the session support will spill over to other
         // tests and they will fail
-        JettyHTTPServerEngineFactory.destroyForPort(PORT);
+        UndertowHTTPServerEngineFactory.destroyForPort(PORT);
     }
 
     @Test

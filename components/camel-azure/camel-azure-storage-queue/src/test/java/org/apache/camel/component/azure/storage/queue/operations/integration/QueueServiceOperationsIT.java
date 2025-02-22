@@ -18,7 +18,6 @@ package org.apache.camel.component.azure.storage.queue.operations.integration;
 
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import com.azure.storage.queue.QueueServiceClient;
 import com.azure.storage.queue.models.QueueItem;
@@ -86,7 +85,7 @@ class QueueServiceOperationsIT {
         final List<String> queues = ((List<QueueItem>) queuesResponse.getBody())
                 .stream()
                 .map(QueueItem::getName)
-                .collect(Collectors.toList());
+                .toList();
 
         assertTrue(queues.contains(queueName1));
         assertTrue(queues.contains(queueName2));
@@ -94,7 +93,7 @@ class QueueServiceOperationsIT {
     }
 
     @AfterAll
-    public void tearDown() {
+    public void cleanup() {
         final QueueServiceClient client = QueueClientFactory.createQueueServiceClient(configuration);
 
         client.deleteQueue(queueName1);

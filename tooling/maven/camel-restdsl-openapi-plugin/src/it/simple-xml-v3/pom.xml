@@ -30,6 +30,8 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>17</maven.compiler.release>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
   </properties>
 
   <build>
@@ -70,7 +72,7 @@
                 <dependency>
                   <groupId>jakarta.xml.bind</groupId>
                   <artifactId>jakarta.xml.bind-api</artifactId>
-                  <version>${jakarta-xml-bind-api-version}</version>
+                  <version>@jakarta-xml-bind-api-version@</version>
                 </dependency>
                 <dependency>
                   <groupId>org.glassfish.jaxb</groupId>

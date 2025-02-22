@@ -62,12 +62,12 @@ public class ResourceLoaderTest extends TestSupport {
 
     @Test
     public void testLoadFileWithSpace() throws Exception {
-        createDirectory("target/data/my space");
-        copyFile(new File("src/test/resources/log4j2.properties"), new File("target/data/my space/log4j2.properties"));
+        testDirectory("target/data/my space", true);
+        copyFile(new File("src/test/resources/log4j2.properties"), testFile("target/data/my space/log4j2.properties").toFile());
 
         DefaultCamelContext context = new DefaultCamelContext();
-        Resource resource
-                = PluginHelper.getResourceLoader(context).resolveResource("file:target/data/my%20space/log4j2.properties");
+        Resource resource = PluginHelper.getResourceLoader(context).resolveResource(
+                "file:" + testDirectory().toString() + "/target/data/my%20space/log4j2.properties");
 
         try (InputStream is = resource.getInputStream()) {
             assertNotNull(is);
@@ -114,18 +114,7 @@ public class ResourceLoaderTest extends TestSupport {
     @Test
     public void testLoadFallback() throws Exception {
         try (DefaultCamelContext context = new DefaultCamelContext()) {
-            DefaultResourceLoader loader = new DefaultResourceLoader();
-            loader.setFallbackResolver(new ResourceResolverSupport("custom") {
-                @Override
-                public Resource resolve(String location) {
-                    return ResourceHelper.fromString("custom", "fallback");
-                }
-
-                @Override
-                protected Resource createResource(String location, String remaining) {
-                    throw new UnsupportedOperationException();
-                }
-            });
+            final DefaultResourceLoader loader = createDefaultResourceLoader();
 
             context.getCamelContextExtension().addContextPlugin(ResourceLoader.class, loader);
 
@@ -143,6 +132,22 @@ public class ResourceLoaderTest extends TestSupport {
                 assertEquals("fallback", text);
             }
         }
+    }
+
+    private static DefaultResourceLoader createDefaultResourceLoader() {
+        DefaultResourceLoader loader = new DefaultResourceLoader();
+        loader.setFallbackResolver(new ResourceResolverSupport("custom") {
+            @Override
+            public Resource resolve(String location) {
+                return ResourceHelper.fromString("custom", "fallback");
+            }
+
+            @Override
+            protected Resource createResource(String location, String remaining) {
+                throw new UnsupportedOperationException();
+            }
+        });
+        return loader;
     }
 
     @Test
@@ -213,7 +218,7 @@ public class ResourceLoaderTest extends TestSupport {
     }
 
     @Test
-    public void testLoadFileNotFound() throws Exception {
+    public void testLoadFileNotFound() {
         DefaultCamelContext context = new DefaultCamelContext();
         Resource resource = PluginHelper.getResourceLoader(context).resolveResource("file:src/test/resources/notfound.txt");
 
@@ -221,7 +226,7 @@ public class ResourceLoaderTest extends TestSupport {
     }
 
     @Test
-    public void testLoadClasspathNotFound() throws Exception {
+    public void testLoadClasspathNotFound() {
         DefaultCamelContext context = new DefaultCamelContext();
         Resource resource = PluginHelper.getResourceLoader(context).resolveResource("classpath:notfound.txt");
 

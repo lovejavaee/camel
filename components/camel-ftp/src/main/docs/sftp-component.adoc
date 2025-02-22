@@ -5,6 +5,7 @@
 :description: Upload and download files to/from SFTP servers.
 :since: 1.1
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: ftp
@@ -13,8 +14,7 @@
 
 *{component-header}*
 
-This component provides access to remote file systems over the FTP and
-SFTP protocols.
+This component provides access to remote file systems over the SFTP protocol.
 
 Maven users will need to add the following dependency to their `pom.xml`
 for this component:
@@ -45,7 +45,9 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Restoring Deprecated Key Types and Algorithms
+== Usage
+
+=== Restoring Deprecated Key Types and Algorithms
 
 As of Camel 3.17.0, key types and algorithms that use SHA1 have been deprecated. These can be restored, if necessary, by setting JSch configuration directly. E.g.:
 
@@ -67,7 +69,7 @@ As of Camel 3.18.1, these values can also be set on SFTP endpoints by setting th
 
 == More Information
 
-For more information you can look at xref:ftp-component.adoc[FTP component]
+For more information, you can look at the xref:ftp-component.adoc[FTP component].
 
 
 include::spring-boot:partial$starter.adoc[]

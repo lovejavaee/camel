@@ -51,16 +51,16 @@ public class DumpModelAsXmlSourceLocationTest extends ContextTestSupport {
         log.info(xml);
 
         Assertions.assertTrue(xml.contains(
-                "<from sourceLineNumber=\"25\" sourceLocation=\"MyCoolRoute.java\" uri=\"direct:cool\"/>"));
+                "sourceLineNumber=\"25\" sourceLocation=\"MyCoolRoute.java\" uri=\"direct:cool\"/>"));
         Assertions.assertTrue(xml.contains("sourceLineNumber=\"26\" sourceLocation=\"MyCoolRoute.java\""));
     }
 
     @Override
-    protected RouteBuilder[] createRouteBuilders() throws Exception {
+    protected RouteBuilder[] createRouteBuilders() {
         return new RouteBuilder[] {
                 new RouteBuilder() {
                     @Override
-                    public void configure() throws Exception {
+                    public void configure() {
                         from("direct:start").routeId("myRoute")
                                 .filter(simple("${body} > 10"))
                                 .to("mock:result");

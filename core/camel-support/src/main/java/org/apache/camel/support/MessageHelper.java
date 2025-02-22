@@ -20,10 +20,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.io.Reader;
-import java.io.StringWriter;
 import java.io.Writer;
+import java.lang.reflect.Array;
+import java.nio.file.Path;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -38,8 +39,8 @@ import org.apache.camel.WrappedFile;
 import org.apache.camel.spi.DataTypeAware;
 import org.apache.camel.spi.ExchangeFormatter;
 import org.apache.camel.spi.HeaderFilterStrategy;
+import org.apache.camel.trait.message.MessageTrait;
 import org.apache.camel.util.ObjectHelper;
-import org.apache.camel.util.StopWatch;
 import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.URISupport;
 import org.apache.camel.util.json.JsonArray;
@@ -75,8 +76,8 @@ public final class MessageHelper {
 
         // optimize if the body is a String type already
         Object body = message.getBody();
-        if (body instanceof String) {
-            return (String) body;
+        if (body instanceof String string) {
+            return string;
         }
 
         // we need to favor using stream cache so the body can be re-read later
@@ -130,11 +131,11 @@ public final class MessageHelper {
         Object body = null;
         try {
             body = message.getBody();
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
-        if (body instanceof StreamCache) {
-            ((StreamCache) body).reset();
+        if (body instanceof StreamCache streamCache) {
+            streamCache.reset();
         }
     }
 
@@ -178,14 +179,7 @@ public final class MessageHelper {
      * @see            org.apache.camel.Exchange#LOG_DEBUG_BODY_MAX_CHARS
      */
     public static String extractValueForLogging(Object value, Message message) {
-        boolean streams = false;
-        if (message.getExchange() != null) {
-            String globalOption = message.getExchange().getContext().getGlobalOption(Exchange.LOG_DEBUG_BODY_STREAMS);
-            if (globalOption != null) {
-                streams = message.getExchange().getContext().getTypeConverter().convertTo(Boolean.class, message.getExchange(),
-                        globalOption);
-            }
-        }
+        boolean streams = isStreams(message);
 
         // default to 1000 chars
         int maxChars = 1000;
@@ -200,6 +194,18 @@ public final class MessageHelper {
         return extractValueForLogging(value, message, streams, false, maxChars);
     }
 
+    private static boolean isStreams(Message message) {
+        boolean streams = false;
+        if (message.getExchange() != null) {
+            String globalOption = message.getExchange().getContext().getGlobalOption(Exchange.LOG_DEBUG_BODY_STREAMS);
+            if (globalOption != null) {
+                streams = message.getExchange().getContext().getTypeConverter().convertTo(Boolean.class, message.getExchange(),
+                        globalOption);
+            }
+        }
+        return streams;
+    }
+
     /**
      * Extracts the body for logging purpose.
      * <p/>
@@ -212,14 +218,7 @@ public final class MessageHelper {
      * @see            org.apache.camel.Exchange#LOG_DEBUG_BODY_MAX_CHARS
      */
     public static String extractBodyForLogging(Message message, String prepend) {
-        boolean streams = false;
-        if (message.getExchange() != null) {
-            String globalOption = message.getExchange().getContext().getGlobalOption(Exchange.LOG_DEBUG_BODY_STREAMS);
-            if (globalOption != null) {
-                streams = message.getExchange().getContext().getTypeConverter().convertTo(Boolean.class, message.getExchange(),
-                        globalOption);
-            }
-        }
+        boolean streams = isStreams(message);
         return extractBodyForLogging(message, prepend, streams, false);
     }
 
@@ -347,7 +346,7 @@ public final class MessageHelper {
         }
 
         if (!allowFiles) {
-            if (obj instanceof WrappedFile || obj instanceof File) {
+            if (obj instanceof WrappedFile || obj instanceof File || obj instanceof Path) {
                 return "[Body is file based: " + obj + "]";
             }
         }
@@ -375,12 +374,10 @@ public final class MessageHelper {
         // is the body a stream cache or input stream
         StreamCache cache = null;
         InputStream is = null;
-        if (obj instanceof StreamCache) {
-            cache = (StreamCache) obj;
-            is = null;
-        } else if (obj instanceof InputStream) {
-            cache = null;
-            is = (InputStream) obj;
+        if (obj instanceof StreamCache streamCache) {
+            cache = streamCache;
+        } else if (obj instanceof InputStream inputStream) {
+            is = inputStream;
         }
 
         // grab the message body as a string
@@ -389,14 +386,14 @@ public final class MessageHelper {
             try {
                 body = message.getExchange().getContext().getTypeConverter().tryConvertTo(String.class, message.getExchange(),
                         obj);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 // ignore as the body is for logging purpose
             }
         }
         if (body == null) {
             try {
                 body = obj.toString();
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 // ignore as the body is for logging purpose
             }
         }
@@ -472,15 +469,16 @@ public final class MessageHelper {
      */
     public static String dumpAsXml(
             Message message, boolean includeBody, int indent, boolean allowStreams, boolean allowFiles, int maxChars) {
-        return dumpAsXml(message, false, includeBody, indent, allowStreams, allowStreams, allowFiles, maxChars);
+        return dumpAsXml(message, false, false, includeBody, indent, allowStreams, allowStreams, allowFiles, maxChars);
     }
 
     /**
      * Dumps the message as a generic XML structure.
      *
      * @param  message                   the message
-     * @param  includeBody               whether or not to include the message body
      * @param  includeExchangeProperties whether or not to include exchange properties
+     * @param  includeExchangeVariables  whether or not to include exchange variables
+     * @param  includeBody               whether or not to include the message body
      * @param  indent                    number of spaces to indent
      * @param  allowCachedStreams        whether to include message body if they are stream cache based
      * @param  allowStreams              whether to include message body if they are stream based
@@ -490,12 +488,12 @@ public final class MessageHelper {
      * @return                           the XML
      */
     public static String dumpAsXml(
-            Message message, boolean includeExchangeProperties, boolean includeBody, int indent,
-            boolean allowCachedStreams, boolean allowStreams, boolean allowFiles, int maxChars) {
-        StringBuilder sb = new StringBuilder();
+            Message message, boolean includeExchangeProperties, boolean includeExchangeVariables,
+            boolean includeBody, int indent, boolean allowCachedStreams, boolean allowStreams,
+            boolean allowFiles, int maxChars) {
+        StringBuilder sb = new StringBuilder(1024);
 
-        StringBuilder prefix = new StringBuilder();
-        prefix.append(" ".repeat(indent));
+        final String prefix = " ".repeat(indent);
 
         // include exchangeId/exchangePattern/type as attribute on the <message> tag
         sb.append(prefix);
@@ -506,16 +504,52 @@ public final class MessageHelper {
                 .append("\" exchangeType=\"").append(exchangeType)
                 .append("\" messageType=\"").append(messageType).append("\">\n");
 
+        // exchange variables
+        if (includeExchangeVariables && message.getExchange().hasVariables()) {
+            sb.append(prefix);
+            sb.append("  <exchangeVariables>\n");
+            // sort the exchange variables so they are listed A..Z
+            Map<String, Object> variables = new TreeMap<>(message.getExchange().getVariables());
+            for (Map.Entry<String, Object> entry : variables.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                String type = ObjectHelper.classCanonicalName(value);
+                sb.append(prefix);
+                sb.append("    <exchangeVariable key=\"").append(key).append("\"");
+                if (type != null) {
+                    sb.append(" type=\"").append(type).append("\"");
+                }
+                sb.append(">");
+
+                // dump value as XML, use Camel type converter to convert to String
+                if (value != null) {
+                    try {
+                        String xml = extractValueForLogging(value, message, allowCachedStreams, allowStreams, allowFiles,
+                                maxChars);
+                        if (xml != null) {
+                            // must always xml encode
+                            sb.append(StringHelper.xmlEncode(xml));
+                        }
+                    } catch (Exception e) {
+                        // ignore as the body is for logging purpose
+                    }
+                }
+                sb.append("</exchangeVariable>\n");
+            }
+            sb.append(prefix);
+            sb.append("  </exchangeVariables>\n");
+        }
         // exchange properties
-        if (includeExchangeProperties && message.getExchange().hasProperties()) {
+        if (includeExchangeProperties) {
             sb.append(prefix);
             sb.append("  <exchangeProperties>\n");
             // sort the exchange properties so they are listed A..Z
             Map<String, Object> properties = new TreeMap<>(message.getExchange().getAllProperties());
             for (Map.Entry<String, Object> entry : properties.entrySet()) {
                 String key = entry.getKey();
-                // skip message history
-                if (Exchange.MESSAGE_HISTORY.equals(key)) {
+                // skip some special that are too big
+                if (Exchange.MESSAGE_HISTORY.equals(key) || Exchange.GROUPED_EXCHANGE.equals(key)
+                        || Exchange.FILE_EXCHANGE_FILE.equals(key)) {
                     continue;
                 }
                 Object value = entry.getValue();
@@ -527,21 +561,19 @@ public final class MessageHelper {
                 }
                 sb.append(">");
 
-                // dump header value as XML, use Camel type converter to convert
-                // to String
+                // dump value as XML, use Camel type converter to convert to String
                 if (value != null) {
                     try {
-                        String xml = message.getExchange().getContext().getTypeConverter().tryConvertTo(String.class,
-                                message.getExchange(), value);
+                        String xml = extractValueForLogging(value, message, allowCachedStreams, allowStreams, allowFiles,
+                                maxChars);
                         if (xml != null) {
                             // must always xml encode
                             sb.append(StringHelper.xmlEncode(xml));
                         }
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
                         // ignore as the body is for logging purpose
                     }
                 }
-
                 sb.append("</exchangeProperty>\n");
             }
             sb.append(prefix);
@@ -563,21 +595,19 @@ public final class MessageHelper {
                 }
                 sb.append(">");
 
-                // dump header value as XML, use Camel type converter to convert
-                // to String
+                // dump value as XML, use Camel type converter to convert to String
                 if (value != null) {
                     try {
-                        String xml = message.getExchange().getContext().getTypeConverter().tryConvertTo(String.class,
-                                message.getExchange(), value);
+                        String xml = extractValueForLogging(value, message, allowCachedStreams, allowStreams, allowFiles,
+                                maxChars);
                         if (xml != null) {
                             // must always xml encode
                             sb.append(StringHelper.xmlEncode(xml));
                         }
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
                         // ignore as the body is for logging purpose
                     }
                 }
-
                 sb.append("</header>\n");
             }
             sb.append(prefix);
@@ -591,8 +621,16 @@ public final class MessageHelper {
             if (type != null) {
                 sb.append(" type=\"").append(type).append("\"");
             }
-            if (body instanceof StreamCache) {
-                long pos = ((StreamCache) body).position();
+            if (body instanceof Collection) {
+                long size = ((Collection<?>) body).size();
+                sb.append(" size=\"").append(size).append("\"");
+            }
+            if (body != null && body.getClass().isArray()) {
+                int size = Array.getLength(body);
+                sb.append(" size=\"").append(size).append("\"");
+            }
+            if (body instanceof StreamCache streamCache) {
+                long pos = streamCache.position();
                 if (pos != -1) {
                     sb.append(" position=\"").append(pos).append("\"");
                 }
@@ -622,14 +660,14 @@ public final class MessageHelper {
      */
     public static void copyBody(Message source, Message target) {
         // Preserve the DataType if both messages are DataTypeAware
-        if (source instanceof DataTypeAware && target instanceof DataTypeAware) {
-            final DataTypeAware dataTypeAwareSource = (DataTypeAware) source;
-            if (dataTypeAwareSource.hasDataType()) {
-                final DataTypeAware dataTypeAwareTarget = (DataTypeAware) target;
-                dataTypeAwareTarget.setBody(source.getBody(), dataTypeAwareSource.getDataType());
-                return;
-            }
+        if (source.hasTrait(MessageTrait.DATA_AWARE)) {
+            target.setBody(source.getBody());
+            target.setPayloadForTrait(MessageTrait.DATA_AWARE,
+                    source.getPayloadForTrait(MessageTrait.DATA_AWARE));
+
+            return;
         }
+
         target.setBody(source.getBody());
     }
 
@@ -674,20 +712,20 @@ public final class MessageHelper {
     }
 
     /**
-     * Dumps the {@link MessageHistory} from the {@link Exchange} in a human readable format.
+     * Dumps the {@link MessageHistory} from the {@link Exchange} in a human-readable format.
      *
      * @param  exchange          the exchange
      * @param  exchangeFormatter if provided then information about the exchange is included in the dump
      * @param  logStackTrace     whether to include a header for the stacktrace, to be added (not included in this
      *                           dump).
-     * @return                   a human readable message history as a table
+     * @return                   a human-readable message history as a table, never {@code null}
      */
     public static String dumpMessageHistoryStacktrace(
             Exchange exchange, ExchangeFormatter exchangeFormatter, boolean logStackTrace) {
         // must not cause new exceptions so run this in a try catch block
         try {
             return doDumpMessageHistoryStacktrace(exchange, exchangeFormatter, logStackTrace);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore as the body is for logging purpose
             return "";
         }
@@ -710,13 +748,13 @@ public final class MessageHelper {
             label = "from[" + URISupport.sanitizeUri(StringHelper.limitLength(exchange.getFromEndpoint().getEndpointUri(), 100))
                     + "]";
         }
-        long elapsed = new StopWatch(exchange.getCreated()).taken();
+        final long elapsed = exchange.getClock().elapsed();
 
         List<MessageHistory> list = exchange.getProperty(ExchangePropertyKey.MESSAGE_HISTORY, List.class);
         boolean enabled = list != null;
         boolean source = !loc.isEmpty();
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(2048);
         sb.append("\n");
         sb.append("Message History");
         if (!source && !enabled) {
@@ -762,9 +800,8 @@ public final class MessageHelper {
                 // fast
                 label = URISupport.sanitizeUri(StringHelper.limitLength(label, 100));
                 // we do not have elapsed time
-                elapsed = 0;
                 sb.append("\t...\n");
-                sb.append(String.format(goMessageHistoryOutput, loc, routeId + "/" + id, label, elapsed));
+                sb.append(String.format(goMessageHistoryOutput, loc, routeId + "/" + id, label, 0));
                 sb.append("\n");
             }
         } else {
@@ -784,9 +821,8 @@ public final class MessageHelper {
                 // characters in the sanitizeUri method and will be reasonably
                 // fast
                 label = URISupport.sanitizeUri(StringHelper.limitLength(history.getNode().getLabel(), 100));
-                elapsed = history.getElapsed();
 
-                sb.append(String.format(goMessageHistoryOutput, loc, routeId + "/" + id, label, elapsed));
+                sb.append(String.format(goMessageHistoryOutput, loc, routeId + "/" + id, label, history.getElapsed()));
                 sb.append("\n");
             }
         }
@@ -855,7 +891,7 @@ public final class MessageHelper {
     public static String dumpAsJSon(
             Message message, boolean includeBody, int indent, boolean allowStreams, boolean allowFiles, int maxChars,
             boolean pretty) {
-        return dumpAsJSon(message, false, includeBody, indent, false, allowStreams, allowFiles, maxChars, pretty);
+        return dumpAsJSon(message, false, false, includeBody, indent, false, allowStreams, allowFiles, maxChars, pretty);
     }
 
     /**
@@ -863,6 +899,7 @@ public final class MessageHelper {
      *
      * @param  message                   the message
      * @param  includeExchangeProperties whether or not to include exchange properties
+     * @param  includeExchangeVariables  whether or not to include exchange variables
      * @param  includeBody               whether or not to include the message body
      * @param  indent                    number of spaces to indent
      * @param  allowCachedStreams        whether to include message body if they are stream cached based
@@ -874,10 +911,12 @@ public final class MessageHelper {
      * @return                           the JSon
      */
     public static String dumpAsJSon(
-            Message message, boolean includeExchangeProperties, boolean includeBody, int indent,
+            Message message, boolean includeExchangeProperties, boolean includeExchangeVariables, boolean includeBody,
+            int indent,
             boolean allowCachedStreams, boolean allowStreams, boolean allowFiles, int maxChars, boolean pretty) {
 
-        JsonObject jo = dumpAsJSonObject(message, includeExchangeProperties, includeBody, allowCachedStreams, allowStreams,
+        JsonObject jo = dumpAsJSonObject(message, includeExchangeProperties, includeExchangeVariables, includeBody,
+                allowCachedStreams, allowStreams,
                 allowFiles, maxChars);
         String answer = jo.toJson();
         if (pretty) {
@@ -895,6 +934,7 @@ public final class MessageHelper {
      *
      * @param  message                   the message
      * @param  includeExchangeProperties whether or not to include exchange properties
+     * @param  includeExchangeVariables  whether or not to include exchange variables
      * @param  includeBody               whether or not to include the message body
      * @param  allowCachedStreams        whether to include message body if they are stream cached based
      * @param  allowStreams              whether to include message body if they are stream based
@@ -904,7 +944,7 @@ public final class MessageHelper {
      * @return                           the JSon Object
      */
     public static JsonObject dumpAsJSonObject(
-            Message message, boolean includeExchangeProperties, boolean includeBody,
+            Message message, boolean includeExchangeProperties, boolean includeExchangeVariables, boolean includeBody,
             boolean allowCachedStreams, boolean allowStreams, boolean allowFiles, int maxChars) {
 
         JsonObject root = new JsonObject();
@@ -915,8 +955,43 @@ public final class MessageHelper {
         jo.put("exchangeType", ObjectHelper.classCanonicalName(message.getExchange()));
         jo.put("messageType", ObjectHelper.classCanonicalName(message));
 
+        // exchange variables
+        if (includeExchangeVariables && message.getExchange().hasVariables()) {
+            JsonArray arr = new JsonArray();
+            // sort the exchange variables so they are listed A..Z
+            Map<String, Object> properties = new TreeMap<>(message.getExchange().getVariables());
+            for (Map.Entry<String, Object> entry : properties.entrySet()) {
+                Object value = entry.getValue();
+                String type = ObjectHelper.classCanonicalName(value);
+                JsonObject jh = new JsonObject();
+                String key = entry.getKey();
+                jh.put("key", key);
+                if (type != null) {
+                    jh.put("type", type);
+                }
+                if (value != null) {
+                    Object s = Jsoner.trySerialize(value);
+                    if (s == null) {
+                        // cannot JSon serialize out of the box, so we need to use string value
+                        try {
+                            s = extractValueForLogging(value, message, allowCachedStreams, allowStreams, allowFiles, maxChars);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    } else {
+                        // use the value as-is because it can be serialized in json
+                        s = value;
+                    }
+                    jh.put("value", s);
+                }
+                arr.add(jh);
+            }
+            if (!arr.isEmpty()) {
+                jo.put("exchangeVariables", arr);
+            }
+        }
         // exchange properties
-        if (includeExchangeProperties && message.getExchange().hasProperties()) {
+        if (includeExchangeProperties) {
             JsonArray arr = new JsonArray();
             // sort the exchange properties so they are listed A..Z
             Map<String, Object> properties = new TreeMap<>(message.getExchange().getAllProperties());
@@ -925,8 +1000,9 @@ public final class MessageHelper {
                 String type = ObjectHelper.classCanonicalName(value);
                 JsonObject jh = new JsonObject();
                 String key = entry.getKey();
-                // skip message history
-                if (Exchange.MESSAGE_HISTORY.equals(key)) {
+                // skip some special that are too big
+                if (Exchange.MESSAGE_HISTORY.equals(key) || Exchange.GROUPED_EXCHANGE.equals(key)
+                        || Exchange.FILE_EXCHANGE_FILE.equals(key)) {
                     continue;
                 }
                 jh.put("key", key);
@@ -938,9 +1014,8 @@ public final class MessageHelper {
                     if (s == null) {
                         // cannot JSon serialize out of the box, so we need to use string value
                         try {
-                            s = message.getExchange().getContext().getTypeConverter().tryConvertTo(String.class,
-                                    message.getExchange(), value);
-                        } catch (Throwable e) {
+                            s = extractValueForLogging(value, message, allowCachedStreams, allowStreams, allowFiles, maxChars);
+                        } catch (Exception e) {
                             // ignore
                         }
                     } else {
@@ -974,9 +1049,8 @@ public final class MessageHelper {
                     if (s == null) {
                         // cannot JSon serialize out of the box, so we need to use string value
                         try {
-                            s = message.getExchange().getContext().getTypeConverter().tryConvertTo(String.class,
-                                    message.getExchange(), value);
-                        } catch (Throwable e) {
+                            s = extractValueForLogging(value, message, allowCachedStreams, allowStreams, allowFiles, maxChars);
+                        } catch (Exception e) {
                             // ignore
                         }
                     } else {
@@ -999,15 +1073,40 @@ public final class MessageHelper {
             if (type != null) {
                 jb.put("type", type);
             }
-            if (body instanceof StreamCache) {
-                long pos = ((StreamCache) body).position();
+            if (body instanceof Collection) {
+                long size = ((Collection<?>) body).size();
+                jb.put("size", size);
+            }
+            if (body != null && body.getClass().isArray()) {
+                int size = Array.getLength(body);
+                jb.put("size", size);
+            }
+            if (body instanceof WrappedFile<?> wf) {
+                if (wf.getFile() instanceof File f) {
+                    jb.put("size", f.length());
+                }
+            } else if (body instanceof File f) {
+                jb.put("size", f.length());
+            } else if (body instanceof Path p) {
+                jb.put("size", p.toFile().length());
+            }
+            if (body instanceof StreamCache streamCache) {
+                long pos = streamCache.position();
                 if (pos != -1) {
                     jb.put("position", pos);
+                }
+                long size = streamCache.length();
+                if (size > 0) {
+                    jb.put("size", size);
                 }
             }
             String data = extractBodyForLogging(message, null, allowCachedStreams, allowStreams, allowFiles, maxChars);
             if (data != null) {
-                jb.put("value", Jsoner.escape(data));
+                if ("[Body is null]".equals(data)) {
+                    jb.put("value", null);
+                } else {
+                    jb.put("value", Jsoner.escape(data));
+                }
             }
         }
 
@@ -1021,10 +1120,9 @@ public final class MessageHelper {
      * @return        the XML
      */
     public static String dumpExceptionAsXML(Throwable exception, int indent) {
-        StringBuilder prefix = new StringBuilder();
-        prefix.append(" ".repeat(indent));
+        final String prefix = " ".repeat(indent);
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(512);
         try {
             sb.append(prefix).append("<exception");
             String type = ObjectHelper.classCanonicalName(exception);
@@ -1037,13 +1135,11 @@ public final class MessageHelper {
                 sb.append(" message=\"").append(msg).append("\"");
             }
             sb.append(">\n");
-            StringWriter sw = new StringWriter();
-            exception.printStackTrace(new PrintWriter(sw));
-            String trace = sw.toString();
+            final String trace = ExceptionHelper.stackTraceToString(exception);
             // must always xml encode
             sb.append(StringHelper.xmlEncode(trace));
             sb.append(prefix).append("</exception>");
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
 
@@ -1085,17 +1181,12 @@ public final class MessageHelper {
             jo.put("type", type);
         }
         String msg = exception.getMessage();
-        if (msg != null) {
-            jo.put("message", msg);
-        } else {
-            jo.put("message", null);
-        }
-        StringWriter sw = new StringWriter();
-        exception.printStackTrace(new PrintWriter(sw));
-        String trace = sw.toString();
+        jo.put("message", msg);
+
+        final String trace = ExceptionHelper.stackTraceToString(exception);
         try {
             jo.put("stackTrace", Jsoner.escape(trace));
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore as the body is for logging purpose
         }
         return root;

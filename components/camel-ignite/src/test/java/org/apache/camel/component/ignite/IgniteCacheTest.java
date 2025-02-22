@@ -36,11 +36,9 @@ import org.apache.ignite.lang.IgniteBiPredicate;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class IgniteCacheTest extends AbstractIgniteTest {
 
     @Override
@@ -177,6 +175,31 @@ public class IgniteCacheTest extends AbstractIgniteTest {
         Assertions.assertThat(cache.size(CachePeekMode.ALL)).isEqualTo(0);
         Assertions.assertThat(cache.get("efgh")).isNull();
 
+    }
+
+    @Test
+    public void testReplaceEntry() {
+        template.requestBodyAndHeader("ignite-cache:" + resourceUid + "?operation=REPLACE", "5678",
+                IgniteConstants.IGNITE_CACHE_KEY, "abcd");
+        IgniteCache<String, String> cache = ignite().getOrCreateCache(resourceUid);
+        Assertions.assertThat(cache.size(CachePeekMode.ALL)).isEqualTo(0);
+
+        cache.put("abcd", "1234");
+        template.requestBodyAndHeader("ignite-cache:" + resourceUid + "?operation=REPLACE", "5678",
+                IgniteConstants.IGNITE_CACHE_KEY, "abcd");
+        Assertions.assertThat(cache.size(CachePeekMode.ALL)).isEqualTo(1);
+        Assertions.assertThat(cache.get("abcd")).isEqualTo("5678");
+
+        Map<String, Object> headers
+                = Map.of(IgniteConstants.IGNITE_CACHE_KEY, "abcd", IgniteConstants.IGNITE_CACHE_OLD_VALUE, "1234");
+        template.requestBodyAndHeaders("ignite-cache:" + resourceUid + "?operation=REPLACE", "9", headers);
+        Assertions.assertThat(cache.size(CachePeekMode.ALL)).isEqualTo(1);
+        Assertions.assertThat(cache.get("abcd")).isEqualTo("5678");
+
+        headers = Map.of(IgniteConstants.IGNITE_CACHE_KEY, "abcd", IgniteConstants.IGNITE_CACHE_OLD_VALUE, "5678");
+        template.requestBodyAndHeaders("ignite-cache:" + resourceUid + "?operation=REPLACE", "9", headers);
+        Assertions.assertThat(cache.size(CachePeekMode.ALL)).isEqualTo(1);
+        Assertions.assertThat(cache.get("abcd")).isEqualTo("9");
     }
 
     @Test

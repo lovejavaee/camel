@@ -20,10 +20,10 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.camel.Component;
-import org.apache.camel.api.management.ManagedAttribute;
-import org.apache.camel.api.management.ManagedOperation;
 import org.apache.camel.api.management.ManagedResource;
 import org.apache.camel.api.management.mbean.ManagedResourceEndpointMBean;
 import org.apache.camel.spi.Metadata;
@@ -49,7 +49,7 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
                            + " ref will lookup the resource in the registry."
                            + " bean will call a method on a bean to be used as the resource."
                            + " For bean you can specify the method name after dot, eg bean:myBean.myMethod.")
-    @Metadata(required = true)
+    @Metadata(required = true, supportFileReference = true)
     private String resourceUri;
     @UriParam(defaultValue = "false", description = "Sets whether to use resource content cache or not")
     private boolean contentCache;
@@ -58,6 +58,8 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
                                                     + " This option can be enabled for full access to the current Exchange and CamelContext."
                                                     + " Doing so impose a potential security risk as this opens access to the full power of CamelContext API.")
     private boolean allowContextMapAll;
+
+    private final Lock lock = new ReentrantLock();
 
     public ResourceEndpoint() {
     }
@@ -79,7 +81,8 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
     public InputStream getResourceAsInputStream() throws IOException {
         // try to get the resource input stream
         if (isContentCache()) {
-            synchronized (this) {
+            lock.lock();
+            try {
                 if (buffer == null) {
                     log.debug("Reading resource: {} into the content cache", resourceUri);
                     try (InputStream is = getResourceAsInputStreamWithoutCache()) {
@@ -88,6 +91,8 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
                         buffer = bos.toByteArray();
                     }
                 }
+            } finally {
+                lock.unlock();
             }
             log.debug("Using resource: {} from the content cache", resourceUri);
             return new ByteArrayInputStream(buffer);
@@ -112,13 +117,11 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
     }
 
     @Override
-    @ManagedAttribute(description = "Whether the resource is cached")
     public boolean isContentCache() {
         return contentCache;
     }
 
     @Override
-    @ManagedOperation(description = "Clears the cached resource, forcing to re-load the resource on next request")
     public void clearContentCache() {
         log.debug("Clearing resource: {} from the content cache", resourceUri);
         buffer = null;
@@ -128,7 +131,9 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
         return buffer == null;
     }
 
-    @ManagedAttribute(description = "Whether the context map is limited to only include the message body and headers")
+    /**
+     * Whether the context map is limited to only include the message body and headers
+     */
     public boolean isAllowContextMapAll() {
         return allowContextMapAll;
     }
@@ -143,19 +148,16 @@ public abstract class ResourceEndpoint extends ProcessorEndpoint implements Mana
     }
 
     @Override
-    @ManagedAttribute(description = "Camel context ID")
     public String getCamelId() {
         return getCamelContext().getName();
     }
 
     @Override
-    @ManagedAttribute(description = "Camel ManagementName")
     public String getCamelManagementName() {
         return getCamelContext().getManagementName();
     }
 
     @Override
-    @ManagedAttribute(description = "Endpoint service state")
     public String getState() {
         return getStatus().name();
     }

@@ -53,13 +53,12 @@ public class ManagedCamelContextTest extends ManagementTestSupport {
         context.getManagementNameStrategy().setNamePattern("19-#name#");
         context.getCamelContextExtension().setDescription("My special Camel description");
         context.setNameStrategy(new ExplicitCamelContextNameStrategy("my-camel-context"));
-        // debugger needed for source locations
-        context.setDebugging(true);
+        context.setSourceLocationEnabled(true);
         return context;
     }
 
     @Test
-    public void testManagedCamelContextClient() throws Exception {
+    public void testManagedCamelContextClient() {
         ManagedCamelContextMBean client
                 = context.getCamelContextExtension().getContextPlugin(ManagedCamelContext.class).getManagedCamelContext();
         assertNotNull(client);
@@ -259,10 +258,10 @@ public class ManagedCamelContextTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .delay(10)
                         .to("mock:result");

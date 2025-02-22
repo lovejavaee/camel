@@ -20,7 +20,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -35,28 +34,36 @@ import org.apache.camel.RoutesBuilder;
 import org.apache.camel.attachment.Attachment;
 import org.apache.camel.attachment.AttachmentMessage;
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.mail.Mailbox.MailboxUser;
+import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.jvnet.mock_javamail.Mailbox;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MailAttachmentNamesTest extends CamelTestSupport {
 
     public static final String UUID_EXPRESSION = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+    private static final MailboxUser james = Mailbox.getOrCreateUser("james", "secret");
+    private static final MailboxUser default_ = Mailbox.getOrCreateUser("default", "secret");
+    private static final MailboxUser suffix = Mailbox.getOrCreateUser("suffix", "secret");
+
     MockEndpoint resultEndpoint;
     MockEndpoint resultDefaultEndpoint;
     Session session;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        session = Session.getInstance(new Properties(), null);
+    public void doPreSetup() {
+        session = Mailbox.getSmtpSession();
+    }
 
-        super.setUp();
-
+    @Override
+    protected void doPostSetup() {
         Mailbox.clearAll();
         resultEndpoint = getMockEndpoint("mock:result");
         resultEndpoint.expectedMinimumMessageCount(1);
@@ -71,24 +78,26 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
     protected RoutesBuilder[] createRouteBuilders() throws Exception {
         return new RoutesBuilder[] { new RouteBuilder() {
             public void configure() {
-                from("pop3://james@localhost?password=foo&initialDelay=100&delay=100&generateMissingAttachmentNames=uuid&handleDuplicateAttachmentNames=uuidPrefix")
+                from(james.uriPrefix(Protocol.pop3)
+                     + "&initialDelay=100&delay=100&generateMissingAttachmentNames=uuid&handleDuplicateAttachmentNames=uuidPrefix")
                         .to("mock:result");
             }
         }, new RouteBuilder() {
             public void configure() {
-                from("pop3://suffix@localhost?password=foo&initialDelay=100&delay=100&generateMissingAttachmentNames=uuid&handleDuplicateAttachmentNames=uuidSuffix")
+                from(suffix.uriPrefix(Protocol.pop3)
+                     + "&initialDelay=100&delay=100&generateMissingAttachmentNames=uuid&handleDuplicateAttachmentNames=uuidSuffix")
                         .to("mock:result");
             }
         }, new RouteBuilder() {
             public void configure() {
-                from("pop3://default@localhost?password=foo&initialDelay=100&delay=100").to("mock:resultDefault");
+                from(default_.uriPrefix(Protocol.pop3) + "&initialDelay=100&delay=100").to("mock:resultDefault");
             }
         } };
     }
 
     @Test
     public void testAttachmentWithEmptyFilename() throws Exception {
-        sendTestMessage("filename_empty.txt", "james@localhost");
+        sendTestMessage("filename_empty.txt", james);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -104,7 +113,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
 
     @Test
     public void testAttachmentWithNoFilename() throws Exception {
-        sendTestMessage("filename_none.txt", "james@localhost");
+        sendTestMessage("filename_none.txt", james);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -118,7 +127,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
 
     @Test
     public void testAttachmentWithDuplicateFilename() throws Exception {
-        sendTestMessage("filename_duplicate.txt", "james@localhost");
+        sendTestMessage("filename_duplicate.txt", james);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -139,7 +148,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
      */
     @Test
     public void testAttachmentWithDuplicateFilenameDefaultBehavior() throws Exception {
-        sendTestMessage("filename_duplicate.txt", "default@localhost");
+        sendTestMessage("filename_duplicate.txt", default_);
 
         resultDefaultEndpoint.assertIsSatisfied();
         Exchange exchange = resultDefaultEndpoint.getReceivedExchanges().get(0);
@@ -156,7 +165,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
      */
     @Test
     public void testAttachmentWithEmptyFilenameDefaultBehavior() throws Exception {
-        sendTestMessage("filename_empty.txt", "default@localhost");
+        sendTestMessage("filename_empty.txt", default_);
 
         resultDefaultEndpoint.assertIsSatisfied();
         Exchange exchange = resultDefaultEndpoint.getReceivedExchanges().get(0);
@@ -171,7 +180,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
      */
     @Test
     public void testAttachmentWithNoFilenameDefaultBehavior() throws Exception {
-        sendTestMessage("filename_none.txt", "default@localhost");
+        sendTestMessage("filename_none.txt", default_);
 
         resultDefaultEndpoint.assertIsSatisfied();
         Exchange exchange = resultDefaultEndpoint.getReceivedExchanges().get(0);
@@ -181,7 +190,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
 
     @Test
     public void testAttachmentWithDuplicateFilenameSuffix() throws Exception {
-        sendTestMessage("filename_duplicate.txt", "suffix@localhost");
+        sendTestMessage("filename_duplicate.txt", suffix);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -196,7 +205,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
 
     @Test
     public void testAttachmentWithDuplicateFilenameSuffixMultipleDots() throws Exception {
-        sendTestMessage("filename_duplicate_multiple_dots.txt", "suffix@localhost");
+        sendTestMessage("filename_duplicate_multiple_dots.txt", suffix);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -211,7 +220,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
 
     @Test
     public void testAttachmentWithDuplicateFilenameSuffixNoExtension() throws Exception {
-        sendTestMessage("filename_duplicate_no_extension.txt", "suffix@localhost");
+        sendTestMessage("filename_duplicate_no_extension.txt", suffix);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -226,7 +235,7 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
 
     @Test
     public void testAttachmentWithDuplicateFilenameSuffixStartsWithDot() throws Exception {
-        sendTestMessage("filename_duplicate_single_dot_at_beginning.txt", "suffix@localhost");
+        sendTestMessage("filename_duplicate_single_dot_at_beginning.txt", suffix);
 
         resultEndpoint.assertIsSatisfied();
         Exchange exchange = resultEndpoint.getReceivedExchanges().get(0);
@@ -239,10 +248,22 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
         }
     }
 
-    private void sendTestMessage(String filename, String recipient) throws MessagingException, FileNotFoundException {
+    @Test
+    public void testAttachmentWithNoDisposition() throws Exception {
+        sendTestMessage("disposition_none.txt", default_);
+
+        resultDefaultEndpoint.assertIsSatisfied();
+        Exchange exchange = resultDefaultEndpoint.getReceivedExchanges().get(0);
+        assertEquals(1, exchange.getIn(AttachmentMessage.class).getAttachmentObjects().entrySet().size());
+
+        Map<String, Attachment> attachments = exchange.getIn(AttachmentMessage.class).getAttachmentObjects();
+        assertNotNull(attachments.get("test.jpg"));
+    }
+
+    private void sendTestMessage(String filename, MailboxUser recipient) throws MessagingException, FileNotFoundException {
         MimeMessage message = populateMimeMessage(session, filename);
-        message.setRecipients(Message.RecipientType.TO, recipient);
-        Transport.send(message);
+        message.setRecipients(Message.RecipientType.TO, recipient.getEmail());
+        Transport.send(message, recipient.getLogin(), recipient.getPassword());
     }
 
     private MimeMessage populateMimeMessage(Session session, String filename) throws MessagingException, FileNotFoundException {

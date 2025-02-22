@@ -17,14 +17,13 @@
     limitations under the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>catalog</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-catalog</artifactId>
@@ -44,29 +43,25 @@
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-core-catalog</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-util-json</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-tooling-model</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- disable all components -->
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-allcomponents</artifactId>
-            <version>${project.version}</version>
             <type>pom</type>
-            <scope>provided</scope>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.camel</groupId>
+                    <groupId>*</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -79,12 +74,11 @@
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-core-all</artifactId>
-            <version>${project.version}</version>
             <type>pom</type>
-            <scope>provided</scope>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.camel</groupId>
+                    <groupId>*</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -94,7 +88,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson2-version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -109,6 +102,12 @@
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-jsonpath</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- for testing groovy language -->
+        <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-groovy</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -133,22 +132,13 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
-
-            <!-- sync parent/pom.xml with camel-dependencies/pom.xml -->
-            <plugin>
-                <groupId>org.apache.camel</groupId>
-                <artifactId>sync-properties-maven-plugin</artifactId>
-                <version>${project.version}</version>
-                <executions>
-                    <execution>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>sync-properties</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
 
             <!-- generate and include all components in the catalog -->
             <plugin>
@@ -161,8 +151,12 @@
                             <goal>prepare-catalog</goal>
                             <!-- update secrets in camel-util -->
                             <goal>update-sensitive-helper</goal>
+                            <!-- update mime-types in camel-util -->
+                            <goal>update-mime-type-helper</goal>
                             <!-- update names in camel-main -->
                             <goal>update-main-helper</goal>
+                            <!-- update test-infra metadata -->
+                            <goal>update-test-infra-metadata</goal>
                         </goals>
                         <phase>generate-resources</phase>
                     </execution>
@@ -191,9 +185,15 @@
                     </execution>
                 </executions>
             </plugin>
-
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <delimiters>
+                        <delimiter>@</delimiter>
+                    </delimiters>
+                </configuration>
+            </plugin>
         </plugins>
-
     </build>
 
     <profiles>

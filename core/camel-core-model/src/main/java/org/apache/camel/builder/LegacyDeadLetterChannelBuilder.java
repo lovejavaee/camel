@@ -26,9 +26,9 @@ import org.apache.camel.spi.CamelLogger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Legacy error handler for XML DSL in camel-spring-xml/camel-blueprint
+ * Legacy error handler for XML DSL in camel-spring-xml
  */
-@Deprecated
+@Deprecated(since = "3.17.0")
 public class LegacyDeadLetterChannelBuilder extends LegacyDefaultErrorHandlerBuilder implements DeadLetterChannelProperties {
 
     public LegacyDeadLetterChannelBuilder() {

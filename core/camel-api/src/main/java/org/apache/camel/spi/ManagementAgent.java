@@ -72,7 +72,7 @@ public interface ManagementAgent extends Service {
      *
      * @param  name  the mbean name
      * @param  mbean the client interface, such as from the {@link org.apache.camel.api.management.mbean} package.
-     * @return       the client or <tt>null</tt> if mbean does not exists
+     * @return       the client or <tt>null</tt> if mbean does not exist
      */
     <T> T newProxyClient(ObjectName name, Class<T> mbean);
 
@@ -200,16 +200,44 @@ public interface ManagementAgent extends Service {
     void setRegisterNewRoutes(Boolean registerNewRoutes);
 
     /**
-     * Whether to remove detected sensitive information (such as passwords) from MBean names and attributes.
+     * Whether to register mbeans for routes created by a Kamelet
      * <p/>
      * This option is default <tt>false</tt>.
+     */
+    Boolean getRegisterRoutesCreateByKamelet();
+
+    /**
+     * Whether to register mbeans for routes created by a Kamelet
+     * <p/>
+     * This option is default <tt>false</tt>.
+     */
+    void setRegisterRoutesCreateByKamelet(Boolean registerRoutesCreateByKamelet);
+
+    /**
+     * Whether to register mbeans for routes created by a route templates (not Kamelets)
+     * <p/>
+     * This option is default <tt>true</tt>.
+     */
+    Boolean getRegisterRoutesCreateByTemplate();
+
+    /**
+     * Whether to register mbeans for routes created by a route templates (not Kamelets)
+     * <p/>
+     * This option is default <tt>true</tt>.
+     */
+    void setRegisterRoutesCreateByTemplate(Boolean registerRoutesCreateByTemplate);
+
+    /**
+     * Whether to remove detected sensitive information (such as passwords) from MBean names and attributes.
+     * <p/>
+     * This option is default <tt>true</tt>.
      */
     Boolean getMask();
 
     /**
      * Whether to remove detected sensitive information (such as passwords) from MBean names and attributes.
      * <p/>
-     * This option is default <tt>false</tt>.
+     * This option is default <tt>true</tt>.
      */
     void setMask(Boolean sanitize);
 
@@ -245,7 +273,8 @@ public interface ManagementAgent extends Service {
     void setManagementNamePattern(String managementNamePattern);
 
     /**
-     * Sets whether load statistics is enabled (gathers load statistics using a background thread per CamelContext).
+     * Sets whether Camel load (inflight messages, not cpu) statistics is enabled (something like the unix load
+     * average). The statistics requires to have camel-management on the classpath as JMX is required.
      * <p/>
      * The default value is <tt>false</tt>
      *
@@ -254,7 +283,7 @@ public interface ManagementAgent extends Service {
     void setLoadStatisticsEnabled(Boolean flag);
 
     /**
-     * Gets whether load statistics is enabled
+     * Gets whether load (inflight messages, not cpu) statistics is enabled
      *
      * @return <tt>true</tt> if enabled
      */
@@ -325,5 +354,15 @@ public interface ManagementAgent extends Service {
      * @param useHostIPAddress <tt>true</tt> to use IP Address.
      */
     void setUseHostIPAddress(Boolean useHostIPAddress);
+
+    /**
+     * Gets whether updating routes via JMX is allowed (is default disabled).
+     */
+    Boolean getUpdateRouteEnabled();
+
+    /**
+     * Sets whether updating routes via JMX is allowed (is default disabled).
+     */
+    void setUpdateRouteEnabled(Boolean updateRouteEnabled);
 
 }

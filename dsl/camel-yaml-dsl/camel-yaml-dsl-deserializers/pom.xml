@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-yaml-dsl-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-yaml-dsl-deserializers</artifactId>
@@ -58,7 +58,6 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj-version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -132,14 +131,14 @@
                                 <bannedDefinition>org.apache.camel.model.RouteTemplateDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.RouteTemplateContextRefDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.RouteTemplatesDefinition</bannedDefinition>
-                                <bannedDefinition>org.apache.camel.model.RouteTemplateBeanDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.TemplatedRouteDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.TemplatedRoutesDefinition</bannedDefinition>
-                                <bannedDefinition>org.apache.camel.model.TemplatedRouteBeanDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.RoutesDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.RestsDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.RouteConfigurationDefinition</bannedDefinition>
                                 <bannedDefinition>org.apache.camel.model.RouteConfigurationsDefinition</bannedDefinition>
+                                <bannedDefinition>org.apache.camel.model.app.BeansDefinition</bannedDefinition>
+                                <bannedDefinition>org.apache.camel.model.app.ApplicationDefinition</bannedDefinition>
                             </bannedDefinitions>
                             <additionalDefinitions>
                                 <!-- saga -->

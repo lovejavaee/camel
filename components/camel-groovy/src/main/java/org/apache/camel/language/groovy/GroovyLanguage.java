@@ -23,26 +23,39 @@ import java.util.Map;
 import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
 import groovy.lang.Script;
+import org.apache.camel.Exchange;
 import org.apache.camel.Service;
+import org.apache.camel.spi.CamelEvent;
+import org.apache.camel.spi.EventNotifier;
 import org.apache.camel.spi.ScriptingLanguage;
 import org.apache.camel.spi.annotations.Language;
+import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.support.LRUCacheFactory;
 import org.apache.camel.support.ObjectHelper;
+import org.apache.camel.support.SimpleEventNotifierSupport;
 import org.apache.camel.support.TypedLanguageSupport;
+import org.apache.camel.support.service.ServiceHelper;
 import org.codehaus.groovy.runtime.InvokerHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Language("groovy")
-public class GroovyLanguage extends TypedLanguageSupport implements ScriptingLanguage {
+public class GroovyLanguage extends TypedLanguageSupport implements ScriptingLanguage, Service {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GroovyLanguage.class);
 
     /**
      * In case the expression is referring to an external resource, it indicates whether it is still needed to load the
      * resource.
      */
     private final boolean loadExternalResource;
+
     /**
      * Cache used to stores the compiled scripts (aka their classes)
      */
     private final Map<String, GroovyClassService> scriptCache;
+
+    private EventNotifier notifier;
 
     private GroovyLanguage(Map<String, GroovyClassService> scriptCache, boolean loadExternalResource) {
         this.scriptCache = scriptCache;
@@ -51,6 +64,42 @@ public class GroovyLanguage extends TypedLanguageSupport implements ScriptingLan
 
     public GroovyLanguage() {
         this(LRUCacheFactory.newLRUSoftCache(16, 1000, true), true);
+    }
+
+    @Override
+    public void start() {
+        // are we in dev mode then support flushing cache on reload
+        if (getCamelContext() != null) {
+            String profile = getCamelContext().getCamelContextExtension().getProfile();
+            if ("dev".equals(profile)) {
+                if (notifier == null) {
+                    notifier = new ReloadNotifier();
+                    getCamelContext().getManagementStrategy().addEventNotifier(notifier);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void stop() {
+        ServiceHelper.stopService(scriptCache.values());
+        scriptCache.clear();
+        if (notifier != null) {
+            getCamelContext().getManagementStrategy().removeEventNotifier(notifier);
+            notifier = null;
+        }
+    }
+
+    private final class ReloadNotifier extends SimpleEventNotifierSupport {
+
+        @Override
+        public void notify(CamelEvent event) throws Exception {
+            // if context or route is reloading then clear cache to ensure old scripts are removed from memory.
+            if (event instanceof CamelEvent.CamelContextReloadingEvent || event instanceof CamelEvent.RouteReloadedEvent) {
+                ServiceHelper.stopService(scriptCache.values());
+                scriptCache.clear();
+            }
+        }
     }
 
     private static final class GroovyClassService implements Service {
@@ -101,21 +150,40 @@ public class GroovyLanguage extends TypedLanguageSupport implements ScriptingLan
             addScriptToCache(script, clazz);
         }
         Script gs = ObjectHelper.newInstance(clazz, Script.class);
-
         if (bindings != null) {
             gs.setBinding(new Binding(bindings));
         }
+        gs.getBinding().setVariable("log", LOG);
         Object value = gs.run();
         return getCamelContext().getTypeConverter().convertTo(resultType, value);
     }
 
+    // use by tooling
+    public boolean validateExpression(String expression) throws GroovyValidationException {
+        final Exchange dummy = new DefaultExchange(getCamelContext());
+        Map<String, Object> globalVariables = new HashMap<>();
+
+        try {
+            GroovyExpression ge = createExpression(expression);
+            Script script = ge.instantiateScript(dummy, globalVariables);
+            script.setBinding(ge.createBinding(dummy, globalVariables));
+            script.run();
+        } catch (Exception e) {
+            throw new GroovyValidationException(expression, e);
+        }
+        return true;
+    }
+
+    // use by tooling
+    public boolean validatePredicate(String expression) throws GroovyValidationException {
+        return validateExpression(expression);
+    }
+
     Class<Script> getScriptFromCache(String script) {
         final GroovyClassService cached = scriptCache.get(script);
-
         if (cached == null) {
             return null;
         }
-
         return cached.script;
     }
 

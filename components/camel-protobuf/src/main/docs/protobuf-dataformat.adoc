@@ -5,6 +5,7 @@
 :description: Serialize and deserialize Java objects using Google's Protocol buffers.
 :since: 2.2
 :supportlevel: Stable
+:tabs-sync-option:
 //Manually maintained attributes
 :camel-spring-boot-name: protobuf
 
@@ -38,8 +39,8 @@ include::partial$dataformat-options.adoc[]
 == Content type format
 
 It's possible to parse JSON message to convert it to the protobuf format and unparse it back using native util converter.
-To use this option, set contentTypeFormat value to 'json' or call protobuf with second parameter.
-If default instance is not specified, always use native protobuf format.
+To use this option, set contentTypeFormat value to `json` or call protobuf with second parameter.
+If the default instance is not specified, always use the native protobuf format.
 The sample code shows below:
 
 [source,java]
@@ -51,16 +52,23 @@ from("direct:marshal")
 --------------------------------------------------------------------------------------------------
 
 == Input data type
-This dataformat supports marshaling input data either as protobuf `Message` type or `Map` data type. In case of input data as `Map` type, first it will try to retrieve the data as `Map` using built-in type converters, if it fails to
+
+This dataformat supports marshaling input data either as protobuf `Message` type or `Map` data type.
+In case of input data as `Map` type, first it will try to retrieve the data as `Map` using built-in type converters, if it fails to
 do so, it will fall back to retrieve it as proto `Message`.
 
 == Output data type
-As mentioned above, you can define the content type format to choose from JSON or native to serialize/deserialize data from/to. In addition, you can also obtain the data as `Map` and let this component to do the heavy lifting to parse the
-data from proto `Message` to `Map`, you will just need to set the `contentTypeFormat` to *native* and explicitly define the data type `Map` when you obtain body of the exchange, e.g: `exchange.getMessage().getBody(Map.class)`.
+
+As mentioned above, you can define the content type format to choose from JSON or native to serialize/deserialize data from/to.
+In addition, you can also obtain the data as `Map` and let this component do the heavy lifting to parse the
+data from proto `Message` to `Map`,
+you will need to set the `contentTypeFormat` to `native`
+and explicitly define the data type `Map` when you get body of the exchange.
+For instance: `exchange.getMessage().getBody(Map.class)`.
 
 == Protobuf overview
 
-This quick overview of how to use Protobuf. For more detail see the
+This quick overview of how to use Protobuf. For more detail, see the
 https://developers.google.com/protocol-buffers/docs/javatutorial[complete tutorial]
 
 == Defining the proto format
@@ -106,11 +114,11 @@ message AddressBook {
 == Generating Java classes
 
 The Protobuf SDK provides a compiler which will generate the Java
-classes for the format we defined in our .proto file.
-If your operating system is supporting by https://www.xolstice.org/protobuf-maven-plugin[Protobuf Java code generator maven plugin],
-you can automate protobuf Java code generating by adding following configurations to your pom.xml:
+classes for the format we defined in our `.proto` file.
+If your operating system is supported by https://www.xolstice.org/protobuf-maven-plugin[Protobuf Java code generator maven plugin],
+you can automate protobuf Java code generating by adding the following configurations to your `pom.xml`:
 
-Insert operating system and CPU architecture detection extension inside **<build>** tag of the project pom.xml or set ${os.detected.classifier} parameter manually
+Insert operating system and CPU architecture detection extension inside `<build>` tag of the project `pom.xml` or set `${os.detected.classifier}` parameter manually
 [source,xml]
 -------------------------------------------------------------------------
 <extensions>
@@ -121,7 +129,7 @@ Insert operating system and CPU architecture detection extension inside **<build
   </extension>
 </extensions>
 -------------------------------------------------------------------------
-Insert gRPC and protobuf Java code generator plugin **<plugins>** tag of the project pom.xml
+Insert gRPC and protobuf Java code generator plugin **<plugins>** tag of the project `pom.xml`
 [source,xml]
 -------------------------------------------------------------------------
 <plugin>
@@ -151,7 +159,7 @@ This will generate a single Java class named AddressBookProtos which
 contains inner classes for Person and AddressBook. Builders are also
 implemented for you. The generated classes implement
 com.google.protobuf.Message which is required by the serialization
-mechanism. For this reason it important that only these classes are used
+mechanism. For this reason it is important that only these classes are used
 in the body of your exchanges. Camel will throw an exception on route
 creation if you attempt to tell the Data Format
 to use a class that does not implement com.google.protobuf.Message. Use
@@ -171,7 +179,7 @@ DataFormat marshal and unmarshal API like this.
    from("direct:back").unmarshal(format).to("mock:reverse");
 -----------------------------------------------------------------------------------
 
-Or use the DSL protobuf() passing the unmarshal default instance or
+Or use the DSL `protobuf()` passing the unmarshal default instance or
 default instance class name like this. However, if you have input data as `Map` type, you will need to **specify** the ProtobufDataFormat otherwise it will throw an error.
 
 [source,java]
@@ -190,7 +198,7 @@ default instance class name like this. However, if you have input data as `Map` 
 The following example shows how to use Protobuf to unmarshal using Spring
 configuring the protobuf data type
 
-[source,java]
+[source,xml]
 ----------------------------------------------------------------------------------------------------------
 <camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
   <route>
@@ -205,9 +213,10 @@ configuring the protobuf data type
 
 == Dependencies
 
-To use Protobuf in your camel routes you need to add the a dependency on
-*camel-protobuf* which implements this data format.
+To use Protobuf in your Camel routes, you need to add the dependency on
+*camel-protobuf*, which implements this data format.
 
+.Example pom.xml for `camel-protobuf`
 [source,xml]
 -----------------------------------------
 <dependency>

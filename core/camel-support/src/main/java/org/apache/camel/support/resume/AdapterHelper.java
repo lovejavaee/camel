@@ -39,7 +39,7 @@ public final class AdapterHelper {
     private AdapterHelper() {
     }
 
-    public static ResumeAdapter eval(CamelContext context, ResumeAware resumeAware, ResumeStrategy resumeStrategy) {
+    public static ResumeAdapter eval(CamelContext context, ResumeAware<?> resumeAware, ResumeStrategy resumeStrategy) {
         assert context != null;
         assert resumeAware != null;
         assert resumeStrategy != null;
@@ -52,19 +52,18 @@ public final class AdapterHelper {
         Optional<ResumeAdapter> adapterOptional
                 = factoryFinder.newInstance(resumeAware.adapterFactoryService(), ResumeAdapter.class);
 
-        if (!adapterOptional.isPresent()) {
+        if (adapterOptional.isEmpty()) {
             throw new RuntimeCamelException("Cannot find a resume adapter class in the consumer classpath or in the registry");
         }
 
         final ResumeAdapter resumeAdapter = adapterOptional.get();
         LOG.debug("Using the acquired resume adapter: {}", resumeAdapter.getClass().getName());
 
-        if (resumeAdapter instanceof Cacheable) {
-            final Cacheable cacheableAdapter = (Cacheable) resumeAdapter;
+        if (resumeAdapter instanceof Cacheable cacheableAdapter) {
             final ResumeStrategyConfiguration resumeStrategyConfiguration = resumeStrategy.getResumeStrategyConfiguration();
 
             final ResumeCache<?> resumeCache = resumeStrategyConfiguration.getResumeCache();
-            if (resumeStrategyConfiguration != null && resumeCache != null) {
+            if (resumeCache != null) {
                 cacheableAdapter.setCache(resumeCache);
             } else {
                 LOG.error("No cache was provided in the configuration for the cacheable resume adapter {}",

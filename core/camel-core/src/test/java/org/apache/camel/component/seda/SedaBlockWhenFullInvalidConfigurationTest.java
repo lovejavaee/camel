@@ -22,7 +22,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SedaBlockWhenFullInvalidConfigurationTest extends ContextTestSupport {
 
@@ -35,17 +35,13 @@ public class SedaBlockWhenFullInvalidConfigurationTest extends ContextTestSuppor
     public void testInvalidConfiguration() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("seda:foo?blockWhenFull=true&blockWhenFull=true");
             }
         });
-        try {
-            context.start();
-            fail("Should fail");
-        } catch (Exception e) {
-            ResolveEndpointFailedException refe = assertIsInstanceOf(ResolveEndpointFailedException.class, e.getCause());
-            assertEquals("Value [true, true] converted to java.lang.Boolean cannot be null", refe.getCause().getMessage());
-        }
 
+        Exception e = assertThrows(Exception.class, () -> context.start(), "Should fail");
+        ResolveEndpointFailedException refe = assertIsInstanceOf(ResolveEndpointFailedException.class, e.getCause());
+        assertEquals("Value [true, true] converted to java.lang.Boolean cannot be null", refe.getCause().getMessage());
     }
 }

@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache</groupId>
         <artifactId>apache</artifactId>
-        <version>25</version>
+        <version>@apache-parent-version@</version>
         <relativePath />
     </parent>
 
@@ -34,9 +34,23 @@
 
     <packaging>pom</packaging>
     <name>Camel :: Dependencies</name>
-    <description>Camel Dependencies POM</description>
+    <description>Version properties used for building and testing Apache Camel</description>
 
-    <!-- sync properties here from parent/pom.xml -->
-    <properties>@properties@</properties>
+    <properties>
+        @properties@
+    </properties>
+
+    <url>https://camel.apache.org</url>
+    <inceptionYear>2007</inceptionYear>
+    <scm>
+        <connection>scm:git:http://gitbox.apache.org/repos/asf/camel.git</connection>
+        <developerConnection>scm:git:https://gitbox.apache.org/repos/asf/camel.git</developerConnection>
+        <url>https://gitbox.apache.org/repos/asf?p=camel.git;a=summary</url>
+        <tag>HEAD</tag>
+    </scm>
+    <issueManagement>
+        <system>jira</system>
+        <url>https://issues.apache.org/jira/browse/CAMEL</url>
+    </issueManagement>
 
 </project>

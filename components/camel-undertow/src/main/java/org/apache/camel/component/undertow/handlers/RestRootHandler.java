@@ -29,6 +29,7 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import org.apache.camel.component.undertow.UndertowConsumer;
 import org.apache.camel.support.RestConsumerContextPathMatcher;
+import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.UnsafeUriCharactersEncoder;
 
 /**
@@ -61,6 +62,7 @@ public class RestRootHandler implements HttpHandler {
      */
     public void addConsumer(UndertowConsumer consumer) {
         consumers.add(consumer);
+        RestConsumerContextPathMatcher.register(consumer.getEndpoint().getHttpURI().getPath());
     }
 
     /**
@@ -68,6 +70,7 @@ public class RestRootHandler implements HttpHandler {
      */
     public void removeConsumer(UndertowConsumer consumer) {
         consumers.remove(consumer);
+        RestConsumerContextPathMatcher.unRegister(consumer.getEndpoint().getHttpURI().getPath());
     }
 
     /**
@@ -118,7 +121,7 @@ public class RestRootHandler implements HttpHandler {
         // use the path as key to find the consumer handler to use
         path = pathAsKey(path);
 
-        List<RestConsumerContextPathMatcher.ConsumerPath> paths = new ArrayList<>();
+        List<RestConsumerContextPathMatcher.ConsumerPath<UndertowConsumer>> paths = new ArrayList<>();
         for (final UndertowConsumer consumer : consumers) {
             paths.add(new RestConsumerPath(consumer));
         }
@@ -136,7 +139,7 @@ public class RestRootHandler implements HttpHandler {
 
                 String consumerPath = consumer.getEndpoint().getHttpURI().getPath();
                 boolean matchOnUriPrefix = consumer.getEndpoint().isMatchOnUriPrefix();
-                // Just make sure the we get the right consumer path first
+                // Just make sure that we get the right consumer path first
                 if (RestConsumerContextPathMatcher.matchPath(path, consumerPath, matchOnUriPrefix)) {
                     candidates.add(consumer);
                 }
@@ -160,10 +163,7 @@ public class RestRootHandler implements HttpHandler {
         }
 
         // strip out query parameters
-        int idx = path.indexOf('?');
-        if (idx > -1) {
-            path = path.substring(0, idx);
-        }
+        path = StringHelper.before(path, "?", path);
 
         // strip of ending /
         if (path.endsWith("/")) {

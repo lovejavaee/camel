@@ -5,6 +5,7 @@
 :description: Perform operations on Hazelcast distributed ringbuffer.
 :since: 2.16
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :group: Hazelcast
@@ -46,10 +47,13 @@ The ringbuffer producer provides 5 operations:
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-=== Sample for *put*:
+=== Example for *put*:
 
-Java DSL:
+[tabs]
+====
 
+Java DSL::
++
 [source,java]
 ------------------------------------------------------------------------------------
 from("direct:put")
@@ -57,8 +61,8 @@ from("direct:put")
 .to(String.format("hazelcast-%sbar", HazelcastConstants.RINGBUFFER_PREFIX));
 ------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -71,7 +75,9 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
-=== Sample for *readonce from head*:
+====
+
+=== Example for *readonce from head*:
 
 Java DSL:
 

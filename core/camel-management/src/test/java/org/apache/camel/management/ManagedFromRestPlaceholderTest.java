@@ -65,10 +65,10 @@ public class ManagedFromRestPlaceholderTest extends ManagementTestSupport {
         assertTrue(xml.contains("application/json"));
         assertTrue(xml.contains("</rests>"));
 
-        assertTrue(xml.contains("<param defaultValue=\"1\" dataType=\"integer\" name=\"header_count\""
-                                + " description=\"header param description1\" type=\"header\" required=\"true\">"));
-        assertTrue(xml.contains("<param defaultValue=\"b\" dataType=\"string\" name=\"header_letter\""
-                                + " description=\"header param description2\" type=\"query\" collectionFormat=\"multi\" required=\"false\">"));
+        assertTrue(xml.contains(
+                "<param defaultValue=\"1\" dataType=\"integer\" name=\"header_count\" description=\"header param description1\" type=\"header\""));
+        assertTrue(xml.contains(
+                "<param defaultValue=\"b\" name=\"header_letter\" description=\"header param description2\" type=\"query\" collectionFormat=\"multi\" required=\"false\""));
         assertTrue(xml.contains("<value>1</value>"));
         assertTrue(xml.contains("<value>a</value>"));
 
@@ -79,15 +79,15 @@ public class ManagedFromRestPlaceholderTest extends ManagementTestSupport {
         // and we should have rest in the routes that indicate its from a rest dsl
         assertTrue(xml2.contains("rest=\"true\""));
 
-        // there should be 3 + 2 routes
-        assertEquals(3 + 2, context.getRouteDefinitions().size());
+        // there should be 3 routes (inlined)
+        assertEquals(3, context.getRouteDefinitions().size());
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 restConfiguration().host("localhost");
                 rest("{{foo}}")
                         .get().to("direct:hello");

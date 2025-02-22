@@ -109,8 +109,8 @@ public abstract class AbstractReifier implements BeanRepository {
     }
 
     protected <T> T parse(Class<T> clazz, Object text) {
-        if (text instanceof String) {
-            text = parseString((String) text);
+        if (text instanceof String string) {
+            text = parseString(string);
         }
         return CamelContextHelper.convertTo(camelContext, clazz, text);
     }
@@ -144,6 +144,8 @@ public abstract class AbstractReifier implements BeanRepository {
     }
 
     public <T> T mandatoryLookup(String name, Class<T> type) {
+        name = parseString(name);
+
         Object obj = lookupByNameAndType(name, type);
         if (obj == null) {
             throw new NoSuchBeanException(name, type.getName());
@@ -156,6 +158,7 @@ public abstract class AbstractReifier implements BeanRepository {
         if (name == null) {
             return null;
         }
+        name = parseString(name);
 
         if (EndpointHelper.isReferenceParameter(name)) {
             return EndpointHelper.resolveReferenceParameter(camelContext, name, Object.class, false);
@@ -168,6 +171,7 @@ public abstract class AbstractReifier implements BeanRepository {
         if (name == null) {
             return null;
         }
+        name = parseString(name);
 
         if (EndpointHelper.isReferenceParameter(name)) {
             return EndpointHelper.resolveReferenceParameter(camelContext, name, type, false);

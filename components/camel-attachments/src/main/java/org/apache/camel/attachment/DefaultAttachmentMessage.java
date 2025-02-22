@@ -26,6 +26,7 @@ import jakarta.activation.DataHandler;
 import org.apache.camel.Exchange;
 import org.apache.camel.InvalidPayloadException;
 import org.apache.camel.Message;
+import org.apache.camel.trait.message.MessageTrait;
 
 public final class DefaultAttachmentMessage implements AttachmentMessage {
 
@@ -41,6 +42,11 @@ public final class DefaultAttachmentMessage implements AttachmentMessage {
     public DefaultAttachmentMessage(Message delegate) {
         this.delegate = delegate;
         this.exchange = delegate.getExchange();
+    }
+
+    @Override
+    public Message getDelegateMessage() {
+        return delegate;
     }
 
     @Override
@@ -286,4 +292,18 @@ public final class DefaultAttachmentMessage implements AttachmentMessage {
         return map != null && !map.isEmpty();
     }
 
+    @Override
+    public boolean hasTrait(MessageTrait trait) {
+        return delegate.hasTrait(trait);
+    }
+
+    @Override
+    public Object getPayloadForTrait(MessageTrait trait) {
+        return delegate.getPayloadForTrait(trait);
+    }
+
+    @Override
+    public void setPayloadForTrait(MessageTrait trait, Object object) {
+        delegate.setPayloadForTrait(trait, object);
+    }
 }

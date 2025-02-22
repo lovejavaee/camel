@@ -29,8 +29,6 @@ import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.protocol.HttpContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -41,29 +39,25 @@ public class HttpCamelHeadersTest extends BaseHttpTest {
 
     protected HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
+    public void setupResources() throws Exception {
         Map<String, String> expectedHeaders = new HashMap<>();
         expectedHeaders.put("TestHeader", "test");
         expectedHeaders.put(ACCEPT_LANGUAGE, "pl");
 
         localServer
-                = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+                = ServerBootstrap.bootstrap()
+                        .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                         .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                         .setSslContext(getSSLContext())
                         .register("/",
-                                new MyHeaderValidationHandler(GET.name(), "HTTP/1.0", getExpectedContent(), expectedHeaders))
+                                new MyHeaderValidationHandler(GET.name(), "HTTP/1.1", getExpectedContent(), expectedHeaders))
                         .create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -71,7 +65,7 @@ public class HttpCamelHeadersTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpHeadersShouldPresent() throws Exception {
+    public void httpHeadersShouldPresent() {
         assertExchange(doExchange());
     }
 
@@ -92,7 +86,7 @@ public class HttpCamelHeadersTest extends BaseHttpTest {
                 exchange -> {
                     exchange.getIn().setHeader("TestHeader", "test");
                     exchange.getIn().setHeader(ACCEPT_LANGUAGE, "pl");
-                    exchange.getIn().setHeader(Exchange.HTTP_PROTOCOL_VERSION, "HTTP/1.0");
+                    exchange.getIn().setHeader(Exchange.HTTP_PROTOCOL_VERSION, "HTTP/1.1");
                 });
     }
 

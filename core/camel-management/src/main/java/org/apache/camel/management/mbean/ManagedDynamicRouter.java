@@ -41,20 +41,20 @@ public class ManagedDynamicRouter extends ManagedProcessor implements ManagedDyn
     private String uri;
     private boolean sanitize;
 
-    public ManagedDynamicRouter(CamelContext context, DynamicRouter processor, DynamicRouterDefinition definition) {
+    public ManagedDynamicRouter(CamelContext context, DynamicRouter processor, DynamicRouterDefinition<?> definition) {
         super(context, processor, definition);
         this.processor = processor;
     }
 
     @Override
-    public DynamicRouterDefinition getDefinition() {
-        return (DynamicRouterDefinition) super.getDefinition();
+    public DynamicRouterDefinition<?> getDefinition() {
+        return (DynamicRouterDefinition<?>) super.getDefinition();
     }
 
     @Override
     public void init(ManagementStrategy strategy) {
         super.init(strategy);
-        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : false;
+        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : true;
         uri = getDefinition().getExpression().getExpression();
         if (sanitize) {
             uri = URISupport.sanitizeUri(uri);

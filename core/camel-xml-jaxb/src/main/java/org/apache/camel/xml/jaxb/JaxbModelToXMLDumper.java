@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -40,23 +41,27 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.DelegateEndpoint;
-import org.apache.camel.Endpoint;
+import org.apache.camel.CamelContextAware;
 import org.apache.camel.NamedNode;
 import org.apache.camel.TypeConversionException;
 import org.apache.camel.converter.jaxp.XmlConverter;
+import org.apache.camel.model.BeanFactoryDefinition;
+import org.apache.camel.model.DataFormatDefinition;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.model.RouteTemplateDefinition;
 import org.apache.camel.model.RouteTemplatesDefinition;
 import org.apache.camel.model.RoutesDefinition;
+import org.apache.camel.model.dataformat.DataFormatsDefinition;
 import org.apache.camel.spi.ModelToXMLDumper;
 import org.apache.camel.spi.PropertiesComponent;
 import org.apache.camel.spi.annotations.JdkService;
 import org.apache.camel.support.ObjectHelper;
 import org.apache.camel.support.PluginHelper;
 import org.apache.camel.util.KeyValueHolder;
+import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.xml.XmlLineNumberParser;
 
+import static org.apache.camel.xml.jaxb.JaxbHelper.enrichLocations;
 import static org.apache.camel.xml.jaxb.JaxbHelper.extractNamespaces;
 import static org.apache.camel.xml.jaxb.JaxbHelper.extractSourceLocations;
 import static org.apache.camel.xml.jaxb.JaxbHelper.getJAXBContext;
@@ -72,14 +77,18 @@ public class JaxbModelToXMLDumper implements ModelToXMLDumper {
 
     @Override
     public String dumpModelAsXml(CamelContext context, NamedNode definition) throws Exception {
+        return doDumpModelAsXml(context, definition, true);
+    }
+
+    public String doDumpModelAsXml(CamelContext context, NamedNode definition, boolean generatedIds) throws Exception {
         final JAXBContext jaxbContext = getJAXBContext(context);
         final Map<String, String> namespaces = new LinkedHashMap<>();
         final Map<String, KeyValueHolder<Integer, String>> locations = new HashMap<>();
 
         // gather all namespaces from the routes or route which is stored on the
         // expression nodes
-        if (definition instanceof RouteTemplatesDefinition) {
-            List<RouteTemplateDefinition> templates = ((RouteTemplatesDefinition) definition).getRouteTemplates();
+        if (definition instanceof RouteTemplatesDefinition routeTemplatesDefinition) {
+            List<RouteTemplateDefinition> templates = routeTemplatesDefinition.getRouteTemplates();
             for (RouteTemplateDefinition route : templates) {
                 extractNamespaces(route.getRoute(), namespaces);
                 if (context.isDebugging()) {
@@ -87,15 +96,14 @@ public class JaxbModelToXMLDumper implements ModelToXMLDumper {
                 }
                 resolveEndpointDslUris(route.getRoute());
             }
-        } else if (definition instanceof RouteTemplateDefinition) {
-            RouteTemplateDefinition template = (RouteTemplateDefinition) definition;
+        } else if (definition instanceof RouteTemplateDefinition template) {
             extractNamespaces(template.getRoute(), namespaces);
             if (context.isDebugging()) {
                 extractSourceLocations(template.getRoute(), locations);
             }
             resolveEndpointDslUris(template.getRoute());
-        } else if (definition instanceof RoutesDefinition) {
-            List<RouteDefinition> routes = ((RoutesDefinition) definition).getRoutes();
+        } else if (definition instanceof RoutesDefinition routesDefinition) {
+            List<RouteDefinition> routes = routesDefinition.getRoutes();
             for (RouteDefinition route : routes) {
                 extractNamespaces(route, namespaces);
                 if (context.isDebugging()) {
@@ -103,8 +111,7 @@ public class JaxbModelToXMLDumper implements ModelToXMLDumper {
                 }
                 resolveEndpointDslUris(route);
             }
-        } else if (definition instanceof RouteDefinition) {
-            RouteDefinition route = (RouteDefinition) definition;
+        } else if (definition instanceof RouteDefinition route) {
             extractNamespaces(route, namespaces);
             if (context.isDebugging()) {
                 extractSourceLocations(route, locations);
@@ -127,10 +134,10 @@ public class JaxbModelToXMLDumper implements ModelToXMLDumper {
             throw new TypeConversionException(xml, Document.class, e);
         }
 
-        sanitizeXml(dom);
         if (context.isDebugging()) {
             enrichLocations(dom, locations);
         }
+        sanitizeXml(dom, generatedIds);
 
         // Add additional namespaces to the document root element
         Element documentElement = dom.getDocumentElement();
@@ -154,71 +161,51 @@ public class JaxbModelToXMLDumper implements ModelToXMLDumper {
 
     @Override
     public String dumpModelAsXml(
-            CamelContext context, NamedNode definition, boolean resolvePlaceholders, boolean resolveDelegateEndpoints)
+            CamelContext context, NamedNode definition, boolean resolvePlaceholders, boolean generatedIds)
             throws Exception {
-        String xml = dumpModelAsXml(context, definition);
+        String xml = doDumpModelAsXml(context, definition, generatedIds);
 
         // if resolving placeholders we parse the xml, and resolve the property
         // placeholders during parsing
-        if (resolvePlaceholders || resolveDelegateEndpoints) {
+        if (resolvePlaceholders) {
             final AtomicBoolean changed = new AtomicBoolean();
             final InputStream is = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
             final Document dom = XmlLineNumberParser.parseXml(is, new XmlLineNumberParser.XmlTextTransformer() {
-                private String prev;
 
                 @Override
                 public String transform(String text) {
                     String after = text;
-                    if (resolveDelegateEndpoints && "uri".equals(prev)) {
-                        try {
-                            // must resolve placeholder as the endpoint may use
-                            // property placeholders
-                            String uri = context.resolvePropertyPlaceholders(text);
-                            Endpoint endpoint = context.hasEndpoint(uri);
-                            if (endpoint instanceof DelegateEndpoint) {
-                                endpoint = ((DelegateEndpoint) endpoint).getEndpoint();
-                                after = endpoint.getEndpointUri();
-                            }
-                        } catch (Exception e) {
-                            // ignore
+
+                    PropertiesComponent pc = context.getPropertiesComponent();
+                    Properties prop = new Properties();
+                    Iterator<?> it = null;
+                    if (definition instanceof RouteDefinition) {
+                        it = ObjectHelper.createIterator(definition);
+                    } else if (definition instanceof RoutesDefinition routesDefinition) {
+                        it = ObjectHelper.createIterator(routesDefinition.getRoutes());
+                    }
+                    while (it != null && it.hasNext()) {
+                        RouteDefinition routeDefinition = (RouteDefinition) it.next();
+                        // if the route definition was created via a route template then we need to prepare its parameters when the route is being created and started
+                        if (routeDefinition.isTemplate() != null && routeDefinition.isTemplate()
+                                && routeDefinition.getTemplateParameters() != null) {
+                            prop.putAll(routeDefinition.getTemplateParameters());
                         }
                     }
-
-                    if (resolvePlaceholders) {
-                        PropertiesComponent pc = context.getPropertiesComponent();
-                        Properties prop = new Properties();
-                        Iterator<?> it = null;
-                        if (definition instanceof RouteDefinition) {
-                            it = ObjectHelper.createIterator(definition);
-                        } else if (definition instanceof RoutesDefinition) {
-                            it = ObjectHelper.createIterator(((RoutesDefinition) definition).getRoutes());
-                        }
-                        while (it != null && it.hasNext()) {
-                            RouteDefinition routeDefinition = (RouteDefinition) it.next();
-                            // if the route definition was created via a route template then we need to prepare its parameters when the route is being created and started
-                            if (routeDefinition.isTemplate() != null && routeDefinition.isTemplate()
-                                    && routeDefinition.getTemplateParameters() != null) {
-                                prop.putAll(routeDefinition.getTemplateParameters());
-                            }
-                        }
-                        pc.setLocalProperties(prop);
-                        try {
-                            after = context.resolvePropertyPlaceholders(after);
-                        } catch (Exception e) {
-                            // ignore
-                        } finally {
-                            // clear local after the route is dumped
-                            pc.setLocalProperties(null);
-                        }
+                    pc.setLocalProperties(prop);
+                    try {
+                        after = context.resolvePropertyPlaceholders(after);
+                    } catch (Exception e) {
+                        // ignore
+                    } finally {
+                        // clear local after the route is dumped
+                        pc.setLocalProperties(null);
                     }
 
-                    if (!changed.get()) {
-                        changed.set(!text.equals(after));
+                    boolean updated = !text.equals(after);
+                    if (updated && !changed.get()) {
+                        changed.set(true);
                     }
-
-                    // okay the previous must be the attribute key with uri, so
-                    // it refers to an endpoint
-                    prev = text;
 
                     return after;
                 }
@@ -229,53 +216,228 @@ public class JaxbModelToXMLDumper implements ModelToXMLDumper {
             if (changed.get()) {
                 xml = context.getTypeConverter().mandatoryConvertTo(String.class, dom);
                 NamedNode copy = modelToXml(context, xml, NamedNode.class);
-                xml = PluginHelper.getModelToXMLDumper(context).dumpModelAsXml(context, copy);
+                xml = PluginHelper.getModelToXMLDumper(context).dumpModelAsXml(context, copy, false, generatedIds);
             }
         }
 
         return xml;
     }
 
-    private static void sanitizeXml(Node node) {
+    @Override
+    public String dumpBeansAsXml(CamelContext context, List<Object> beans) throws Exception {
+        StringWriter buffer = new StringWriter();
+        BeanModelWriter writer = new BeanModelWriter(buffer);
+
+        List<BeanFactoryDefinition<?>> list = new ArrayList<>();
+        for (Object bean : beans) {
+            if (bean instanceof BeanFactoryDefinition<?> rb) {
+                list.add(rb);
+            }
+        }
+        writer.setCamelContext(context);
+        writer.start();
+        try {
+            writer.writeBeans(list);
+        } finally {
+            writer.stop();
+        }
+
+        return buffer.toString();
+    }
+
+    @Override
+    public String dumpDataFormatsAsXml(CamelContext context, Map<String, Object> dataFormats) throws Exception {
+        StringWriter buffer = new StringWriter();
+        buffer.write("\n");
+
+        DataFormatModelWriter writer = new DataFormatModelWriter(buffer);
+        Map<String, DataFormatDefinition> map = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : dataFormats.entrySet()) {
+            if (entry.getValue() instanceof DataFormatDefinition def) {
+                map.put(entry.getKey(), def);
+            }
+        }
+        writer.setCamelContext(context);
+        writer.start();
+        try {
+            writer.writeDataFormats(map);
+        } finally {
+            writer.stop();
+        }
+
+        return buffer.toString();
+    }
+
+    private static void sanitizeXml(Node node, boolean generatedIds) {
         // we want to remove all customId="false" attributes as they are noisy
         if (node.hasAttributes()) {
             Node att = node.getAttributes().getNamedItem("customId");
-            if (att != null && "false".equals(att.getNodeValue())) {
+            boolean custom = att != null && "true".equals(att.getNodeValue());
+            if (att != null) {
                 node.getAttributes().removeNamedItem("customId");
+            }
+            if (!generatedIds && !custom) {
+                // remove auto-generated ids
+                Node attId = node.getAttributes().getNamedItem("id");
+                if (attId != null) {
+                    node.getAttributes().removeNamedItem("id");
+                }
             }
         }
         if (node.hasChildNodes()) {
             for (int i = 0; i < node.getChildNodes().getLength(); i++) {
                 Node child = node.getChildNodes().item(i);
-                sanitizeXml(child);
+                sanitizeXml(child, generatedIds);
             }
         }
     }
 
-    private static void enrichLocations(Node node, Map<String, KeyValueHolder<Integer, String>> locations) {
-        if (node instanceof Element) {
-            Element el = (Element) node;
+    private static class BeanModelWriter implements CamelContextAware {
 
-            // from should grab it from parent (route)
-            String id = el.getAttribute("id");
-            if ("from".equals(el.getNodeName())) {
-                Node parent = el.getParentNode();
-                if (parent instanceof Element) {
-                    id = ((Element) parent).getAttribute("id");
-                }
+        private final StringWriter buffer;
+        private CamelContext camelContext;
+
+        public BeanModelWriter(StringWriter buffer) {
+            this.buffer = buffer;
+        }
+
+        @Override
+        public CamelContext getCamelContext() {
+            return camelContext;
+        }
+
+        @Override
+        public void setCamelContext(CamelContext camelContext) {
+            this.camelContext = camelContext;
+        }
+
+        public void start() {
+            // noop
+        }
+
+        public void stop() {
+            // noop
+        }
+
+        public void writeBeans(List<BeanFactoryDefinition<?>> beans) {
+            if (beans.isEmpty()) {
+                return;
             }
-            if (id != null) {
-                var loc = locations.get(id);
-                if (loc != null) {
-                    el.setAttribute("sourceLineNumber", loc.getKey().toString());
-                    el.setAttribute("sourceLocation", loc.getValue());
-                }
+            for (BeanFactoryDefinition<?> b : beans) {
+                doWriteBeanFactoryDefinition(b);
             }
         }
-        if (node.hasChildNodes()) {
-            for (int i = 0; i < node.getChildNodes().getLength(); i++) {
-                Node child = node.getChildNodes().item(i);
-                enrichLocations(child, locations);
+
+        private void doWriteBeanFactoryDefinition(BeanFactoryDefinition<?> b) {
+            String type = b.getType();
+            if (type.startsWith("#class:")) {
+                type = type.substring(7);
+            }
+            buffer.write(String.format("    <bean name=\"%s\" type=\"%s\"", b.getName(), type));
+            if (b.getFactoryBean() != null) {
+                buffer.write(String.format(" factoryBean=\"%s\"", b.getFactoryBean()));
+            }
+            if (b.getFactoryMethod() != null) {
+                buffer.write(String.format(" factoryMethod=\"%s\"", b.getFactoryMethod()));
+            }
+            if (b.getBuilderClass() != null) {
+                buffer.write(String.format(" builderClass=\"%s\"", b.getBuilderClass()));
+            }
+            if (b.getBuilderMethod() != null) {
+                buffer.write(String.format(" builderMethod=\"%s\"", b.getBuilderMethod()));
+            }
+            if (b.getInitMethod() != null) {
+                buffer.write(String.format(" initMethod=\"%s\"", b.getInitMethod()));
+            }
+            if (b.getDestroyMethod() != null) {
+                buffer.write(String.format(" destroyMethod=\"%s\"", b.getDestroyMethod()));
+            }
+            if (b.getScriptLanguage() != null) {
+                buffer.write(String.format(" scriptLanguage=\"%s\"", b.getScriptLanguage()));
+            }
+            if (b.getScript() != null) {
+                buffer.write(String.format("        <script>%n"));
+                buffer.write(b.getScript());
+                buffer.write("\n");
+                buffer.write(String.format("        </script>%n"));
+            }
+            buffer.write(">\n");
+            if (b.getConstructors() != null && !b.getConstructors().isEmpty()) {
+                buffer.write(String.format("        <constructors>%n"));
+                b.getConstructors().forEach((idx, value) -> {
+                    if (idx != null) {
+                        buffer.write(String.format("            <constructor index=\"%d\" value=\"%s\"/>%n", idx, value));
+                    } else {
+                        buffer.write(String.format("            <constructor value=\"%s\"/>%n", value));
+                    }
+                });
+                buffer.write(String.format("        </constructors>%n"));
+            }
+            if (b.getProperties() != null && !b.getProperties().isEmpty()) {
+                buffer.write(String.format("        <properties>%n"));
+                b.getProperties().forEach((key, value) -> {
+                    buffer.write(String.format("            <property key=\"%s\" value=\"%s\"/>%n", key, value));
+                });
+                buffer.write(String.format("        </properties>%n"));
+            }
+            buffer.write(String.format("    </bean>%n"));
+        }
+    }
+
+    private static class DataFormatModelWriter implements CamelContextAware {
+
+        private final StringWriter buffer;
+        private CamelContext camelContext;
+
+        public DataFormatModelWriter(StringWriter buffer) {
+            this.buffer = buffer;
+        }
+
+        @Override
+        public CamelContext getCamelContext() {
+            return camelContext;
+        }
+
+        @Override
+        public void setCamelContext(CamelContext camelContext) {
+            this.camelContext = camelContext;
+        }
+
+        public void start() {
+            // noop
+        }
+
+        public void stop() {
+            // noop
+        }
+
+        public void writeDataFormats(Map<String, DataFormatDefinition> dataFormats) throws Exception {
+            if (dataFormats.isEmpty()) {
+                return;
+            }
+
+            DataFormatsDefinition def = new DataFormatsDefinition();
+            def.setDataFormats(new ArrayList<>(dataFormats.values()));
+
+            final JAXBContext jaxbContext = getJAXBContext(camelContext);
+
+            StringWriter tmp = new StringWriter();
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+            marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
+            marshaller.marshal(def, tmp);
+
+            // remove unwanted namespace
+            String xml = tmp.toString();
+            xml = xml.replace("<dataFormats xmlns=\"http://camel.apache.org/schema/spring\">", "<dataFormats>");
+            xml = StringHelper.after(xml, "<dataFormats>");
+
+            // output with 4 space indent
+            buffer.write("    <dataFormats>");
+            for (String line : xml.split("\n")) {
+                buffer.write("    ");
+                buffer.write(line);
+                buffer.write("\n");
             }
         }
     }

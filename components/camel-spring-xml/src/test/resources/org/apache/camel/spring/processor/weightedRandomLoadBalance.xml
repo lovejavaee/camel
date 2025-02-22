@@ -28,10 +28,11 @@
 
   <!-- START SNIPPET: example -->
   <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
     <route>
       <from uri="direct:start"/>
       <loadBalance>
-        <weighted roundRobin="false" distributionRatio="4, 2, 1" />
+        <weightedLoadBalancer roundRobin="false" distributionRatio="4, 2, 1" />
           <to uri="mock:x"/>
           <to uri="mock:y"/>
           <to uri="mock:z"/>

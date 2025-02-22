@@ -16,32 +16,11 @@
  */
 package org.apache.camel.test.infra.minio.services;
 
+import org.apache.camel.test.infra.common.services.ContainerTestService;
 import org.apache.camel.test.infra.common.services.TestService;
-import org.apache.camel.test.infra.common.services.TestServiceUtil;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
  * Test infra service for Minio
  */
-public interface MinioService extends BeforeAllCallback, AfterAllCallback, TestService {
-
-    String secretKey();
-
-    String accessKey();
-
-    int port();
-
-    String host();
-
-    @Override
-    default void beforeAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryInitialize(this, extensionContext);
-    }
-
-    @Override
-    default void afterAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryShutdown(this, extensionContext);
-    }
+public interface MinioService extends TestService, MinioInfraService, ContainerTestService {
 }

@@ -16,34 +16,11 @@
  */
 package org.apache.camel.test.infra.postgres.services;
 
+import org.apache.camel.test.infra.common.services.ContainerTestService;
 import org.apache.camel.test.infra.common.services.TestService;
-import org.apache.camel.test.infra.common.services.TestServiceUtil;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
  * Test infra service for Postgres
  */
-public interface PostgresService extends BeforeAllCallback, AfterAllCallback, TestService {
-
-    String host();
-
-    int port();
-
-    String userName();
-
-    String password();
-
-    String getServiceAddress();
-
-    @Override
-    default void beforeAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryInitialize(this, extensionContext);
-    }
-
-    @Override
-    default void afterAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryShutdown(this, extensionContext);
-    }
+public interface PostgresService extends TestService, PostgresInfraService, ContainerTestService {
 }

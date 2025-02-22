@@ -24,15 +24,14 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.RoutesBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.spi.PropertiesComponent;
 import org.apache.camel.spi.PropertiesSource;
 import org.apache.camel.spi.Registry;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.assertj.core.api.Assertions;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class CamelMicroProfilePropertiesSourceTest extends CamelTestSupport {
 
@@ -46,10 +45,17 @@ public class CamelMicroProfilePropertiesSourceTest extends CamelTestSupport {
         prop.put("hi", "World");
         prop.put("my-mock", "result");
         prop.put("empty", "");
+        prop.put("%non-active-profile.test-non-active-profile", "should not see this");
+        prop.put("%profileA.test-profile-a", "Profile A");
+        prop.put("%profileB.test-profile-b", "Profile B");
 
         // create PMC config source and register it so we can use it for testing
         PropertiesConfigSource pcs = new PropertiesConfigSource(prop, "my-smallrye-config");
-        config = new SmallRyeConfigBuilder().withSources(pcs).build();
+        config = new SmallRyeConfigBuilder()
+                .withProfile("profileA")
+                .withProfile("profileB")
+                .withSources(pcs)
+                .build();
 
         ConfigProviderResolver.instance().registerConfig(config, CamelMicroProfilePropertiesSourceTest.class.getClassLoader());
 
@@ -57,10 +63,8 @@ public class CamelMicroProfilePropertiesSourceTest extends CamelTestSupport {
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
+    public void doPostTearDown() {
         ConfigProviderResolver.instance().releaseConfig(config);
-        super.tearDown();
     }
 
     @Override
@@ -82,33 +86,30 @@ public class CamelMicroProfilePropertiesSourceTest extends CamelTestSupport {
     }
 
     @Test
-    public void testLoadAll() {
-        PropertiesComponent pc = context.getPropertiesComponent();
-        Properties properties = pc.loadProperties();
-
-        Assertions.assertThat(properties.get("start")).isEqualTo("direct:start");
-        Assertions.assertThat(properties.get("hi")).isEqualTo("World");
-        Assertions.assertThat(properties.get("my-mock")).isEqualTo("result");
-        Assertions.assertThat(properties.get("empty")).isNull();
-    }
-
-    @Test
-    public void testLoadFiltered() {
-        PropertiesComponent pc = context.getPropertiesComponent();
-        Properties properties = pc.loadProperties(k -> k.length() > 2);
-
-        Assertions.assertThat(properties).hasSize(2);
-        Assertions.assertThat(properties.get("start")).isEqualTo("direct:start");
-        Assertions.assertThat(properties.get("my-mock")).isEqualTo("result");
-    }
-
-    @Test
     public void testMicroProfileConfig() throws Exception {
         getMockEndpoint("mock:result").expectedBodiesReceived("Hello World from Camel");
 
         template.sendBody("direct:start", context.resolvePropertyPlaceholders("Hello {{hi}} from {{who}}"));
 
         MockEndpoint.assertIsSatisfied(context);
+    }
+
+    @Test
+    public void testActiveConfigProfiles() throws Exception {
+        getMockEndpoint("mock:result").expectedBodiesReceived("Profile A :: Profile B");
+
+        template.sendBody("direct:start", context.resolvePropertyPlaceholders("{{test-profile-a}} :: {{test-profile-b}}"));
+
+        MockEndpoint.assertIsSatisfied(context);
+    }
+
+    @Test
+    public void testInactiveConfigProfiles() throws Exception {
+        assertThatThrownBy(() -> {
+            template.sendBody("direct:start", context.resolvePropertyPlaceholders("{{test-non-active-profile}}"));
+        })
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Property with key [test-non-active-profile] not found");
     }
 
     @Override

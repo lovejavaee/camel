@@ -44,8 +44,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class XsltBuilderTest extends ContextTestSupport {
 
@@ -261,7 +261,7 @@ public class XsltBuilderTest extends ContextTestSupport {
 
         // now done the exchange
         List<Synchronization> onCompletions = exchange.getExchangeExtension().handoverCompletions();
-        UnitOfWorkHelper.doneSynchronizations(exchange, onCompletions, log);
+        UnitOfWorkHelper.doneSynchronizations(exchange, onCompletions);
 
         // the file should be deleted
         assertFileNotExists(testFile("xsltout.xml"));
@@ -294,12 +294,8 @@ public class XsltBuilderTest extends ContextTestSupport {
         Exchange exchange = new DefaultExchange(context);
         exchange.getIn().setBody(null);
 
-        try {
-            builder.process(exchange);
-            fail("Should thrown an exception");
-        } catch (ExpectedBodyTypeException e) {
-            // expected
-        }
+        assertThrows(ExpectedBodyTypeException.class,
+                () -> builder.process(exchange), "Should thrown an exception");
     }
 
     @Test
@@ -312,12 +308,8 @@ public class XsltBuilderTest extends ContextTestSupport {
         Exchange exchange = new DefaultExchange(context);
         exchange.getIn().setBody(null);
 
-        try {
-            builder.process(exchange);
-            fail("Should thrown an exception");
-        } catch (ExpectedBodyTypeException e) {
-            // expected
-        }
+        assertThrows(ExpectedBodyTypeException.class,
+                () -> builder.process(exchange), "Should thrown an exception");
     }
 
     @Test

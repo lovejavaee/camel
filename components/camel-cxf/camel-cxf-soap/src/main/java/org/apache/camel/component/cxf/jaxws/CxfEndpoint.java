@@ -69,6 +69,7 @@ import org.apache.camel.component.cxf.transport.header.CxfHeaderFilterStrategy;
 import org.apache.camel.http.base.cookie.CookieHandler;
 import org.apache.camel.spi.HeaderFilterStrategy;
 import org.apache.camel.spi.HeaderFilterStrategyAware;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
@@ -127,7 +128,10 @@ import static org.apache.camel.component.cxf.common.message.CxfConstants.SCHEME_
  * Expose SOAP WebServices using Apache CXF or connect to external WebServices using CXF WS client.
  */
 @UriEndpoint(firstVersion = "1.0.0", scheme = SCHEME_CXF, title = "CXF", syntax = "cxf:beanId:address",
-             category = { Category.SOAP, Category.WEBSERVICE }, headersClass = CxfConstants.class)
+             category = { Category.HTTP, Category.WEBSERVICE }, headersClass = CxfConstants.class)
+@Metadata(annotations = {
+        "protocol=http",
+})
 public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, HeaderFilterStrategyAware, Service, Cloneable {
 
     private static final Logger LOG = LoggerFactory.getLogger(CxfEndpoint.class);
@@ -192,7 +196,7 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
     @UriParam(label = "logging")
     private boolean loggingFeatureEnabled;
     @UriParam(label = "logging", defaultValue = "" + AbstractLoggingInterceptor.DEFAULT_LIMIT)
-    private int loggingSizeLimit;
+    private int loggingSizeLimit = AbstractLoggingInterceptor.DEFAULT_LIMIT;
     @UriParam(label = "advanced")
     private boolean mtomEnabled;
     @UriParam(label = "advanced")
@@ -216,7 +220,6 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
     @UriParam(defaultValue = "false", label = "producer,advanced",
               description = "Sets whether synchronous processing should be strictly used")
     private boolean synchronous;
-
     @UriParam(defaultValue = "false", label = "advanced",
               description = "Enable schema validation for request and response. Disabled by default for performance reason")
     private Boolean schemaValidationEnabled;
@@ -318,32 +321,13 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
 
         // apply feature here
         if (!CxfEndpointUtils.hasAnnotation(cls, WebServiceProvider.class)) {
-            if (getDataFormat() == DataFormat.PAYLOAD) {
-                sfb.getFeatures().add(new PayLoadDataFormatFeature(allowStreaming));
-            } else if (getDataFormat().dealias() == DataFormat.CXF_MESSAGE) {
-                sfb.getFeatures().add(new CXFMessageDataFormatFeature());
-                sfb.setDataBinding(new SourceDataBinding());
-            } else if (getDataFormat().dealias() == DataFormat.RAW) {
-                RAWDataFormatFeature feature = new RAWDataFormatFeature();
-                if (this.getExchangePattern().equals(ExchangePattern.InOnly)) {
-                    //if DataFormat is RAW|MESSAGE, can't read message so can't
-                    //determine it's oneway so need get the MEP from URI explicitly
-                    feature.setOneway(true);
-                }
-                feature.addInIntercepters(getInInterceptors());
-                feature.addOutInterceptors(getOutInterceptors());
-                sfb.getFeatures().add(feature);
-            }
+            applyFeatures(sfb);
         } else {
             LOG.debug("Ignore DataFormat mode {} since SEI class is annotated with WebServiceProvider", getDataFormat());
         }
 
         if (isLoggingFeatureEnabled()) {
-            LoggingFeature loggingFeature = new LoggingFeature();
-            if (getLoggingSizeLimit() >= -1) {
-                loggingFeature.setLimit(getLoggingSizeLimit());
-            }
-            sfb.getFeatures().add(loggingFeature);
+            enableLoggingFeature(sfb);
         }
 
         if (getDataFormat() == DataFormat.PAYLOAD) {
@@ -357,38 +341,93 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
 
         // any optional properties
         if (getProperties() != null) {
-            if (sfb.getProperties() != null) {
-                // add to existing properties
-                sfb.getProperties().putAll(getProperties());
-            } else {
-                sfb.setProperties(getProperties());
-            }
-            LOG.debug("ServerFactoryBean: {} added properties: {}", sfb, getProperties());
+            applyOptionalProperties(sfb);
         }
         if (this.isSkipPayloadMessagePartCheck()) {
-            if (sfb.getProperties() == null) {
-                sfb.setProperties(new HashMap<String, Object>());
-            }
-            sfb.getProperties().put("soap.no.validate.parts", Boolean.TRUE);
+            applySkipPayloadMessagePartCheck(sfb);
         }
 
         if (this.isSkipFaultLogging()) {
-            if (sfb.getProperties() == null) {
-                sfb.setProperties(new HashMap<String, Object>());
-            }
-            sfb.getProperties().put(FaultListener.class.getName(), new NullFaultListener());
+            applySkipFaultLogging(sfb);
         }
 
         if (this.getSchemaValidationEnabled() != null) {
-            if (sfb.getProperties() == null) {
-                sfb.setProperties(new HashMap<>());
-            }
-            sfb.getProperties().put(Message.SCHEMA_VALIDATION_ENABLED, schemaValidationEnabled);
+            applySchemaValidation(sfb);
         }
 
         sfb.setBus(getBus());
         sfb.setStart(false);
         getNullSafeCxfConfigurer().configure(sfb);
+    }
+
+    private static void applySkipPayloadMessagePartCheck(ServerFactoryBean sfb) {
+        if (sfb.getProperties() == null) {
+            sfb.setProperties(new HashMap<>());
+        }
+        sfb.getProperties().put("soap.no.validate.parts", Boolean.TRUE);
+    }
+
+    private void applySchemaValidation(ServerFactoryBean sfb) {
+        if (sfb.getProperties() == null) {
+            sfb.setProperties(new HashMap<>());
+        }
+        sfb.getProperties().put(Message.SCHEMA_VALIDATION_ENABLED, schemaValidationEnabled);
+    }
+
+    private static void applySkipFaultLogging(ServerFactoryBean sfb) {
+        if (sfb.getProperties() == null) {
+            sfb.setProperties(new HashMap<>());
+        }
+        sfb.getProperties().put(FaultListener.class.getName(), new NullFaultListener());
+    }
+
+    private void applyOptionalProperties(ServerFactoryBean sfb) {
+        if (sfb.getProperties() != null) {
+            // add to existing properties
+            sfb.getProperties().putAll(getProperties());
+        } else {
+            sfb.setProperties(getProperties());
+        }
+        LOG.debug("ServerFactoryBean: {} added properties: {}", sfb, getProperties());
+    }
+
+    private void enableLoggingFeature(ServerFactoryBean sfb) {
+        LoggingFeature loggingFeature = new LoggingFeature();
+        if (getLoggingSizeLimit() >= -1) {
+            loggingFeature.setLimit(getLoggingSizeLimit());
+        }
+        sfb.getFeatures().add(loggingFeature);
+    }
+
+    private void applyFeatures(ServerFactoryBean sfb) {
+        if (getDataFormat() == DataFormat.PAYLOAD) {
+            applyPayload(sfb);
+        } else if (getDataFormat().dealias() == DataFormat.CXF_MESSAGE) {
+            applyCXFMessage(sfb);
+        } else if (getDataFormat().dealias() == DataFormat.RAW) {
+            applyRaw(sfb);
+        }
+    }
+
+    private void applyPayload(ServerFactoryBean sfb) {
+        sfb.getFeatures().add(new PayLoadDataFormatFeature(allowStreaming));
+    }
+
+    private static void applyCXFMessage(ServerFactoryBean sfb) {
+        sfb.getFeatures().add(new CXFMessageDataFormatFeature());
+        sfb.setDataBinding(new SourceDataBinding());
+    }
+
+    private void applyRaw(ServerFactoryBean sfb) {
+        RAWDataFormatFeature feature = new RAWDataFormatFeature();
+        if (this.getExchangePattern().equals(ExchangePattern.InOnly)) {
+            //if DataFormat is RAW|MESSAGE, can't read message so can't
+            //determine it's oneway so need get the MEP from URI explicitly
+            feature.setOneway(true);
+        }
+        feature.addInIntercepters(getInInterceptors());
+        feature.addOutInterceptors(getOutInterceptors());
+        sfb.getFeatures().add(feature);
     }
 
     /**
@@ -563,21 +602,21 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
             authPolicy.setUserName(username);
             authPolicy.setPassword(password);
             if (factoryBean.getProperties() == null) {
-                factoryBean.setProperties(new HashMap<String, Object>());
+                factoryBean.setProperties(new HashMap<>());
             }
             factoryBean.getProperties().put(AuthorizationPolicy.class.getName(), authPolicy);
         }
 
         if (this.isSkipPayloadMessagePartCheck()) {
             if (factoryBean.getProperties() == null) {
-                factoryBean.setProperties(new HashMap<String, Object>());
+                factoryBean.setProperties(new HashMap<>());
             }
             factoryBean.getProperties().put("soap.no.validate.parts", Boolean.TRUE);
         }
 
         if (this.isSkipFaultLogging()) {
             if (factoryBean.getProperties() == null) {
-                factoryBean.setProperties(new HashMap<String, Object>());
+                factoryBean.setProperties(new HashMap<>());
             }
             factoryBean.getProperties().put(FaultListener.class.getName(), new NullFaultListener());
         }
@@ -984,10 +1023,10 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
                         LOG.warn("Error creating Cxf Bus from SpringBootCamelContext: {} This exception will be ignored.",
                                 ex.getMessage(), ex);
                     }
-                    bus = CxfEndpointUtils.createBus(getCamelContext());
+                    bus = CxfEndpointUtils.createBus();
                 }
             } else {
-                bus = CxfEndpointUtils.createBus(getCamelContext());
+                bus = CxfEndpointUtils.createBus();
             }
             this.createBus = true;
             LOG.debug("Using DefaultBus {}", bus);
@@ -1232,50 +1271,54 @@ public class CxfEndpoint extends DefaultEndpoint implements AsyncEndpoint, Heade
             // as the setParameter will be called more than once when using the fail over feature
             if (DataFormat.PAYLOAD == message.get(DataFormat.class) && params[0] instanceof CxfPayload) {
 
-                CxfPayload<?> payload = (CxfPayload<?>) params[0];
-                List<Source> elements = payload.getBodySources();
-
-                BindingOperationInfo boi = message.get(BindingOperationInfo.class);
-                MessageContentsList content = new MessageContentsList();
-                int i = 0;
-
-                for (MessagePartInfo partInfo : boi.getInput().getMessageParts()) {
-                    if (elements.size() > i) {
-                        if (isSkipPayloadMessagePartCheck()) {
-                            content.put(partInfo, elements.get(i++));
-                        } else {
-                            String name = findName(elements, i);
-                            if (partInfo.getConcreteName().getLocalPart().equals(name)) {
-                                content.put(partInfo, elements.get(i++));
-                            }
-                        }
-                    }
-                }
-
-                if (elements != null && content.size() < elements.size()) {
-                    throw new IllegalArgumentException(
-                            "The PayLoad elements cannot fit with the message parts of the BindingOperation. Please check the BindingOperation and PayLoadMessage.");
-                }
-
-                message.setContent(List.class, content);
-                // merge header list from request context with header list from CXF payload
-                List<Object> headerListOfRequestContxt = (List<Object>) message.get(Header.HEADER_LIST);
-                List<Object> headerListOfPayload = CastUtils.cast(payload.getHeaders());
-                if (headerListOfRequestContxt == headerListOfPayload) {
-                    // == is correct, we want to compare the object instances
-                    // nothing to do, this can happen when the CXF payload is already created in the from-cxf-endpoint and then forwarded to a to-cxf-endpoint
-                } else {
-                    if (headerListOfRequestContxt == null) {
-                        message.put(Header.HEADER_LIST, payload.getHeaders());
-                    } else {
-                        headerListOfRequestContxt.addAll(headerListOfPayload);
-                    }
-                }
+                setParametersViaPayload(params, message);
             } else {
                 super.setParameters(params, message);
             }
 
             message.remove(DataFormat.class.getName());
+        }
+
+        private void setParametersViaPayload(Object[] params, Message message) {
+            CxfPayload<?> payload = (CxfPayload<?>) params[0];
+            List<Source> elements = payload.getBodySources();
+
+            BindingOperationInfo boi = message.get(BindingOperationInfo.class);
+            MessageContentsList content = new MessageContentsList();
+            int i = 0;
+
+            for (MessagePartInfo partInfo : boi.getInput().getMessageParts()) {
+                if (elements.size() > i) {
+                    if (isSkipPayloadMessagePartCheck()) {
+                        content.put(partInfo, elements.get(i++));
+                    } else {
+                        String name = findName(elements, i);
+                        if (partInfo.getConcreteName().getLocalPart().equals(name)) {
+                            content.put(partInfo, elements.get(i++));
+                        }
+                    }
+                }
+            }
+
+            if (elements != null && content.size() < elements.size()) {
+                throw new IllegalArgumentException(
+                        "The PayLoad elements cannot fit with the message parts of the BindingOperation. Please check the BindingOperation and PayLoadMessage.");
+            }
+
+            message.setContent(List.class, content);
+            // merge header list from request context with header list from CXF payload
+            List<Object> headerListOfRequestContxt = (List<Object>) message.get(Header.HEADER_LIST);
+            List<Object> headerListOfPayload = CastUtils.cast(payload.getHeaders());
+            if (headerListOfRequestContxt == headerListOfPayload) {
+                // == is correct, we want to compare the object instances
+                // nothing to do, this can happen when the CXF payload is already created in the from-cxf-endpoint and then forwarded to a to-cxf-endpoint
+            } else {
+                if (headerListOfRequestContxt == null) {
+                    message.put(Header.HEADER_LIST, payload.getHeaders());
+                } else {
+                    headerListOfRequestContxt.addAll(headerListOfPayload);
+                }
+            }
         }
 
         private String findName(List<Source> sources, int i) {

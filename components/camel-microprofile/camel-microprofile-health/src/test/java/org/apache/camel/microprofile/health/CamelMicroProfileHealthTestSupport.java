@@ -16,17 +16,23 @@
  */
 package org.apache.camel.microprofile.health;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.NotificationOptions;
+import jakarta.enterprise.util.TypeLiteral;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 
 import io.smallrye.health.SmallRyeHealth;
 import io.smallrye.health.SmallRyeHealthReporter;
 import io.smallrye.health.api.HealthType;
+import io.smallrye.health.api.event.HealthStatusChangeEvent;
 import io.smallrye.health.registry.HealthRegistries;
 import io.smallrye.health.registry.HealthRegistryImpl;
 import io.smallrye.mutiny.Uni;
@@ -36,18 +42,24 @@ import org.apache.camel.health.HealthCheckRegistry;
 import org.apache.camel.health.HealthCheckResultBuilder;
 import org.apache.camel.impl.health.AbstractHealthCheck;
 import org.apache.camel.test.junit5.CamelTestSupport;
+import org.apache.camel.util.ReflectionHelper;
 import org.eclipse.microprofile.health.HealthCheckResponse;
-import org.junit.jupiter.api.AfterEach;
 
 public class CamelMicroProfileHealthTestSupport extends CamelTestSupport {
 
     protected SmallRyeHealthReporter reporter = new SmallRyeHealthReporter();
 
-    @SuppressWarnings("unchecked")
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    protected void setupResources() throws Exception {
+        super.setupResources();
+
+        // Work around to fulfil CDI injected fields
+        setupHealthReporterEventFields();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void doPostTearDown() {
         // Hack to clean up all registered checks
         Stream.of(HealthType.LIVENESS, HealthType.READINESS)
                 .forEach(type -> {
@@ -70,6 +82,18 @@ public class CamelMicroProfileHealthTestSupport extends CamelTestSupport {
         HealthCheckRegistry registry = new CamelMicroProfileHealthCheckRegistry();
         camelContext.getCamelContextExtension().addContextPlugin(HealthCheckRegistry.class, registry);
         return camelContext;
+    }
+
+    protected void setupHealthReporterEventFields() {
+        Stream.of("healthEvent", "livenessEvent", "readinessEvent", "wellnessEvent", "startupEvent")
+                .forEach(fieldName -> {
+                    try {
+                        Field field = SmallRyeHealthReporter.class.getDeclaredField(fieldName);
+                        ReflectionHelper.setField(field, reporter, new NoOpHealthEvent());
+                    } catch (NoSuchFieldException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
     }
 
     protected void assertHealthCheckOutput(
@@ -154,5 +178,36 @@ public class CamelMicroProfileHealthTestSupport extends CamelTestSupport {
         };
         readinessCheck.setEnabled(enabled);
         return readinessCheck;
+    }
+
+    static final class NoOpHealthEvent implements Event<HealthStatusChangeEvent> {
+        @Override
+        public void fire(HealthStatusChangeEvent healthStatusChangeEvent) {
+        }
+
+        @Override
+        public <U extends HealthStatusChangeEvent> CompletionStage<U> fireAsync(U u) {
+            return null;
+        }
+
+        @Override
+        public <U extends HealthStatusChangeEvent> CompletionStage<U> fireAsync(U u, NotificationOptions notificationOptions) {
+            return null;
+        }
+
+        @Override
+        public Event<HealthStatusChangeEvent> select(Annotation... annotations) {
+            return null;
+        }
+
+        @Override
+        public <U extends HealthStatusChangeEvent> Event<U> select(Class<U> aClass, Annotation... annotations) {
+            return null;
+        }
+
+        @Override
+        public <U extends HealthStatusChangeEvent> Event<U> select(TypeLiteral<U> typeLiteral, Annotation... annotations) {
+            return null;
+        }
     }
 }

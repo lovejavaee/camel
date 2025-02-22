@@ -26,6 +26,7 @@ public final class KubernetesConstants {
     public static final String SCHEME_EVENTS = "kubernetes-events";
     public static final String SCHEME_HPA = "kubernetes-hpa";
     public static final String SCHEME_JOB = "kubernetes-job";
+    public static final String SCHEME_CRON_JOB = "kubernetes-cronjob";
     public static final String SCHEME_NAMESPACES = "kubernetes-namespaces";
     public static final String SCHEME_NODES = "kubernetes-nodes";
     public static final String SCHEME_PERSISTENT_VOLUMES = "kubernetes-persistent-volumes";
@@ -52,6 +53,9 @@ public final class KubernetesConstants {
     @Metadata(label = "producer", description = "The namespace labels", javaType = "Map<String, String>",
               applicableFor = SCHEME_NAMESPACES)
     public static final String KUBERNETES_NAMESPACE_LABELS = "CamelKubernetesNamespaceLabels";
+    @Metadata(label = "producer", description = "The namespace annotations", javaType = "Map<String, String>",
+              applicableFor = SCHEME_NAMESPACES)
+    public static final String KUBERNETES_NAMESPACE_ANNOTATIONS = "CamelKubernetesNamespaceAnnotations";
     @Metadata(label = "producer", description = "The service labels", javaType = "Map<String, String>",
               applicableFor = SCHEME_SERVICES)
     public static final String KUBERNETES_SERVICE_LABELS = "CamelKubernetesServiceLabels";
@@ -134,6 +138,9 @@ public final class KubernetesConstants {
     @Metadata(label = "producer", description = "A secret object", javaType = "io.fabric8.kubernetes.api.model.Secret",
               applicableFor = SCHEME_SECRETS)
     public static final String KUBERNETES_SECRET = "CamelKubernetesSecret";
+    @Metadata(label = "producer", description = "The secret annotations", javaType = "Map<String, String>",
+              applicableFor = SCHEME_SECRETS)
+    public static final String KUBERNETES_SECRETS_ANNOTATIONS = "CamelKubernetesSecretsAnnotations";
     @Metadata(label = "producer", description = "The resource quota labels", javaType = "Map<String, String>",
               applicableFor = SCHEME_RESOURCES_QUOTA)
     public static final String KUBERNETES_RESOURCES_QUOTA_LABELS = "CamelKubernetesResourcesQuotaLabels";
@@ -163,6 +170,9 @@ public final class KubernetesConstants {
     @Metadata(label = "producer", description = "The deployment labels", javaType = "Map<String, String>",
               applicableFor = { SCHEME_DEPLOYMENTS, SCHEME_DEPLOYMENT_CONFIGS })
     public static final String KUBERNETES_DEPLOYMENTS_LABELS = "CamelKubernetesDeploymentsLabels";
+    @Metadata(label = "producer", description = "The deployment labels", javaType = "Map<String, String>",
+              applicableFor = { SCHEME_DEPLOYMENTS, SCHEME_DEPLOYMENT_CONFIGS })
+    public static final String KUBERNETES_DEPLOYMENTS_ANNOTATIONS = "CamelKubernetesDeploymentsAnnotations";
     @Metadata(label = "producer", description = "The deployment name", javaType = "String",
               applicableFor = { SCHEME_DEPLOYMENTS, SCHEME_DEPLOYMENT_CONFIGS })
     public static final String KUBERNETES_DEPLOYMENT_NAME = "CamelKubernetesDeploymentName";
@@ -177,12 +187,15 @@ public final class KubernetesConstants {
     @Metadata(label = "producer", description = "The ConfigMap Data", javaType = "Map<String, String>",
               applicableFor = SCHEME_CONFIG_MAPS)
     public static final String KUBERNETES_CONFIGMAP_DATA = "CamelKubernetesConfigData";
-    @Metadata(label = "producer", description = "The Openshift build labels", javaType = "Map<String, String>",
+    @Metadata(label = "producer", description = "The ConfigMap annotations", javaType = "Map<String, String>",
+              applicableFor = SCHEME_CONFIG_MAPS)
+    public static final String KUBERNETES_CONFIGMAPS_ANNOTATIONS = "CamelKubernetesConfigMapsAnnotations";
+    @Metadata(label = "producer", description = "The OpenShift build labels", javaType = "Map<String, String>",
               applicableFor = SCHEME_BUILDS)
     public static final String KUBERNETES_BUILDS_LABELS = "CamelKubernetesBuildsLabels";
-    @Metadata(label = "producer", description = "The Openshift build name", javaType = "String", applicableFor = SCHEME_BUILDS)
+    @Metadata(label = "producer", description = "The OpenShift build name", javaType = "String", applicableFor = SCHEME_BUILDS)
     public static final String KUBERNETES_BUILD_NAME = "CamelKubernetesBuildName";
-    @Metadata(label = "producer", description = "The Openshift Config Build labels", javaType = "Map<String, String>",
+    @Metadata(label = "producer", description = "The OpenShift Config Build labels", javaType = "Map<String, String>",
               applicableFor = SCHEME_BUILD_CONFIG)
     public static final String KUBERNETES_BUILD_CONFIGS_LABELS = "CamelKubernetesBuildConfigsLabels";
     @Metadata(label = "producer", description = "The Openshift Config Build name", javaType = "String",
@@ -206,6 +219,9 @@ public final class KubernetesConstants {
     public static final String KUBERNETES_JOB_SPEC = "CamelKubernetesJobSpec";
     @Metadata(label = "producer", description = "The Job labels.", javaType = "Map<String, String>", applicableFor = SCHEME_JOB)
     public static final String KUBERNETES_JOB_LABELS = "CamelKubernetesJobLabels";
+    @Metadata(label = "producer", description = "The Job annotations.", javaType = "Map<String, String>",
+              applicableFor = SCHEME_JOB)
+    public static final String KUBERNETES_JOB_ANNOTATIONS = "CamelKubernetesJobAnnotations";
     @Metadata(label = "producer", description = "The deployment name", javaType = "String",
               applicableFor = SCHEME_CUSTOM_RESOURCES)
     public static final String KUBERNETES_CRD_INSTANCE_NAME = "CamelKubernetesCRDInstanceName";
@@ -255,6 +271,19 @@ public final class KubernetesConstants {
                       SCHEME_CONFIG_MAPS, SCHEME_DEPLOYMENTS, SCHEME_HPA, SCHEME_NAMESPACES, SCHEME_NODES, SCHEME_PODS,
                       SCHEME_REPLICATION_CONTROLLERS, SCHEME_SERVICES, SCHEME_DEPLOYMENT_CONFIGS, SCHEME_EVENTS })
     public static final String KUBERNETES_EVENT_TIMESTAMP = "CamelKubernetesEventTimestamp";
+
+    @Metadata(label = "producer", description = "The Cronjob labels.", javaType = "Map<String, String>",
+              applicableFor = SCHEME_CRON_JOB)
+    public static final String KUBERNETES_CRON_JOB_LABELS = "CamelKubernetesCronJobLabels";
+
+    @Metadata(label = "producer", description = "The Cronjob name.", javaType = "String", applicableFor = SCHEME_CRON_JOB)
+    public static final String KUBERNETES_CRON_JOB_NAME = "CamelKubernetesCronJobName";
+    @Metadata(label = "producer", description = "The spec for a Job.",
+              javaType = "io.fabric8.kubernetes.api.model.batch.v1.CronJobSpec", applicableFor = SCHEME_CRON_JOB)
+    public static final String KUBERNETES_CRON_JOB_SPEC = "CamelKubernetesCronJobSpec";
+    @Metadata(label = "producer", description = "The Cron Job annotations.", javaType = "Map<String, String>",
+              applicableFor = SCHEME_CRON_JOB)
+    public static final String KUBERNETES_CRON_JOB_ANNOTATIONS = "CamelKubernetesCronJobAnnotations";
 
     private KubernetesConstants() {
 

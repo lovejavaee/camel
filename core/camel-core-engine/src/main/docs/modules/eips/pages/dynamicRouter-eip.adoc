@@ -4,6 +4,7 @@
 :description: Route messages based on dynamic rules
 :since: 
 :supportlevel: Stable
+:tabs-sync-option:
 
 The
 http://www.enterpriseintegrationpatterns.com/DynamicRouter.html[Dynamic
@@ -19,6 +20,12 @@ image::eip/DynamicRouter.gif[image]
 include::partial$eip-options.adoc[]
 // eip options: END
 
+== Exchange properties
+
+// eip exchangeProperties: START
+include::partial$eip-exchangeProperties.adoc[]
+// eip exchangeProperties: END
+
 == Dynamic Router
 
 The Dynamic Router is similar to the xref:routingSlip-eip.adoc[Routing Slip] EIP,
@@ -30,8 +37,12 @@ with the current slip. This allows you to know how far we have processed in the 
 
 == Example
 
-In Java DSL you can use the `dynamicRouter` as shown below:
+You can use the `dynamicRouter` as shown below:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("direct:start")
@@ -39,8 +50,8 @@ from("direct:start")
     .dynamicRouter(method(MySlipBean.class, "slip"));
 ----
 
-And in XML:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -51,6 +62,21 @@ And in XML:
     </dynamicRouter>
 </route>
 ----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: direct:start
+    steps:
+      - dynamicRouter:
+          expression:
+            method:
+              beanType: com.foo.MySlipBean
+              method: slip
+----
+====
 
 Which will call a xref:languages:bean-language.adoc[Bean Method] to compute the slip
 _on-the-fly_. The bean could be implemented as follows:
@@ -111,7 +137,7 @@ public String slip(String body, @ExchangeProperties Map<String, Object> properti
     int invoked = 0;
     Object current = properties.get("invoked");
     if (current != null) {
-        invoked = Integer.valueOf(current.toString());
+        invoked = Integer.parseInt(current.toString());
     }
     invoked++;
     // and store the state back on the properties
@@ -154,7 +180,7 @@ public class MyDynamicRouter {
     @Consume(uri = "activemq:foo")
     @DynamicRouter
     public String route(@XPath("/customer/id") String customerId, @Header("Location") String location, Document body) {
-        // query a database to find the best match of the endpoint based on the input parameters
+        // Query a database to find the best match of the endpoint based on the input parameters
         // return the next endpoint uri, where to go. Return null to indicate the end.
     }
 }

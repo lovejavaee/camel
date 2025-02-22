@@ -28,19 +28,19 @@ public class DefaultMessageHistory implements MessageHistory {
     private final String routeId;
     private final NamedNode node;
     private final String nodeId;
-    private final long timestamp;
+    private final MonotonicClock clock = new MonotonicClock();
     private final Message message;
+    private boolean acceptDebugger;
     private long elapsed;
 
-    public DefaultMessageHistory(String routeId, NamedNode node, long timestamp) {
-        this(routeId, node, timestamp, null);
+    public DefaultMessageHistory(String routeId, NamedNode node) {
+        this(routeId, node, null);
     }
 
-    public DefaultMessageHistory(String routeId, NamedNode node, long timestamp, Message message) {
+    public DefaultMessageHistory(String routeId, NamedNode node, Message message) {
         this.routeId = routeId;
         this.node = node;
         this.nodeId = node.getId();
-        this.timestamp = timestamp;
         this.message = message;
     }
 
@@ -56,7 +56,7 @@ public class DefaultMessageHistory implements MessageHistory {
 
     @Override
     public long getTime() {
-        return timestamp;
+        return clock.getCreated();
     }
 
     @Override
@@ -66,14 +66,22 @@ public class DefaultMessageHistory implements MessageHistory {
 
     @Override
     public void nodeProcessingDone() {
-        if (timestamp > 0) {
-            elapsed = System.currentTimeMillis() - timestamp;
-        }
+        elapsed = clock.elapsed();
     }
 
     @Override
     public Message getMessage() {
         return message;
+    }
+
+    @Override
+    public void setAcceptDebugger(boolean acceptDebugger) {
+        this.acceptDebugger = acceptDebugger;
+    }
+
+    @Override
+    public boolean isAcceptDebugger() {
+        return acceptDebugger;
     }
 
     @Override

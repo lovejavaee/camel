@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -56,11 +57,11 @@ public class ConverterTest extends TestSupport {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConverterTest.class);
 
-    protected TypeConverter converter = new DefaultTypeConverter(
-            new DefaultPackageScanClassResolver(), new ReflectionInjector(), true);
+    protected final TypeConverter converter = new DefaultTypeConverter(
+            new DefaultPackageScanClassResolver(), new ReflectionInjector(), true, false);
 
     @BeforeEach
-    public void setUp() throws Exception {
+    public void setUp() {
         ServiceHelper.startService(converter);
     }
 
@@ -113,11 +114,10 @@ public class ConverterTest extends TestSupport {
         assertEquals(2, list.size(), "List size: " + list);
 
         Collection<?> collection = converter.convertTo(Collection.class, array);
+        assertNotNull(collection, "Returned object must not be null");
         assertEquals(2, collection.size(), "Collection size: " + collection);
 
-        Set<?> set = converter.convertTo(Set.class, array);
-        assertEquals(2, set.size(), "Set size: " + set);
-        set = converter.convertTo(Set.class, list);
+        Set<?> set = converter.convertTo(Set.class, list);
         assertEquals(2, set.size(), "Set size: " + set);
     }
 
@@ -157,17 +157,10 @@ public class ConverterTest extends TestSupport {
     }
 
     @Test
-    public void testStringToFile() {
-        File file = converter.convertTo(File.class, "foo.txt");
-        assertNotNull("Should have converted to a file!");
-        assertEquals("foo.txt", file.getName(), "file name");
-    }
-
-    @Test
-    public void testFileToString() throws Exception {
+    public void testFileToString() {
         URL resource = getClass().getResource("dummy.txt");
         assertNotNull(resource, "Cannot find resource!");
-        File file = new File(URLDecoder.decode(resource.getFile(), "UTF-8"));
+        File file = new File(URLDecoder.decode(resource.getFile(), StandardCharsets.UTF_8));
         String text = converter.convertTo(String.class, file);
         assertNotNull(text, "Should have returned a String!");
         text = text.trim();
@@ -241,7 +234,7 @@ public class ConverterTest extends TestSupport {
         CamelContext camel = new DefaultCamelContext();
         Exchange exchange = new DefaultExchange(camel);
 
-        Exception ex = assertThrows(NoTypeConversionAvailableException.class,
+        assertThrows(NoTypeConversionAvailableException.class,
                 () -> converter.mandatoryConvertTo(InputStream.class, exchange),
                 "Expected to get a NoTypeConversionAvailableException here");
     }

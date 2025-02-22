@@ -26,8 +26,8 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
@@ -42,34 +42,20 @@ public class FopComponentTest extends CamelTestSupport {
     @Produce("direct:start")
     protected ProducerTemplate template;
 
-    private boolean canTest = true;
-
     @Override
-    @BeforeEach
-    public void setUp() {
+    public void doPreSetup() {
         deleteDirectory("target/data");
-
-        try {
-            super.setUp();
-        } catch (Throwable e) {
-            canTest = false;
-        }
     }
 
     @Test
     public void createPdfUsingXmlDataAndXsltTransformation() throws Exception {
-        if (!canTest) {
-            // cannot run on CI
-            return;
-        }
-
         resultEndpoint.expectedMessageCount(1);
         FileInputStream inputStream = new FileInputStream("src/test/data/xml/data.xml");
 
         template.sendBody(inputStream);
         resultEndpoint.assertIsSatisfied();
 
-        PDDocument document = PDDocument.load(new File("target/data/result.pdf"));
+        PDDocument document = Loader.loadPDF(new File("target/data/result.pdf"));
         String pdfText = FopHelper.extractTextFrom(document);
         assertTrue(pdfText.contains("Project"));    //from xsl template
         assertTrue(pdfText.contains("John Doe"));   //from data xml

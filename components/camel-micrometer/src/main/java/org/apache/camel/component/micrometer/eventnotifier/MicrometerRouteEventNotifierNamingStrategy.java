@@ -21,18 +21,25 @@ import java.util.function.Predicate;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tags;
 import org.apache.camel.CamelContext;
+import org.apache.camel.component.micrometer.MicrometerUtils;
 import org.apache.camel.spi.CamelEvent.RouteEvent;
 
 import static org.apache.camel.component.micrometer.MicrometerConstants.CAMEL_CONTEXT_TAG;
 import static org.apache.camel.component.micrometer.MicrometerConstants.DEFAULT_CAMEL_ROUTES_ADDED;
+import static org.apache.camel.component.micrometer.MicrometerConstants.DEFAULT_CAMEL_ROUTES_RELOADED;
 import static org.apache.camel.component.micrometer.MicrometerConstants.DEFAULT_CAMEL_ROUTES_RUNNING;
 import static org.apache.camel.component.micrometer.MicrometerConstants.EVENT_TYPE_TAG;
-import static org.apache.camel.component.micrometer.MicrometerConstants.SERVICE_NAME;
+import static org.apache.camel.component.micrometer.MicrometerConstants.KIND;
+import static org.apache.camel.component.micrometer.MicrometerConstants.KIND_ROUTE;
 
 public interface MicrometerRouteEventNotifierNamingStrategy {
 
     Predicate<Meter.Id> EVENT_NOTIFIERS
-            = id -> MicrometerEventNotifierService.class.getSimpleName().equals(id.getTag(SERVICE_NAME));
+            = id -> KIND_ROUTE.equals(id.getTag(KIND));
+
+    /**
+     * Default naming strategy that uses micrometer naming convention.
+     */
     MicrometerRouteEventNotifierNamingStrategy DEFAULT = new MicrometerRouteEventNotifierNamingStrategy() {
         @Override
         public String getRouteAddedName() {
@@ -43,15 +50,51 @@ public interface MicrometerRouteEventNotifierNamingStrategy {
         public String getRouteRunningName() {
             return DEFAULT_CAMEL_ROUTES_RUNNING;
         }
+
+        @Override
+        public String getRouteReloadedName() {
+            return DEFAULT_CAMEL_ROUTES_RELOADED;
+        }
     };
+
+    /**
+     * Naming strategy that uses the classic/legacy naming style (camelCase)
+     */
+    MicrometerRouteEventNotifierNamingStrategy LEGACY = new MicrometerRouteEventNotifierNamingStrategy() {
+        @Override
+        public String getRouteAddedName() {
+            return formatName(DEFAULT_CAMEL_ROUTES_ADDED);
+        }
+
+        @Override
+        public String getRouteRunningName() {
+            return formatName(DEFAULT_CAMEL_ROUTES_RUNNING);
+        }
+
+        @Override
+        public String getRouteReloadedName() {
+            return formatName(DEFAULT_CAMEL_ROUTES_RELOADED);
+        }
+
+        @Override
+        public String formatName(String name) {
+            return MicrometerUtils.legacyName(name);
+        }
+    };
+
+    default String formatName(String name) {
+        return name;
+    }
 
     String getRouteAddedName();
 
     String getRouteRunningName();
 
+    String getRouteReloadedName();
+
     default Tags getTags(CamelContext camelContext) {
         return Tags.of(
-                SERVICE_NAME, MicrometerEventNotifierService.class.getSimpleName(),
+                KIND, KIND_ROUTE,
                 CAMEL_CONTEXT_TAG, camelContext.getName(),
                 EVENT_TYPE_TAG, RouteEvent.class.getSimpleName());
     }

@@ -16,9 +16,15 @@
  */
 package org.apache.camel.component.sjms.tx;
 
+import org.apache.camel.test.infra.artemis.services.ArtemisService;
+import org.apache.camel.test.infra.artemis.services.ArtemisServiceFactory;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class TransactedTopicConsumerTest extends TransactedConsumerSupport {
+
+    @RegisterExtension
+    protected static ArtemisService service = ArtemisServiceFactory.createVMService();
 
     /**
      * We want to verify that when consuming from a single destination with multiple routes that we are thread safe and
@@ -26,7 +32,7 @@ public class TransactedTopicConsumerTest extends TransactedConsumerSupport {
      */
     @Test
     public void testRoute() throws Exception {
-        final String destinationName = "sjms:topic:one.consumer.one.route.tx.test";
+        final String destinationName = "sjms:topic:one.consumer.one.route.tx.test.TransactedTopicConsumerTest";
         int routeCount = 2;
         int concurrentConsumers = 1;
         int messageCount = 20;

@@ -16,8 +16,10 @@
  */
 package org.apache.camel.tooling.maven;
 
+import java.util.Objects;
+
 /**
- * Maven GAV model with parsing support and speacial rules for some names:
+ * Maven GAV model with parsing support and special rules for some names:
  * <ul>
  * <li>{@code camel:core -> org.apache.camel:camel-core}</li>
  * <li>{@code camel-xxx -> org.apache.camel:camel-xxx}</li>
@@ -57,7 +59,8 @@ public final class MavenGav {
 
     public static MavenGav parseGav(String gav, String defaultVersion) {
         MavenGav answer = new MavenGav();
-        // camel-k style GAV
+        // abbreviated style GAV
+        gav = gav.trim();
         if (gav.startsWith("camel:")) {
             answer.setGroupId("org.apache.camel");
             String a = gav.substring(6);
@@ -73,7 +76,7 @@ public final class MavenGav {
                 answer.setVersion(defaultVersion);
             }
         } else if (gav.startsWith("camel-") && !(gav.contains(":") || gav.contains("/"))) {
-            // not really camel-k style but users may mistakenly use camel-file instead of camel:file
+            // users may mistakenly use camel-file instead of camel:file
             answer.setGroupId("org.apache.camel");
             String a = gav;
             // users may mistakenly use quarkus extension, but they should just refer to the vanilla component name
@@ -97,6 +100,10 @@ public final class MavenGav {
             } else if (defaultVersion != null) {
                 answer.setVersion(defaultVersion);
             }
+        } else if (gav.startsWith("agent:")) {
+            // special for java agent JARs
+            answer = parseGav(gav.substring(6));
+            answer.setPackaging("agent");
         } else {
             // for those used to OSGi's pax-url-aether syntax
             String[] parts = gav.startsWith("mvn:") ? gav.substring(4).split(":") : gav.split(":");
@@ -164,6 +171,27 @@ public final class MavenGav {
 
     public void setClassifier(String classifier) {
         this.classifier = classifier;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof MavenGav mavenGav)) {
+            return false;
+        }
+
+        return groupId.equals(mavenGav.groupId) && artifactId.equals(mavenGav.artifactId)
+                && Objects.equals(version, mavenGav.version) && Objects.equals(packaging, mavenGav.packaging)
+                && Objects.equals(classifier, mavenGav.classifier);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = groupId.hashCode();
+        result = 31 * result + artifactId.hashCode();
+        result = 31 * result + Objects.hashCode(version);
+        result = 31 * result + Objects.hashCode(packaging);
+        result = 31 * result + Objects.hashCode(classifier);
+        return result;
     }
 
     @Override

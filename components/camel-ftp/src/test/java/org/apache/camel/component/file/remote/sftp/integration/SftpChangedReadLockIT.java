@@ -41,7 +41,8 @@ public class SftpChangedReadLockIT extends SftpServerTestSupport {
 
     protected String getFtpUrl() {
         return "sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}/changed" +
-               "?username=admin&password=admin&readLock=changed&readLockCheckInterval=1000&delete=true";
+               "?username=admin&password=admin&readLock=changed&readLockCheckInterval=1000&delete=true&knownHostsFile="
+               + service.getKnownHostsFile();
     }
 
     @Test
@@ -71,7 +72,7 @@ public class SftpChangedReadLockIT extends SftpServerTestSupport {
         FileOutputStream fos = new FileOutputStream(ftpFile("changed/slowfile.dat").toFile(), true);
         for (int i = 0; i < 20; i++) {
             fos.write(("Line " + i + LS).getBytes());
-            LOG.debug("Writing line " + i);
+            LOG.debug("Writing line {}", i);
             Thread.sleep(200);
         }
         fos.flush();

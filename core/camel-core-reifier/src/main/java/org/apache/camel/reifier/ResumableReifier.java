@@ -44,8 +44,8 @@ public class ResumableReifier extends ProcessorReifier<ResumableDefinition> {
         ResumeStrategy resumeStrategy = resolveResumeStrategy();
         ObjectHelper.notNull(resumeStrategy, ResumeStrategy.DEFAULT_NAME, definition);
 
-        if (resumeStrategy instanceof CamelContextAware) {
-            ((CamelContextAware) resumeStrategy).setCamelContext(camelContext);
+        if (resumeStrategy instanceof CamelContextAware camelContextAware) {
+            camelContextAware.setCamelContext(camelContext);
         }
 
         route.setResumeStrategy(resumeStrategy);
@@ -70,7 +70,7 @@ public class ResumableReifier extends ProcessorReifier<ResumableDefinition> {
                 Optional<ResumeStrategy> resumeStrategyOptional = factoryFinder.newInstance(
                         resumeStrategyConfiguration.resumeStrategyService(), ResumeStrategy.class);
 
-                if (!resumeStrategyOptional.isPresent()) {
+                if (resumeStrategyOptional.isEmpty()) {
                     throw new RuntimeCamelException("Cannot find a resume strategy class in the classpath or the registry");
                 }
 

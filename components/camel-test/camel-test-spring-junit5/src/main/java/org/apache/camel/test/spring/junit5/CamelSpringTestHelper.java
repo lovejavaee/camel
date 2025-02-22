@@ -37,9 +37,9 @@ import org.springframework.test.context.TestContext;
  */
 public final class CamelSpringTestHelper {
 
-    private static ThreadLocal<String> originalJmxDisabledValue = new ThreadLocal<>();
-    private static ThreadLocal<String> originalExcludeRoutesValue = new ThreadLocal<>();
-    private static ThreadLocal<TestContext> testContext = new ThreadLocal<>();
+    private static final ThreadLocal<String> originalJmxDisabledValue = new ThreadLocal<>();
+    private static final ThreadLocal<String> originalExcludeRoutesValue = new ThreadLocal<>();
+    private static final ThreadLocal<TestContext> testContext = new ThreadLocal<>();
 
     private CamelSpringTestHelper() {
     }
@@ -109,6 +109,7 @@ public final class CamelSpringTestHelper {
         }
     }
 
+    @FunctionalInterface
     public interface DoToSpringCamelContextsStrategy {
         void execute(String contextName, SpringCamelContext camelContext) throws Exception;
     }

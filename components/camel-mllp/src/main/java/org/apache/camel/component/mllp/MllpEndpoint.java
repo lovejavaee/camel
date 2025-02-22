@@ -30,11 +30,13 @@ import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.api.management.ManagedAttribute;
 import org.apache.camel.api.management.ManagedResource;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
 import org.apache.camel.support.DefaultEndpoint;
+import org.apache.camel.support.jsse.SSLContextParameters;
 import org.slf4j.Logger;
 
 /**
@@ -48,9 +50,9 @@ import org.slf4j.Logger;
  */
 @ManagedResource(description = "MLLP Endpoint")
 @UriEndpoint(scheme = "mllp", firstVersion = "2.17.0", title = "MLLP", syntax = "mllp:hostname:port",
-             category = { Category.NETWORKING, Category.RPC, Category.MLLP }, generateConfigurer = true,
+             category = { Category.HEALTH }, generateConfigurer = true,
              headersClass = MllpConstants.class)
-public class MllpEndpoint extends DefaultEndpoint {
+public class MllpEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     @UriPath
     @Metadata(required = true)
@@ -81,6 +83,16 @@ public class MllpEndpoint extends DefaultEndpoint {
     }
 
     @Override
+    public String getServiceUrl() {
+        return hostname + ":" + port;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "mllp";
+    }
+
+    @Override
     public Exchange createExchange(ExchangePattern exchangePattern) {
         Exchange mllpExchange = super.createExchange(exchangePattern);
         setExchangeProperties(mllpExchange);
@@ -107,6 +119,7 @@ public class MllpEndpoint extends DefaultEndpoint {
 
     @Override
     public Producer createProducer() throws Exception {
+
         return new MllpTcpClientProducer(this);
     }
 
@@ -301,6 +314,25 @@ public class MllpEndpoint extends DefaultEndpoint {
         configuration.setIdleTimeoutStrategy(strategy);
     }
 
+    /**
+     * Sets the SSLContextParameters for the endpoint. Subclasses overriding this method should ensure that the
+     * configuration's SSLContextParameters are appropriately updated and validated.
+     *
+     * @param sslContextParameters the SSLContextParameters to use
+     */
+    public void setSslContextParameters(SSLContextParameters sslContextParameters) {
+        configuration.setSslContextParameters(sslContextParameters);
+    }
+
+    /**
+     * Retrieves the SSLContextParameters for the endpoint. Subclasses overriding this method should ensure the returned
+     * SSLContextParameters are consistent with the endpoint's configuration.
+     *
+     * @return the current SSLContextParameters
+     */
+    public SSLContextParameters getSslContextParameters() {
+        return configuration.getSslContextParameters();
+    }
     // Utility methods for producers and consumers
 
     public boolean checkBeforeSendProperties(Exchange exchange, Socket socket, Logger log) {

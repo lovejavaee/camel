@@ -26,19 +26,19 @@ import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.DispatcherType;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.camel.AsyncCallback;
+import org.apache.camel.CamelException;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePattern;
+import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Message;
 import org.apache.camel.http.common.CamelServlet;
 import org.apache.camel.http.common.HttpCommonEndpoint;
 import org.apache.camel.http.common.HttpConstants;
 import org.apache.camel.http.common.HttpConsumer;
-import org.apache.camel.http.common.HttpHelper;
 import org.apache.camel.http.common.HttpMessage;
 import org.apache.camel.spi.UnitOfWork;
 import org.apache.camel.support.ObjectHelper;
@@ -67,19 +67,13 @@ public class CamelContinuationServlet extends CamelServlet {
             handleDoService(request, response);
         } catch (Exception e) {
             // do not leak exception back to caller
-            log.warn("Error handling request due to: " + e.getMessage(), e);
-            try {
-                if (!response.isCommitted()) {
-                    response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                }
-            } catch (Exception e1) {
-                // ignore
-            }
+            log.warn("Error handling request due to: {}", e.getMessage(), e);
+            sendError(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
     }
 
     protected void handleDoService(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+            throws Exception {
 
         // is there a consumer registered for the request.
         HttpConsumer consumer = getServletResolveConsumerStrategy().resolve(request, getConsumers());
@@ -90,11 +84,11 @@ public class CamelContinuationServlet extends CamelServlet {
                     .anyMatch(m -> getServletResolveConsumerStrategy().isHttpMethodAllowed(request, m, getConsumers()));
             if (hasAnyMethod) {
                 log.debug("No consumer to service request {} as method {} is not allowed", request, request.getMethod());
-                response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                sendError(response, HttpServletResponse.SC_METHOD_NOT_ALLOWED);
                 return;
             } else {
                 log.debug("No consumer to service request {} as resource is not found", request);
-                response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                sendError(response, HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
         }
@@ -159,13 +153,13 @@ public class CamelContinuationServlet extends CamelServlet {
                 }
             }
             if (!match) {
-                response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                sendError(response, HttpServletResponse.SC_METHOD_NOT_ALLOWED);
                 return;
             }
         }
 
         if ("TRACE".equals(request.getMethod()) && !consumer.isTraceEnabled()) {
-            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            sendError(response, HttpServletResponse.SC_METHOD_NOT_ALLOWED);
             return;
         }
 
@@ -173,7 +167,7 @@ public class CamelContinuationServlet extends CamelServlet {
         String contentType = request.getContentType();
         if (HttpConstants.CONTENT_TYPE_JAVA_SERIALIZED_OBJECT.equals(contentType)
                 && !consumer.getEndpoint().getComponent().isAllowJavaSerializedObject()) {
-            response.sendError(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
+            sendError(response, HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
             return;
         }
 
@@ -185,11 +179,11 @@ public class CamelContinuationServlet extends CamelServlet {
                 // set timeout on initial
                 asyncContext.setTimeout(continuationTimeout.longValue());
             }
-            asyncContext.addListener(new ExpiredListener(consumer), request, response);
+            asyncContext.addListener(new ExpiredListener(), request, response);
 
             // are we suspended and a request is dispatched initially?
             if (consumer.isSuspended() && isInitial(request)) {
-                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                sendError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE);
                 return;
             }
 
@@ -206,8 +200,10 @@ public class CamelContinuationServlet extends CamelServlet {
                 exchange.setProperty(Exchange.DISABLE_HTTP_STREAM_CACHE, Boolean.TRUE);
             }
 
-            HttpHelper.setCharsetFromContentType(request.getContentType(), exchange);
-
+            String charset = request.getCharacterEncoding();
+            if (charset != null) {
+                exchange.setProperty(ExchangePropertyKey.CHARSET_NAME, charset);
+            }
             // reuse existing http message if pooled
             Message msg = exchange.getIn();
             if (msg instanceof HttpMessage) {
@@ -230,12 +226,7 @@ public class CamelContinuationServlet extends CamelServlet {
             // we want to handle the UoW
             UnitOfWork uow = exchange.getUnitOfWork();
             if (uow == null) {
-                try {
-                    consumer.createUoW(exchange);
-                } catch (Exception e) {
-                    log.error("Error processing request", e);
-                    throw new ServletException(e);
-                }
+                consumer.createUoW(exchange);
             } else if (uow.onPrepare(exchange)) {
                 // need to re-attach uow
                 exchange.getExchangeExtension().setUnitOfWork(uow);
@@ -247,7 +238,6 @@ public class CamelContinuationServlet extends CamelServlet {
                 log.trace("Processing request for exchangeId: {}", exchange.getExchangeId());
             }
             // use the asynchronous API to process the exchange
-
             consumer.getAsyncProcessor().process(exchange, new AsyncCallback() {
                 public void done(boolean doneSync) {
                     // check if the exchange id is already expired
@@ -291,7 +281,7 @@ public class CamelContinuationServlet extends CamelServlet {
             throw e;
         } catch (Exception e) {
             log.error("Error processing request", e);
-            throw new ServletException(e);
+            throw new CamelException(e);
         } finally {
             consumer.doneUoW(result);
             consumer.releaseExchange(result, false);
@@ -303,19 +293,12 @@ public class CamelContinuationServlet extends CamelServlet {
     }
 
     private class ExpiredListener implements AsyncListener {
-
-        private HttpConsumer consumer;
-
-        public ExpiredListener(HttpConsumer consumer) {
-            this.consumer = consumer;
+        @Override
+        public void onComplete(AsyncEvent event) {
         }
 
         @Override
-        public void onComplete(AsyncEvent event) throws IOException {
-        }
-
-        @Override
-        public void onTimeout(AsyncEvent event) throws IOException {
+        public void onTimeout(AsyncEvent event) {
             HttpServletRequest request = (HttpServletRequest) event.getSuppliedRequest();
             String id = (String) request.getAttribute(EXCHANGE_ATTRIBUTE_ID);
             // remember this id as expired
@@ -325,11 +308,11 @@ public class CamelContinuationServlet extends CamelServlet {
         }
 
         @Override
-        public void onError(AsyncEvent event) throws IOException {
+        public void onError(AsyncEvent event) {
         }
 
         @Override
-        public void onStartAsync(AsyncEvent event) throws IOException {
+        public void onStartAsync(AsyncEvent event) {
         }
     }
 

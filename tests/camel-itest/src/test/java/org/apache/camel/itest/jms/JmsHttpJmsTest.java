@@ -18,7 +18,6 @@ package org.apache.camel.itest.jms;
 
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.jms.JmsComponent;
 import org.apache.camel.component.mock.MockEndpoint;
@@ -27,6 +26,7 @@ import org.apache.camel.spi.Registry;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Based on user forum.
  */
+@Timeout(30)
 public class JmsHttpJmsTest extends CamelTestSupport {
 
     @RegisterExtension
@@ -51,22 +52,14 @@ public class JmsHttpJmsTest extends CamelTestSupport {
         template.sendBody("jms:in", "Hello World");
 
         Endpoint endpoint = context.getEndpoint("jms:out");
-        endpoint.createConsumer(new Processor() {
-            public void process(Exchange exchange) {
-                assertEquals("Bye World", exchange.getIn().getBody(String.class));
-            }
-        });
+        endpoint.createConsumer(exchange -> assertEquals("Bye World", exchange.getIn().getBody(String.class)));
 
         mock.assertIsSatisfied();
     }
 
     @Test
     void testResultReplyJms() throws Exception {
-        Exchange exchange = template.request("jms:reply?replyTo=bar", new Processor() {
-            public void process(Exchange exchange) {
-                exchange.getIn().setBody("Hello World");
-            }
-        });
+        Exchange exchange = template.request("jms:reply?replyTo=bar", exchange1 -> exchange1.getIn().setBody("Hello World"));
         assertEquals("Bye World", exchange.getMessage().getBody(String.class));
         assertTrue(exchange.getMessage().hasHeaders(), "Should have headers");
         assertEquals("ActiveMQQueue[bar]", exchange.getMessage().getHeader("JMSDestination", String.class));

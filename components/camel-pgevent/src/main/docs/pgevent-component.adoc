@@ -5,6 +5,7 @@
 :description: Send and receive PostgreSQL events via LISTEN and NOTIFY commands.
 :since: 2.15
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: pgevent
@@ -13,7 +14,7 @@
 
 *{component-header}*
 
-This is a component for Apache Camel which allows for
+This is a component for Apache Camel that allows for
 Producing/Consuming PostgreSQL events related to the LISTEN/NOTIFY
 commands added since PostgreSQL 8.3.
 
@@ -30,7 +31,7 @@ for this component:
 </dependency>
 ------------------------------------------------------------
 
-URI format
+== URI format
 
 The pgevent component uses the following two styles of endpoint URI
 notation:
@@ -58,9 +59,11 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Common problems
+== Usage
 
-=== Unable to connect to PostgreSQL database using DataSource
+=== Common problems
+
+==== Unable to connect to PostgreSQL database using DataSource
 Using the driver provided by PostgreSQL itself (`jdbc:postgresql:/...`) when using a DataSource to connect to a PostgreSQL database does not work.
 
 Please use the pgjdbc-ng driver (`jdbc:pgsql:/...`) instead.

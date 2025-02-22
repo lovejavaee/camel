@@ -18,6 +18,8 @@ package org.apache.camel.component.aws2.iam.client;
 
 import org.apache.camel.component.aws2.iam.IAM2Configuration;
 import org.apache.camel.component.aws2.iam.client.impl.IAM2ClientOptimizedImpl;
+import org.apache.camel.component.aws2.iam.client.impl.IAM2ClientProfileOptimizedImpl;
+import org.apache.camel.component.aws2.iam.client.impl.IAM2ClientSessionTokenImpl;
 import org.apache.camel.component.aws2.iam.client.impl.IAM2ClientStandardImpl;
 
 /**
@@ -35,7 +37,14 @@ public final class IAM2ClientFactory {
      * @return               IamClient
      */
     public static IAM2InternalClient getIamClient(IAM2Configuration configuration) {
-        return Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())
-                ? new IAM2ClientOptimizedImpl(configuration) : new IAM2ClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new IAM2ClientOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new IAM2ClientProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new IAM2ClientSessionTokenImpl(configuration);
+        } else {
+            return new IAM2ClientStandardImpl(configuration);
+        }
     }
 }

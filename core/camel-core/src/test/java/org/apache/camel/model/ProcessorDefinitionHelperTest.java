@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class ProcessorDefinitionHelperTest extends ContextTestSupport {
 
     @Test
-    public void testFilterTypeInOutputs() throws Exception {
+    public void testFilterTypeInOutputs() {
         RouteDefinition route = context.getRouteDefinitions().get(0);
 
         Iterator<ProcessorDefinition> it
@@ -36,19 +36,17 @@ public class ProcessorDefinitionHelperTest extends ContextTestSupport {
         assertNotNull(it);
 
         assertThat(it.next().getId()).matches("choice[0-9]+");
-        assertEquals("whenfoo", it.next().getId());
         assertEquals("foo", it.next().getId());
-        assertEquals("whenbar", it.next().getId());
         assertEquals("bar", it.next().getId());
         assertEquals("baz", it.next().getId());
         assertFalse(it.hasNext());
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").choice().when(header("foo")).id("whenfoo").to("mock:foo").id("foo").when(header("bar"))
                         .id("whenbar").to("mock:bar").id("bar").otherwise()
                         .to("mock:baz").id("baz");

@@ -19,8 +19,6 @@ package org.apache.camel.component.undertow;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -51,6 +49,7 @@ import org.apache.camel.attachment.AttachmentMessage;
 import org.apache.camel.attachment.DefaultAttachment;
 import org.apache.camel.spi.HeaderFilterStrategy;
 import org.apache.camel.support.DefaultMessage;
+import org.apache.camel.support.ExceptionHelper;
 import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.MessageHelper;
 import org.apache.camel.support.ObjectHelper;
@@ -61,6 +60,7 @@ import org.xnio.channels.BlockingReadableByteChannel;
 import org.xnio.channels.StreamSourceChannel;
 import org.xnio.streams.ChannelInputStream;
 
+import static org.apache.camel.support.http.HttpUtil.determineResponseCode;
 import static org.apache.camel.util.BufferCaster.cast;
 
 /**
@@ -197,17 +197,7 @@ public class DefaultUndertowHttpBinding implements UndertowHttpBinding {
             throws Exception {
         LOG.trace("populateCamelHeaders: {}", exchange.getMessage().getHeaders());
 
-        String path = httpExchange.getRequestPath();
-        UndertowEndpoint endpoint = (UndertowEndpoint) exchange.getFromEndpoint();
-        if (endpoint.getHttpURI() != null) {
-            // need to match by lower case as we want to ignore case on context-path
-            String endpointPath = endpoint.getHttpURI().getPath();
-            String matchPath = path.toLowerCase(Locale.US);
-            String match = endpointPath.toLowerCase(Locale.US);
-            if (matchPath.startsWith(match)) {
-                path = path.substring(endpointPath.length());
-            }
-        }
+        final String path = stripPath(httpExchange, exchange);
         headersMap.put(UndertowConstants.HTTP_PATH, path);
 
         if (LOG.isTraceEnabled()) {
@@ -289,6 +279,21 @@ public class DefaultUndertowHttpBinding implements UndertowHttpBinding {
         headersMap.put(Exchange.HTTP_RAW_QUERY, httpExchange.getQueryString());
     }
 
+    private static String stripPath(HttpServerExchange httpExchange, Exchange exchange) {
+        String path = httpExchange.getRequestPath();
+        UndertowEndpoint endpoint = (UndertowEndpoint) exchange.getFromEndpoint();
+        if (endpoint.getHttpURI() != null) {
+            // need to match by lower case as we want to ignore case on context-path
+            String endpointPath = endpoint.getHttpURI().getPath();
+            String matchPath = path.toLowerCase(Locale.US);
+            String match = endpointPath.toLowerCase(Locale.US);
+            if (matchPath.startsWith(match)) {
+                path = path.substring(endpointPath.length());
+            }
+        }
+        return path;
+    }
+
     @Override
     public void populateCamelHeaders(ClientResponse response, Map<String, Object> headersMap, Exchange exchange) {
         LOG.trace("populateCamelHeaders: {}", exchange.getMessage().getHeaders());
@@ -366,12 +371,10 @@ public class DefaultUndertowHttpBinding implements UndertowHttpBinding {
                 message.setHeader(UndertowConstants.CONTENT_TYPE, "application/x-java-serialized-object");
             } else {
                 // we failed due an exception so print it as plain text
-                StringWriter sw = new StringWriter();
-                PrintWriter pw = new PrintWriter(sw);
-                exception.printStackTrace(pw);
+                final String stackTrace = ExceptionHelper.stackTraceToString(exception);
 
                 // the body should then be the stacktrace
-                body = ByteBuffer.wrap(sw.toString().getBytes());
+                body = ByteBuffer.wrap(stackTrace.getBytes());
                 // force content type to be text/plain as that is what the stacktrace is
                 message.setHeader(UndertowConstants.CONTENT_TYPE, "text/plain");
             }
@@ -391,27 +394,6 @@ public class DefaultUndertowHttpBinding implements UndertowHttpBinding {
             LOG.trace("Content-Type: {}", contentType);
         }
         return body;
-    }
-
-    /*
-     * set the HTTP status code
-     */
-    private int determineResponseCode(Exchange camelExchange, Object body) {
-        boolean failed = camelExchange.isFailed();
-        int defaultCode = failed ? 500 : 200;
-
-        Message message = camelExchange.getMessage();
-        Integer currentCode = message.getHeader(UndertowConstants.HTTP_RESPONSE_CODE, Integer.class);
-        int codeToUse = currentCode == null ? defaultCode : currentCode;
-
-        if (codeToUse != 500) {
-            if (body == null || body instanceof String && ((String) body).trim().isEmpty()) {
-                // no content
-                codeToUse = currentCode == null ? 204 : currentCode;
-            }
-        }
-
-        return codeToUse;
     }
 
     @Override
@@ -472,8 +454,8 @@ public class DefaultUndertowHttpBinding implements UndertowHttpBinding {
     }
 
     static class FilePartDataSource extends FileDataSource {
-        private String name;
-        private String contentType;
+        private final String name;
+        private final String contentType;
 
         FilePartDataSource(FormValue value) {
             super(value.getPath().toFile());

@@ -16,36 +16,30 @@
  */
 package org.apache.camel.component.aws2.eventbridge;
 
+import java.util.Map;
+
 import org.apache.camel.Category;
 import org.apache.camel.Component;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.component.aws2.eventbridge.client.EventbridgeClientFactory;
-import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.impl.health.ComponentsHealthCheckRepository;
-import org.apache.camel.spi.Metadata;
-import org.apache.camel.spi.UriEndpoint;
-import org.apache.camel.spi.UriParam;
-import org.apache.camel.spi.UriPath;
+import org.apache.camel.spi.*;
 import org.apache.camel.support.DefaultEndpoint;
 import org.apache.camel.util.ObjectHelper;
 import software.amazon.awssdk.services.eventbridge.EventBridgeClient;
 
 /**
- * Manage AWS Eventbridge cluster instances using AWS SDK version 2.x.
+ * Send events to AWS Eventbridge cluster instances.
  */
 @UriEndpoint(firstVersion = "3.6.0", scheme = "aws2-eventbridge", title = "AWS Eventbridge",
              syntax = "aws2-eventbridge://eventbusNameOrArn", producerOnly = true, category = {
                      Category.CLOUD,
                      Category.MANAGEMENT },
              headersClass = EventbridgeConstants.class)
-public class EventbridgeEndpoint extends DefaultEndpoint {
+public class EventbridgeEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     private EventBridgeClient eventbridgeClient;
-
-    private ComponentsHealthCheckRepository healthCheckRepository;
-    private EventbridgeClientHealthCheck clientHealthCheck;
 
     @UriPath(description = "Event bus name or ARN")
     @Metadata(required = true)
@@ -56,6 +50,11 @@ public class EventbridgeEndpoint extends DefaultEndpoint {
     public EventbridgeEndpoint(String uri, Component component, EventbridgeConfiguration configuration) {
         super(uri, component);
         this.configuration = configuration;
+    }
+
+    @Override
+    public EventbridgeComponent getComponent() {
+        return (EventbridgeComponent) super.getComponent();
     }
 
     @Override
@@ -75,24 +74,10 @@ public class EventbridgeEndpoint extends DefaultEndpoint {
         eventbridgeClient = configuration.getEventbridgeClient() != null
                 ? configuration.getEventbridgeClient()
                 : EventbridgeClientFactory.getEventbridgeClient(configuration).getEventbridgeClient();
-
-        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(getCamelContext(),
-                ComponentsHealthCheckRepository.REPOSITORY_ID, ComponentsHealthCheckRepository.class);
-
-        if (healthCheckRepository != null) {
-            // Do not register the health check until we resolve CAMEL-18992
-            // clientHealthCheck = new EventbridgeClientHealthCheck(this, getId());
-            // healthCheckRepository.addHealthCheck(clientHealthCheck);
-        }
     }
 
     @Override
     public void doStop() throws Exception {
-        if (healthCheckRepository != null && clientHealthCheck != null) {
-            healthCheckRepository.removeHealthCheck(clientHealthCheck);
-            clientHealthCheck = null;
-        }
-
         if (ObjectHelper.isEmpty(configuration.getEventbridgeClient())) {
             if (eventbridgeClient != null) {
                 eventbridgeClient.close();
@@ -107,5 +92,30 @@ public class EventbridgeEndpoint extends DefaultEndpoint {
 
     public EventBridgeClient getEventbridgeClient() {
         return eventbridgeClient;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (ObjectHelper.isNotEmpty(configuration.getRegion())) {
+                return configuration.getRegion();
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "eventbridge";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (configuration.getEventbusName() != null) {
+            return Map.of("eventbus", configuration.getEventbusName());
+        }
+        return null;
     }
 }

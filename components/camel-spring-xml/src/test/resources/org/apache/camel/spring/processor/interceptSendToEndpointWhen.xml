@@ -26,9 +26,10 @@
 
     <!-- START SNIPPET: e1 -->
     <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
 
         <interceptSendToEndpoint uri="mock:foo">
-            <when><simple>${body} == 'Hello World'</simple></when>
+            <onWhen><simple>${body} == 'Hello World'</simple></onWhen>
             <to uri="mock:detour"/>
             <transform>
                 <constant>Bye World</constant>

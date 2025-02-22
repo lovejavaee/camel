@@ -26,7 +26,10 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class MulticastParallelStressTest extends ContextTestSupport {
 
     @Test
@@ -65,7 +68,7 @@ public class MulticastParallelStressTest extends ContextTestSupport {
         for (int i = 0; i < 20; i++) {
             final int index = i;
             executor.submit(new Callable<Object>() {
-                public Object call() throws Exception {
+                public Object call() {
                     template.sendBodyAndHeader("direct:start", "", "id", index);
                     return null;
                 }
@@ -77,10 +80,10 @@ public class MulticastParallelStressTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").multicast(new AggregationStrategy() {
                     public Exchange aggregate(Exchange oldExchange, Exchange newExchange) {
                         if (oldExchange == null) {

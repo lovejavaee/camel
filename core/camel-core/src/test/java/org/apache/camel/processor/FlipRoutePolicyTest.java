@@ -21,7 +21,9 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.spi.RoutePolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
+@Isolated("This test has a rather strict dependency on timing and threads under the hood, therefore run in isolated mode to reduce flakiness")
 public class FlipRoutePolicyTest extends ContextTestSupport {
 
     @Test
@@ -36,10 +38,10 @@ public class FlipRoutePolicyTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // create the flip route policy
                 RoutePolicy policy = new FlipRoutePolicy("foo", "bar");
 
@@ -49,7 +51,7 @@ public class FlipRoutePolicyTest extends ContextTestSupport {
 
                 // use the flip route policy in the bar route and do NOT start
                 // this route on startup
-                from("timer://bar?delay=0&period=10").routeId("bar").routePolicy(policy).noAutoStartup().setBody()
+                from("timer://bar?delay=0&period=10").routeId("bar").routePolicy(policy).autoStartup(false).setBody()
                         .constant("Bar message").to("log:bar").to("mock:bar");
             }
         };

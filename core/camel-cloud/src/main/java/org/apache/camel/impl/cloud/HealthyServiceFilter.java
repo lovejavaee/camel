@@ -17,15 +17,18 @@
 package org.apache.camel.impl.cloud;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.cloud.ServiceDefinition;
 import org.apache.camel.cloud.ServiceFilter;
 
+/**
+ * @deprecated since 4.7
+ */
+@Deprecated(since = "4.7")
 public class HealthyServiceFilter implements ServiceFilter {
     @Override
     public List<ServiceDefinition> apply(Exchange exchange, List<ServiceDefinition> services) {
-        return services.stream().filter(s -> s.getHealth().isHealthy()).collect(Collectors.toList());
+        return services.stream().filter(s -> s.getHealth().isHealthy()).toList();
     }
 }

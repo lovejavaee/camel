@@ -47,15 +47,21 @@ public class TokenPairExpressionIterator extends ExpressionAdapter {
     protected final String startToken;
     protected final String endToken;
     protected final boolean includeTokens;
+    private final Expression source;
     private Expression startExp;
     private Expression endExp;
 
     public TokenPairExpressionIterator(String startToken, String endToken, boolean includeTokens) {
+        this(null, startToken, endToken, includeTokens);
+    }
+
+    public TokenPairExpressionIterator(Expression source, String startToken, String endToken, boolean includeTokens) {
         StringHelper.notEmpty(startToken, "startToken");
         StringHelper.notEmpty(endToken, "endToken");
         this.startToken = startToken;
         this.endToken = endToken;
         this.includeTokens = includeTokens;
+        this.source = source;
     }
 
     @Override
@@ -94,7 +100,14 @@ public class TokenPairExpressionIterator extends ExpressionAdapter {
     protected Object doEvaluate(Exchange exchange, boolean closeStream) {
         InputStream in = null;
         try {
-            in = exchange.getIn().getMandatoryBody(InputStream.class);
+            if (source != null) {
+                in = source.evaluate(exchange, InputStream.class);
+            } else {
+                in = exchange.getIn().getBody(InputStream.class);
+            }
+            if (in == null) {
+                throw new InvalidPayloadException(exchange, InputStream.class);
+            }
             // we may read from a file, and want to support custom charset defined on the exchange
             String charset = ExchangeHelper.getCharsetName(exchange);
             return createIterator(exchange, in, charset);
@@ -212,13 +225,12 @@ public class TokenPairExpressionIterator extends ExpressionAdapter {
             String next = scanner.next();
 
             // only grab text after the start token
-            if (next != null && next.contains(startToken)) {
+            if (next.contains(startToken)) {
                 next = StringHelper.after(next, startToken);
 
                 // include tokens in answer
                 if (next != null && includeTokens) {
-                    StringBuilder sb = new StringBuilder();
-                    next = sb.append(startToken).append(next).append(endToken).toString();
+                    next = startToken + next + endToken;
                 }
             } else {
                 // must have start token, otherwise we have reached beyond last tokens

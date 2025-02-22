@@ -5,7 +5,9 @@
 :description: Read from system-in and write to system-out and system-err streams.
 :since: 1.3
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
+:core:
 //Manually maintained attributes
 :camel-spring-boot-name: stream
 
@@ -61,7 +63,9 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Message content
+== Usage
+
+=== Message content
 
 The Stream component supports either `String` or `byte[]` for writing
 to streams. Just add either `String` or `byte[]` content to the
@@ -74,7 +78,7 @@ add a `java.io.OutputStream` object to `message.in.header` in the key
 `header`. +
  See samples for an example.
 
-== Samples
+== Examples
 
 In the following sample we route messages from the `direct:in` endpoint
 to the `System.out` stream:
@@ -106,7 +110,7 @@ from("stream:file?fileName=/server/logs/server.log&scanStream=true&scanStreamDel
   .to("bean:logService?method=parseLogLine");
 ----
 
-If you want to re-load the file if it rollover/rewritten then you should also turn on the `fileWatcher` and `retry` options.
+If you want to re-load the file if it roll over/rewritten then you should also turn on the `fileWatcher` and `retry` options.
 
 [source,java]
 ----
@@ -114,7 +118,7 @@ from("stream:file?fileName=/server/logs/server.log&scanStream=true&scanStreamDel
   .to("bean:logService?method=parseLogLine");
 ----
 
-== Reading HTTP server side streaming
+=== Reading HTTP server side streaming
 
 The camel-stream component has basic support for connecting to a remote HTTP server and read streaming data
 (chunk of data separated by new-line).

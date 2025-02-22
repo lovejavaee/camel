@@ -19,8 +19,14 @@ package org.apache.camel.component.couchbase.integration;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.couchbase.CouchbaseConstants;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Too resource intensive for most systems to run reliably")
+@Tags({ @Tag("couchbase-7") })
 public class ProduceMessagesSimpleIT extends CouchbaseIntegrationTestBase {
 
     @Test

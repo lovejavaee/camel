@@ -63,7 +63,7 @@ public class ManagedChoiceTest extends ManagementTestSupport {
         int level = (Integer) mbeanServer.getAttribute(on, "Level");
         assertEquals(1, level);
 
-        TabularData data = (TabularData) mbeanServer.invoke(on, "choiceStatistics", null, null);
+        TabularData data = (TabularData) mbeanServer.invoke(on, "extendedInformation", null, null);
         assertNotNull(data);
         assertEquals(2, data.size());
 
@@ -74,10 +74,10 @@ public class ManagedChoiceTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .choice().id("mysend")
                         .when(header("foo"))

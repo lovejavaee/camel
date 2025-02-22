@@ -25,7 +25,9 @@ import java.util.Stack;
 import java.util.concurrent.Callable;
 
 import org.apache.camel.dsl.jbang.core.common.CommandLineHelper;
+import org.apache.camel.dsl.jbang.core.common.Printer;
 import org.apache.camel.dsl.jbang.core.common.RuntimeUtil;
+import org.apache.camel.util.StringHelper;
 import picocli.CommandLine;
 import picocli.CommandLine.IParameterConsumer;
 import picocli.CommandLine.Model.ArgSpec;
@@ -38,12 +40,9 @@ public abstract class CamelCommand implements Callable<Integer> {
     CommandLine.Model.CommandSpec spec;
 
     private final CamelJBangMain main;
-    private File camelDir;
 
-    //CHECKSTYLE:OFF
     @CommandLine.Option(names = { "-h", "--help" }, usageHelp = true, description = "Display the help and sub-commands")
     private boolean helpRequested = false;
-    //CHECKSTYLE:ON
 
     public CamelCommand(CamelJBangMain main) {
         this.main = main;
@@ -53,8 +52,8 @@ public abstract class CamelCommand implements Callable<Integer> {
         return main;
     }
 
-    protected void configureLoggingOff() {
-        RuntimeUtil.configureLog("off", false, false, false, false);
+    protected void configureLoggingOff() throws Exception {
+        RuntimeUtil.configureLog("off", false, false, false, false, null, null);
     }
 
     protected boolean disarrangeLogging() {
@@ -67,54 +66,84 @@ public abstract class CamelCommand implements Callable<Integer> {
             configureLoggingOff();
         }
 
+        replacePlaceholders();
+
         return doCall();
+    }
+
+    private void replacePlaceholders() throws Exception {
+        if (spec != null) {
+            for (CommandLine.Model.ArgSpec argSpec : spec.args()) {
+                var provider = spec.defaultValueProvider();
+                String defaultValue = provider != null ? provider.defaultValue(argSpec) : null;
+                if (defaultValue != null &&
+                        argSpec instanceof CommandLine.Model.OptionSpec optionSpec) {
+                    for (String name : optionSpec.names()) {
+                        String placeholder = "#" + StringHelper.after(name, "--");
+                        Object v = argSpec.getValue();
+                        if (v != null &&
+                                v.toString().contains(placeholder)) {
+                            argSpec.setValue(v.toString().replace(placeholder, defaultValue));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public abstract Integer doCall() throws Exception;
 
     public File getStatusFile(String pid) {
-        if (camelDir == null) {
-            camelDir = new File(System.getProperty("user.home"), ".camel");
-        }
-        return new File(camelDir, pid + "-status.json");
+        return new File(CommandLineHelper.getCamelDir(), pid + "-status.json");
     }
 
     public File getActionFile(String pid) {
-        if (camelDir == null) {
-            camelDir = new File(System.getProperty("user.home"), ".camel");
-        }
-        return new File(camelDir, pid + "-action.json");
+        return new File(CommandLineHelper.getCamelDir(), pid + "-action.json");
     }
 
     public File getOutputFile(String pid) {
-        if (camelDir == null) {
-            camelDir = new File(System.getProperty("user.home"), ".camel");
-        }
-        return new File(camelDir, pid + "-output.json");
+        return new File(CommandLineHelper.getCamelDir(), pid + "-output.json");
     }
 
     public File getTraceFile(String pid) {
-        if (camelDir == null) {
-            camelDir = new File(System.getProperty("user.home"), ".camel");
-        }
-        return new File(camelDir, pid + "-trace.json");
+        return new File(CommandLineHelper.getCamelDir(), pid + "-trace.json");
+    }
+
+    public File getReceiveFile(String pid) {
+        return new File(CommandLineHelper.getCamelDir(), pid + "-receive.json");
+    }
+
+    public File getDebugFile(String pid) {
+        return new File(CommandLineHelper.getCamelDir(), pid + "-debug.json");
+    }
+
+    public File getRunBackgroundLogFile(String uuid) {
+        return new File(CommandLineHelper.getCamelDir(), uuid + "-run.log");
+    }
+
+    protected Printer printer() {
+        var out = getMain().getOut();
+        CommandHelper.setPrinter(out);
+        return out;
     }
 
     protected void printConfigurationValues(String header) {
-        final Properties configProperties = new Properties();
-        CommandLineHelper.loadProperties(configProperties::putAll);
-        List<String> lines = new ArrayList<>();
-        spec.options().forEach(opt -> {
-            if (Arrays.stream(opt.names()).anyMatch(name ->
-            // name starts with --
-            configProperties.containsKey(name.substring(2)))) {
-                lines.add(String.format("    %s=%s",
-                        opt.longestName(), opt.getValue().toString()));
+        if (spec != null) {
+            final Properties configProperties = new Properties();
+            CommandLineHelper.loadProperties(configProperties::putAll);
+            List<String> lines = new ArrayList<>();
+            spec.options().forEach(opt -> {
+                if (Arrays.stream(opt.names()).anyMatch(name ->
+                // name starts with --
+                configProperties.containsKey(name.substring(2)))) {
+                    lines.add(String.format("    %s=%s",
+                            opt.longestName(), opt.getValue().toString()));
+                }
+            });
+            if (!lines.isEmpty()) {
+                printer().println(header);
+                lines.forEach(printer()::println);
             }
-        });
-        if (!lines.isEmpty()) {
-            System.out.println(header);
-            lines.forEach(System.out::println);
         }
     }
 
@@ -122,7 +151,7 @@ public abstract class CamelCommand implements Callable<Integer> {
 
         @Override
         public void consumeParameters(Stack<String> args, ArgSpec argSpec, CommandSpec cmdSpec) {
-            if (args.isEmpty()) {
+            if (failIfEmptyArgs() && args.isEmpty()) {
                 throw new ParameterException(cmdSpec.commandLine(), "Error: missing required parameter");
             }
             T cmd = (T) cmdSpec.userObject();
@@ -130,6 +159,10 @@ public abstract class CamelCommand implements Callable<Integer> {
         }
 
         protected abstract void doConsumeParameters(Stack<String> args, T cmd);
+
+        protected boolean failIfEmptyArgs() {
+            return true;
+        }
     }
 
 }

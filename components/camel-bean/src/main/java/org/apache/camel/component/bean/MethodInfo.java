@@ -70,14 +70,14 @@ import static org.apache.camel.util.ObjectHelper.asString;
 public class MethodInfo {
     private static final Logger LOG = LoggerFactory.getLogger(MethodInfo.class);
 
-    private CamelContext camelContext;
-    private Class<?> type;
-    private Method method;
+    private final CamelContext camelContext;
+    private final Class<?> type;
+    private final Method method;
     private final List<ParameterInfo> parameters;
     private final List<ParameterInfo> bodyParameters;
     private final boolean hasCustomAnnotation;
     private final boolean hasHandlerAnnotation;
-    private Expression parametersExpression;
+    private final Expression parametersExpression;
     private ExchangePattern pattern = ExchangePattern.InOut;
     private AsyncProcessor recipientList;
     private AsyncProcessor routingSlip;
@@ -297,14 +297,7 @@ public class MethodInfo {
             private boolean doProceed(AsyncCallback callback) throws Exception {
                 // dynamic router should be invoked beforehand
                 if (dynamicRouter != null) {
-                    if (!ServiceHelper.isStarted(dynamicRouter)) {
-                        ServiceHelper.startService(dynamicRouter);
-                    }
-                    // use an expression which invokes the method to be used by dynamic router
-                    Expression expression = new DynamicRouterExpression(pojo);
-                    expression.init(camelContext);
-                    exchange.setProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT, expression);
-                    return dynamicRouter.process(exchange, callback);
+                    return dynamicRouterInvocation(callback);
                 }
 
                 // invoke pojo
@@ -327,19 +320,10 @@ public class MethodInfo {
                 }
 
                 if (recipientList != null) {
-                    // ensure its started
-                    if (!ServiceHelper.isStarted(recipientList)) {
-                        ServiceHelper.startService(recipientList);
-                    }
-                    exchange.setProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT, result);
-                    return recipientList.process(exchange, callback);
+                    return recipientListInvocation(callback, result);
                 }
                 if (routingSlip != null) {
-                    if (!ServiceHelper.isStarted(routingSlip)) {
-                        ServiceHelper.startService(routingSlip);
-                    }
-                    exchange.setProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT, result);
-                    return routingSlip.process(exchange, callback);
+                    return routingSlipInvocation(callback, result);
                 }
 
                 //If it's Java 8 async result
@@ -367,6 +351,34 @@ public class MethodInfo {
                 // so notify the callback we are done synchronously
                 callback.done(true);
                 return true;
+            }
+
+            private boolean routingSlipInvocation(AsyncCallback callback, Object result) {
+                if (!ServiceHelper.isStarted(routingSlip)) {
+                    ServiceHelper.startService(routingSlip);
+                }
+                exchange.setProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT, result);
+                return routingSlip.process(exchange, callback);
+            }
+
+            private boolean recipientListInvocation(AsyncCallback callback, Object result) {
+                // ensure its started
+                if (!ServiceHelper.isStarted(recipientList)) {
+                    ServiceHelper.startService(recipientList);
+                }
+                exchange.setProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT, result);
+                return recipientList.process(exchange, callback);
+            }
+
+            private boolean dynamicRouterInvocation(AsyncCallback callback) {
+                if (!ServiceHelper.isStarted(dynamicRouter)) {
+                    ServiceHelper.startService(dynamicRouter);
+                }
+                // use an expression which invokes the method to be used by dynamic router
+                Expression expression = new DynamicRouterExpression(pojo);
+                expression.init(camelContext);
+                exchange.setProperty(ExchangePropertyKey.EVALUATE_EXPRESSION_RESULT, expression);
+                return dynamicRouter.process(exchange, callback);
             }
 
             public Object getThis() {
@@ -656,7 +668,7 @@ public class MethodInfo {
                 }
 
                 // check if its a valid parameter value (no type declared via .class syntax)
-                valid = BeanHelper.isValidParameterValue(exchange.getContext().getClassResolver(), exp);
+                valid = BeanHelper.isValidParameterValue(exp);
                 if (!valid) {
                     // it may be a parameter type instead, and if so, then we should return null,
                     // as this method is only for evaluating parameter values
@@ -702,7 +714,7 @@ public class MethodInfo {
                             // which may change the parameterValue, so we have to check it again to see if it is now valid
                             exp = exchange.getContext().getTypeConverter().tryConvertTo(String.class, parameterValue);
                             // re-validate if the parameter was not valid the first time
-                            valid = BeanHelper.isValidParameterValue(exchange.getContext().getClassResolver(), exp);
+                            valid = BeanHelper.isValidParameterValue(exp);
                         }
                     }
                 }

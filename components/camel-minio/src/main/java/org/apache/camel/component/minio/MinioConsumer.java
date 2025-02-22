@@ -91,7 +91,7 @@ public class MinioConsumer extends ScheduledBatchPollingConsumer {
                         LOG.trace("Destination Bucket created");
                     } else {
                         throw new IllegalArgumentException(
-                                "Destination Bucket does not exists, set autoCreateBucket option for bucket auto creation");
+                                "Destination Bucket does not exist, set autoCreateBucket option for bucket auto creation");
                     }
                 }
             } else {
@@ -166,6 +166,9 @@ public class MinioConsumer extends ScheduledBatchPollingConsumer {
 
             Iterator<Result<Item>> listObjects = getMinioClient().listObjects(listObjectRequest.build()).iterator();
 
+            // we have listed some objects so mark the consumer as ready
+            forceConsumerAsReady();
+
             if (listObjects.hasNext()) {
                 exchanges = createExchanges(listObjects);
                 if (maxMessagesPerPoll <= 0 || exchanges.size() < maxMessagesPerPoll) {
@@ -224,7 +227,6 @@ public class MinioConsumer extends ScheduledBatchPollingConsumer {
         } catch (Exception e) {
             LOG.warn("Error getting MinioObject due: {}", e.getMessage());
             throw e;
-
         }
 
         return answer;

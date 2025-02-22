@@ -59,7 +59,7 @@ public class ThreadsProcessor extends AsyncProcessorSupport implements IdAware, 
     private final CamelContext camelContext;
     private final ExecutorService executorService;
     private final ThreadPoolRejectedPolicy rejectedPolicy;
-    private volatile boolean shutdownExecutorService;
+    private final boolean shutdownExecutorService;
     private final AtomicBoolean shutdown = new AtomicBoolean(true);
 
     private final class ProcessCall implements Runnable, Rejectable {
@@ -132,18 +132,21 @@ public class ThreadsProcessor extends AsyncProcessorSupport implements IdAware, 
             executorService.submit(call);
             // tell Camel routing engine we continue routing asynchronous
             return false;
-        } catch (Throwable e) {
-            if (executorService instanceof ThreadPoolExecutor) {
-                ThreadPoolExecutor tpe = (ThreadPoolExecutor) executorService;
-                // process the call in synchronous mode
-                ProcessCall call = new ProcessCall(exchange, callback, true);
-                rejectedPolicy.asRejectedExecutionHandler().rejectedExecution(call, tpe);
-                return true;
-            } else {
-                exchange.setException(e);
-                callback.done(true);
-                return true;
-            }
+        } catch (Exception e) {
+            return handleException(exchange, callback, e);
+        }
+    }
+
+    private boolean handleException(Exchange exchange, AsyncCallback callback, Exception e) {
+        if (executorService instanceof ThreadPoolExecutor tpe) {
+            // process the call in synchronous mode
+            ProcessCall call = new ProcessCall(exchange, callback, true);
+            rejectedPolicy.asRejectedExecutionHandler().rejectedExecution(call, tpe);
+            return true;
+        } else {
+            exchange.setException(e);
+            callback.done(true);
+            return true;
         }
     }
 

@@ -21,7 +21,6 @@ import javax.net.ssl.SSLContext;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.camel.spi.Registry;
-import org.apache.camel.support.SimpleRegistry;
 import org.apache.camel.support.jsse.KeyManagersParameters;
 import org.apache.camel.support.jsse.KeyStoreParameters;
 import org.apache.camel.support.jsse.SSLContextParameters;
@@ -36,11 +35,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public abstract class StompBaseTest extends CamelTestSupport {
 
     protected int numberOfMessages = 100;
-    int sslServicePort = AvailablePortFinder.getNextAvailable();
-    int servicePort = AvailablePortFinder.getNextAvailable();
+    static int sslServicePort = AvailablePortFinder.getNextAvailable();
+    static int servicePort = AvailablePortFinder.getNextAvailable();
 
     @RegisterExtension
-    public ArtemisService service = new ArtemisEmbeddedServiceBuilder()
+    public static ArtemisService service = new ArtemisEmbeddedServiceBuilder()
             .withCustomConfiguration(configuration -> {
                 try {
                     configuration.setJMXManagementEnabled(true);
@@ -75,13 +74,10 @@ public abstract class StompBaseTest extends CamelTestSupport {
     }
 
     @Override
-    protected Registry createCamelRegistry() {
-        SimpleRegistry registry = new SimpleRegistry();
+    protected void bindToRegistry(Registry registry) {
         if (isUseSsl()) {
             registry.bind("sslContextParameters", getClientSSLContextParameters());
         }
-
-        return registry;
     }
 
     protected Stomp createStompClient() throws Exception {

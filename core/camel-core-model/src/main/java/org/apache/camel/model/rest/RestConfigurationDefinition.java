@@ -59,7 +59,7 @@ public class RestConfigurationDefinition {
     @Metadata(label = "consumer,advanced")
     private String apiHost;
     @XmlAttribute
-    @Metadata(label = "consumer,advanced", javaType = "java.lang.Boolean", defaultValue = "true")
+    @Metadata(label = "consumer,advanced", javaType = "java.lang.Boolean")
     private String useXForwardHeaders;
     @XmlAttribute
     @Metadata(label = "producer,advanced")
@@ -83,6 +83,9 @@ public class RestConfigurationDefinition {
     @Metadata(defaultValue = "off", enums = "off,auto,json,xml,json_xml")
     private RestBindingMode bindingMode;
     @XmlAttribute
+    @Metadata(label = "consumer,advanced")
+    private String bindingPackageScan;
+    @XmlAttribute
     @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "false")
     private String skipBindingOnErrorCode;
     @XmlAttribute
@@ -92,7 +95,10 @@ public class RestConfigurationDefinition {
     @Metadata(label = "consumer,advanced", javaType = "java.lang.Boolean", defaultValue = "false")
     private String enableCORS;
     @XmlAttribute
-    @Metadata(label = "consumer", javaType = "java.lang.Boolean", defaultValue = "false")
+    @Metadata(label = "consumer,advanced", javaType = "java.lang.Boolean", defaultValue = "false")
+    private String enableNoContentResponse;
+    @XmlAttribute
+    @Metadata(label = "consumer", javaType = "java.lang.Boolean", defaultValue = "true")
     private String inlineRoutes;
     @XmlAttribute
     @Metadata(label = "advanced")
@@ -246,7 +252,7 @@ public class RestConfigurationDefinition {
     }
 
     /**
-     * Sets a leading API context-path the REST API services will be using.
+     * Sets a leading context-path the REST API will be using.
      * <p/>
      * This can be used when using components such as <tt>camel-servlet</tt> where the deployed web application is
      * deployed using a context-path.
@@ -310,6 +316,18 @@ public class RestConfigurationDefinition {
         this.bindingMode = bindingMode;
     }
 
+    public String getBindingPackageScan() {
+        return bindingPackageScan;
+    }
+
+    /**
+     * Package name to use as base (offset) for classpath scanning of POJO classes are located when using binding mode
+     * is enabled for JSon or XML. Multiple package names can be separated by comma.
+     */
+    public void setBindingPackageScan(String bindingPackageScan) {
+        this.bindingPackageScan = bindingPackageScan;
+    }
+
     public String getSkipBindingOnErrorCode() {
         return skipBindingOnErrorCode;
     }
@@ -351,6 +369,19 @@ public class RestConfigurationDefinition {
         this.enableCORS = enableCORS;
     }
 
+    public String getEnableNoContentResponse() {
+        return enableNoContentResponse;
+    }
+
+    /**
+     * Whether to return HTTP 204 with an empty body when a response contains an empty JSON object or XML root object.
+     * <p/>
+     * The default value is false.
+     */
+    public void setEnableNoContentResponse(String enableNoContentResponse) {
+        this.enableNoContentResponse = enableNoContentResponse;
+    }
+
     public String getInlineRoutes() {
         return inlineRoutes;
     }
@@ -358,11 +389,12 @@ public class RestConfigurationDefinition {
     /**
      * Inline routes in rest-dsl which are linked using direct endpoints.
      *
-     * By default, each service in Rest DSL is an individual route, meaning that you would have at least two routes per
-     * service (rest-dsl, and the route linked from rest-dsl). Enabling this allows Camel to optimize and inline this as
-     * a single route, however this requires to use direct endpoints, which must be unique per service.
+     * Each service in Rest DSL is an individual route, meaning that you would have at least two routes per service
+     * (rest-dsl, and the route linked from rest-dsl). By inlining (default) allows Camel to optimize and inline this as
+     * a single route, however this requires to use direct endpoints, which must be unique per service. If a route is
+     * not using direct endpoint then the rest-dsl is not inlined, and will become an individual route.
      *
-     * This option is default <tt>false</tt>.
+     * This option is default <tt>true</tt>.
      */
     public void setInlineRoutes(String inlineRoutes) {
         this.inlineRoutes = inlineRoutes;
@@ -474,9 +506,11 @@ public class RestConfigurationDefinition {
     }
 
     /**
-     * Whether to use X-Forward headers for Host and related setting.
-     * <p/>
-     * The default value is true.
+     * Whether to use X-Forward headers to set host etc. for OpenApi.
+     *
+     * This may be needed in special cases involving reverse-proxy and networking going from HTTP to HTTPS etc. Then the
+     * proxy can send X-Forward headers (X-Forwarded-Proto) that influences the host names in the OpenAPI schema that
+     * camel-openapi-java generates from Rest DSL routes.
      */
     public void setUseXForwardHeaders(String useXForwardHeaders) {
         this.useXForwardHeaders = useXForwardHeaders;
@@ -563,7 +597,7 @@ public class RestConfigurationDefinition {
     }
 
     /**
-     * Sets a leading context-path the REST services will be using.
+     * Sets a leading context-path the REST API will be using.
      * <p/>
      * This can be used when using components such as <tt>camel-servlet</tt> where the deployed web application is
      * deployed using a context-path. Or for components such as <tt>camel-jetty</tt> or <tt>camel-netty-http</tt> that
@@ -640,6 +674,15 @@ public class RestConfigurationDefinition {
     }
 
     /**
+     * Package name to use as base (offset) for classpath scanning of POJO classes are located when using binding mode
+     * is enabled for JSon or XML. Multiple package names can be separated by comma.
+     */
+    public RestConfigurationDefinition bindingPackageScan(String bindingPackageScan) {
+        setBindingPackageScan(bindingPackageScan);
+        return this;
+    }
+
+    /**
      * To specify whether to skip binding output if there is a custom HTTP error code
      */
     public RestConfigurationDefinition skipBindingOnErrorCode(boolean skipBindingOnErrorCode) {
@@ -700,13 +743,32 @@ public class RestConfigurationDefinition {
     }
 
     /**
+     * To Specify whether to return HTTP 204 with an empty body when a response contains an empty JSON object or XML
+     * root object.
+     */
+    public RestConfigurationDefinition enableNoContentResponse(boolean enableNoContentResponse) {
+        setEnableNoContentResponse(enableNoContentResponse ? "true" : "false");
+        return this;
+    }
+
+    /**
+     * To specify whether to return HTTP 204 with an empty body when a response contains an empty JSON object or XML
+     * root object.
+     */
+    public RestConfigurationDefinition enableNoContentResponse(String enableNoContentResponse) {
+        setEnableNoContentResponse(enableNoContentResponse);
+        return this;
+    }
+
+    /**
      * Inline routes in rest-dsl which are linked using direct endpoints.
      *
-     * By default, each service in Rest DSL is an individual route, meaning that you would have at least two routes per
-     * service (rest-dsl, and the route linked from rest-dsl). Enabling this allows Camel to optimize and inline this as
-     * a single route, however this requires to use direct endpoints, which must be unique per service.
+     * Each service in Rest DSL is an individual route, meaning that you would have at least two routes per service
+     * (rest-dsl, and the route linked from rest-dsl). By inlining (default) allows Camel to optimize and inline this as
+     * a single route, however this requires to use direct endpoints, which must be unique per service. If a route is
+     * not using direct endpoint then the rest-dsl is not inlined, and will become an individual route.
      *
-     * This option is default <tt>false</tt>.
+     * This option is default <tt>true</tt>.
      */
     public RestConfigurationDefinition inlineRoutes(String inlineRoutes) {
         setInlineRoutes(inlineRoutes);
@@ -716,11 +778,12 @@ public class RestConfigurationDefinition {
     /**
      * Inline routes in rest-dsl which are linked using direct endpoints.
      *
-     * By default, each service in Rest DSL is an individual route, meaning that you would have at least two routes per
-     * service (rest-dsl, and the route linked from rest-dsl). Enabling this allows Camel to optimize and inline this as
-     * a single route, however this requires to use direct endpoints, which must be unique per service.
+     * Each service in Rest DSL is an individual route, meaning that you would have at least two routes per service
+     * (rest-dsl, and the route linked from rest-dsl). By inlining (default) allows Camel to optimize and inline this as
+     * a single route, however this requires to use direct endpoints, which must be unique per service. If a route is
+     * not using direct endpoint then the rest-dsl is not inlined, and will become an individual route.
      *
-     * This option is default <tt>false</tt>.
+     * This option is default <tt>true</tt>.
      */
     public RestConfigurationDefinition inlineRoutes(boolean inlineRoutes) {
         setInlineRoutes(inlineRoutes ? "true" : "false");
@@ -830,14 +893,18 @@ public class RestConfigurationDefinition {
     }
 
     /**
-     * Shortcut for setting the {@code Access-Control-Allow-Credentials} header.
+     * Shortcut for setting the Access-Control-Allow-Credentials header.
      */
     public RestConfigurationDefinition corsAllowCredentials(boolean corsAllowCredentials) {
         return corsHeaderProperty("Access-Control-Allow-Credentials", String.valueOf(corsAllowCredentials));
     }
 
     /**
-     * To specify whether to use X-Forward headers for Host and related setting
+     * Whether to use X-Forward headers to set host etc. for OpenApi.
+     *
+     * This may be needed in special cases involving reverse-proxy and networking going from HTTP to HTTPS etc. Then the
+     * proxy can send X-Forward headers (X-Forwarded-Proto) that influences the host names in the OpenAPI schema that
+     * camel-openapi-java generates from Rest DSL routes.
      */
     public RestConfigurationDefinition useXForwardHeaders(boolean useXForwardHeaders) {
         setUseXForwardHeaders(useXForwardHeaders ? "true" : "false");
@@ -845,7 +912,11 @@ public class RestConfigurationDefinition {
     }
 
     /**
-     * To specify whether to use X-Forward headers for Host and related setting
+     * Whether to use X-Forward headers to set host etc. for OpenApi.
+     *
+     * This may be needed in special cases involving reverse-proxy and networking going from HTTP to HTTPS etc. Then the
+     * proxy can send X-Forward headers (X-Forwarded-Proto) that influences the host names in the OpenAPI schema that
+     * camel-openapi-java generates from Rest DSL routes.
      */
     public RestConfigurationDefinition useXForwardHeaders(String useXForwardHeaders) {
         setUseXForwardHeaders(useXForwardHeaders);
@@ -909,6 +980,9 @@ public class RestConfigurationDefinition {
         if (bindingMode != null) {
             target.setBindingMode(bindingMode.name());
         }
+        if (bindingPackageScan != null) {
+            target.setBindingPackageScan(bindingPackageScan);
+        }
         if (skipBindingOnErrorCode != null) {
             target.setSkipBindingOnErrorCode(CamelContextHelper.parseBoolean(context, skipBindingOnErrorCode));
         }
@@ -917,6 +991,9 @@ public class RestConfigurationDefinition {
         }
         if (enableCORS != null) {
             target.setEnableCORS(CamelContextHelper.parseBoolean(context, enableCORS));
+        }
+        if (enableNoContentResponse != null) {
+            target.setEnableNoContentResponse(CamelContextHelper.parseBoolean(context, enableNoContentResponse));
         }
         if (inlineRoutes != null) {
             target.setInlineRoutes(CamelContextHelper.parseBoolean(context, inlineRoutes));

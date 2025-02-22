@@ -48,10 +48,33 @@ public interface CatalogCamelContext extends CamelContext {
     String getLanguageParameterJsonSchema(String languageName) throws IOException;
 
     /**
+     * Returns the JSON schema representation of the {@link org.apache.camel.spi.DataTypeTransformer} parameters for the
+     * given transformer name.
+     *
+     * @return the json or <tt>null</tt> if the transformer does not exist
+     */
+    String getTransformerParameterJsonSchema(String transformerName) throws IOException;
+
+    /**
+     * Returns the JSON schema representation of the {@link org.apache.camel.spi.annotations.DevConsole} parameters for
+     * the given dev-console name.
+     *
+     * @return the json or <tt>null</tt> if the dev-console does not exist
+     */
+    String getDevConsoleParameterJsonSchema(String devConsoleName) throws IOException;
+
+    /**
      * Returns the JSON schema representation of the EIP parameters for the given EIP name.
      *
      * @return the json or <tt>null</tt> if the EIP does not exist
      */
     String getEipParameterJsonSchema(String eipName) throws IOException;
+
+    /**
+     * Returns the JSON schema representation of the pojo bean parameters for the given bean name.
+     *
+     * @return the json or <tt>null</tt> if the pojo bean does not exist
+     */
+    String getPojoBeanParameterJsonSchema(String name) throws IOException;
 
 }

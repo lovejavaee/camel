@@ -134,11 +134,21 @@ final class CamelCoapResource extends CoapResource {
                 res++;
             }
 
-            byte bytes[] = exchange.getCurrentRequest().getPayload();
+            byte[] bytes = exchange.getCurrentRequest().getPayload();
             camelExchange.getIn().setBody(bytes);
 
             consumer.getProcessor().process(camelExchange);
             Message target = camelExchange.getMessage();
+
+            Long maxAge = target.getHeader(CoAPConstants.COAP_MAX_AGE, Long.class);
+            if (maxAge != null) {
+                cexchange.setMaxAge(maxAge);
+            }
+
+            byte[] eTag = target.getHeader(CoAPConstants.COAP_ETAG, byte[].class);
+            if (eTag != null) {
+                cexchange.setETag(eTag);
+            }
 
             int format = MediaTypeRegistry.parse(target.getHeader(CoAPConstants.CONTENT_TYPE, String.class));
             cexchange.respond(ResponseCode.CONTENT, target.getBody(byte[].class), format);

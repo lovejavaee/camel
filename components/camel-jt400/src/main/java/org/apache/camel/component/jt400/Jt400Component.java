@@ -22,8 +22,8 @@ import com.ibm.as400.access.AS400ConnectionPool;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
 import org.apache.camel.support.EndpointHelper;
+import org.apache.camel.support.HealthCheckComponent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * Current implementation supports working with data queues (*DTAQ), message queues (*MSGQ), and Program calls (*PGM)
  */
 @Component("jt400")
-public class Jt400Component extends DefaultComponent {
+public class Jt400Component extends HealthCheckComponent {
 
     /**
      * Name of the connection pool URI option.
@@ -86,12 +86,17 @@ public class Jt400Component extends DefaultComponent {
      *
      * @return the default connection pool used by this component
      */
-    public synchronized AS400ConnectionPool getConnectionPool() {
-        if (connectionPool == null) {
-            LOG.info("Instantiating the default connection pool ...");
-            connectionPool = new AS400ConnectionPool();
+    public AS400ConnectionPool getConnectionPool() {
+        lock.lock();
+        try {
+            if (connectionPool == null) {
+                LOG.info("Instantiating the default connection pool ...");
+                connectionPool = new AS400ConnectionPool();
+            }
+            return connectionPool;
+        } finally {
+            lock.unlock();
         }
-        return connectionPool;
     }
 
     public void setConnectionPool(AS400ConnectionPool connectionPool) {

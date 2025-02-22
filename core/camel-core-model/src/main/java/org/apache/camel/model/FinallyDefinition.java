@@ -23,6 +23,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElementRef;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
+import org.apache.camel.Exchange;
 import org.apache.camel.spi.Metadata;
 
 /**
@@ -32,6 +33,18 @@ import org.apache.camel.spi.Metadata;
 @XmlRootElement(name = "doFinally")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class FinallyDefinition extends OutputDefinition<FinallyDefinition> {
+
+    public FinallyDefinition() {
+    }
+
+    protected FinallyDefinition(FinallyDefinition source) {
+        super(source);
+    }
+
+    @Override
+    public FinallyDefinition copyDefinition() {
+        return new FinallyDefinition(this);
+    }
 
     @Override
     public String toString() {
@@ -57,5 +70,11 @@ public class FinallyDefinition extends OutputDefinition<FinallyDefinition> {
     @Override
     public void setOutputs(List<ProcessorDefinition<?>> outputs) {
         super.setOutputs(outputs);
+    }
+
+    @Override
+    public boolean acceptDebugger(Exchange exchange) {
+        // we should only debug if there are any outputs in the finally-block
+        return !getOutputs().isEmpty();
     }
 }

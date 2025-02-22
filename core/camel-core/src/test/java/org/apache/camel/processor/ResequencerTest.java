@@ -26,7 +26,6 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.impl.engine.DefaultChannel;
 import org.apache.camel.impl.engine.DefaultRoute;
 import org.apache.camel.processor.errorhandler.DefaultErrorHandler;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,17 +42,30 @@ public class ResequencerTest extends ContextTestSupport {
         resultEndpoint.assertIsSatisfied();
     }
 
+    @Test
+    public void testRestartRoute() throws Exception {
+        resultEndpoint.expectedBodiesReceived("Guillaume", "Hiram", "James", "Rob");
+        sendBodies("direct:start", "Rob", "Hiram", "Guillaume", "James");
+        resultEndpoint.assertIsSatisfied();
+
+        context.getRouteController().stopRoute("myRoute");
+
+        // wait just a little bit
+        Thread.sleep(5);
+        resultEndpoint.reset();
+
+        context.getRouteController().startRoute("myRoute");
+
+        resultEndpoint.expectedBodiesReceived("Donald", "Goofy", "Jack");
+        sendBodies("direct:start", "Jack", "Donald", "Goofy");
+        resultEndpoint.assertIsSatisfied();
+    }
+
     @Override
     @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
         resultEndpoint = getMockEndpoint("mock:result");
-    }
-
-    @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
     }
 
     @Override
@@ -67,7 +79,8 @@ public class ResequencerTest extends ContextTestSupport {
         return new RouteBuilder() {
             public void configure() {
                 // START SNIPPET: example
-                from("direct:start").resequence().body().timeout(50).to("mock:result");
+                from("direct:start").routeId("myRoute")
+                        .resequence().body().timeout(50).to("mock:result");
                 // END SNIPPET: example
             }
         };

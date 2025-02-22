@@ -23,17 +23,18 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-aws-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-aws2-sns</artifactId>
     <packaging>jar</packaging>
 
     <name>Camel :: AWS2 SNS</name>
-    <description>A Camel Amazon SNS Web Service Component Version 2</description>
+    <description>Send Notifications through AWS SNS service</description>
 
     <properties>
         <camel.surefire.forkTimeout>1200</camel.surefire.forkTimeout>
+        <camel.surefire.fork.additional-vmargs>-Xmx2G</camel.surefire.fork.additional-vmargs>
     </properties>
 
     <dependencies>
@@ -67,7 +68,7 @@
         </dependency>
 
         <!-- test infra -->
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-aws-v2</artifactId>
             <version>${project.version}</version>
@@ -82,34 +83,10 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
             <version>${mockito-version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest</artifactId>
-            <version>${hamcrest-version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>${camel.surefire.fork.vmargs} -Xmx2G</argLine>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

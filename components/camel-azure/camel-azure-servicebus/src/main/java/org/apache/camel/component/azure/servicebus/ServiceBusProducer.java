@@ -16,38 +16,35 @@
  */
 package org.apache.camel.component.azure.servicebus;
 
+import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import com.azure.messaging.servicebus.ServiceBusSenderAsyncClient;
-import org.apache.camel.AsyncCallback;
+import com.azure.core.util.BinaryData;
+import com.azure.messaging.servicebus.ServiceBusSenderClient;
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.RuntimeCamelException;
-import org.apache.camel.component.azure.servicebus.client.ServiceBusClientFactory;
-import org.apache.camel.component.azure.servicebus.client.ServiceBusSenderAsyncClientWrapper;
+import org.apache.camel.TypeConverter;
 import org.apache.camel.component.azure.servicebus.operations.ServiceBusSenderOperations;
-import org.apache.camel.support.DefaultAsyncProducer;
+import org.apache.camel.spi.HeaderFilterStrategy;
+import org.apache.camel.support.DefaultProducer;
 import org.apache.camel.util.ObjectHelper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
 
-public class ServiceBusProducer extends DefaultAsyncProducer {
+public class ServiceBusProducer extends DefaultProducer {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ServiceBusProducer.class);
-
-    private ServiceBusSenderAsyncClientWrapper senderClientWrapper;
+    private final Map<ServiceBusProducerOperationDefinition, Consumer<Exchange>> operationsToExecute
+            = new EnumMap<>(ServiceBusProducerOperationDefinition.class);
+    private ServiceBusSenderClient client;
     private ServiceBusConfigurationOptionsProxy configurationOptionsProxy;
     private ServiceBusSenderOperations serviceBusSenderOperations;
-
-    private final Map<ServiceBusProducerOperationDefinition, BiConsumer<Exchange, AsyncCallback>> operationsToExecute
-            = new EnumMap<>(ServiceBusProducerOperationDefinition.class);
 
     {
         bind(ServiceBusProducerOperationDefinition.sendMessages, sendMessages());
@@ -61,6 +58,7 @@ public class ServiceBusProducer extends DefaultAsyncProducer {
     @Override
     protected void doInit() throws Exception {
         super.doInit();
+        ServiceBusUtils.validateConfiguration(getConfiguration(), false);
         configurationOptionsProxy = new ServiceBusConfigurationOptionsProxy(getConfiguration());
     }
 
@@ -69,35 +67,41 @@ public class ServiceBusProducer extends DefaultAsyncProducer {
         super.doStart();
 
         // create the senderClient
-        final ServiceBusSenderAsyncClient senderClient = getConfiguration().getSenderAsyncClient() != null
-                ? getConfiguration().getSenderAsyncClient()
-                : ServiceBusClientFactory.createServiceBusSenderAsyncClient(getConfiguration());
-
-        // create the wrapper
-        senderClientWrapper = new ServiceBusSenderAsyncClientWrapper(senderClient);
+        client = getConfiguration().getSenderClient() != null
+                ? getConfiguration().getSenderClient()
+                : getEndpoint().getServiceBusClientFactory().createServiceBusSenderClient(getConfiguration());
 
         // create the operations
-        serviceBusSenderOperations = new ServiceBusSenderOperations(senderClientWrapper);
+        serviceBusSenderOperations = new ServiceBusSenderOperations(client);
     }
 
     @Override
-    public boolean process(Exchange exchange, AsyncCallback callback) {
-        try {
-            invokeOperation(configurationOptionsProxy.getServiceBusProducerOperationDefinition(exchange), exchange, callback);
-            return false;
-        } catch (Exception e) {
-            exchange.setException(e);
-            callback.done(true);
-            return true;
+    public void process(Exchange exchange) {
+        final ServiceBusProducerOperationDefinition operation
+                = configurationOptionsProxy.getServiceBusProducerOperationDefinition(exchange);
+        final ServiceBusProducerOperationDefinition operationsToInvoke;
+
+        // we put sendMessage operation as default in case no operation has been selected
+        if (ObjectHelper.isEmpty(operation)) {
+            operationsToInvoke = ServiceBusProducerOperationDefinition.sendMessages;
+        } else {
+            operationsToInvoke = operation;
         }
 
+        final Consumer<Exchange> fnToInvoke = operationsToExecute.get(operationsToInvoke);
+
+        if (fnToInvoke != null) {
+            fnToInvoke.accept(exchange);
+        } else {
+            throw new RuntimeCamelException("Operation not supported. Value: " + operationsToInvoke);
+        }
     }
 
     @Override
     protected void doStop() throws Exception {
-        if (senderClientWrapper != null) {
-            // shutdown async client
-            senderClientWrapper.close();
+        if (client != null) {
+            // shutdown client
+            client.close();
         }
 
         super.doStop();
@@ -112,104 +116,117 @@ public class ServiceBusProducer extends DefaultAsyncProducer {
         return getEndpoint().getConfiguration();
     }
 
-    private void bind(ServiceBusProducerOperationDefinition operation, BiConsumer<Exchange, AsyncCallback> fn) {
+    private void bind(ServiceBusProducerOperationDefinition operation, Consumer<Exchange> fn) {
         operationsToExecute.put(operation, fn);
     }
 
-    /**
-     * Entry method that selects the appropriate ServiceBusProducerOperationDefinition operation and executes it
-     */
-    private void invokeOperation(
-            final ServiceBusProducerOperationDefinition operation, final Exchange exchange, final AsyncCallback callback) {
-        final ServiceBusProducerOperationDefinition operationsToInvoke;
-
-        // we put sendMessage operation as default in case no operation has been selected
-        if (ObjectHelper.isEmpty(operation)) {
-            operationsToInvoke = ServiceBusProducerOperationDefinition.sendMessages;
-        } else {
-            operationsToInvoke = operation;
-        }
-
-        final BiConsumer<Exchange, AsyncCallback> fnToInvoke = operationsToExecute.get(operationsToInvoke);
-
-        if (fnToInvoke != null) {
-            fnToInvoke.accept(exchange, callback);
-        } else {
-            throw new RuntimeCamelException("Operation not supported. Value: " + operationsToInvoke);
-        }
-    }
-
     @SuppressWarnings("unchecked")
-    private BiConsumer<Exchange, AsyncCallback> sendMessages() {
-        return (exchange, callback) -> {
+    private Consumer<Exchange> sendMessages() {
+        return (exchange) -> {
             final Object inputBody = exchange.getMessage().getBody();
-            final Map<String, Object> applicationProperties
+            Map<String, Object> applicationProperties
                     = exchange.getMessage().getHeader(ServiceBusConstants.APPLICATION_PROPERTIES, Map.class);
-
-            Mono<Void> sendMessageAsync;
-
-            if (exchange.getMessage().getBody() instanceof Iterable) {
-                sendMessageAsync
-                        = serviceBusSenderOperations.sendMessages(convertBodyToList((Iterable<Object>) inputBody),
-                                configurationOptionsProxy.getServiceBusTransactionContext(exchange), applicationProperties);
-            } else {
-                sendMessageAsync = serviceBusSenderOperations.sendMessages(exchange.getMessage().getBody(String.class),
-                        configurationOptionsProxy.getServiceBusTransactionContext(exchange), applicationProperties);
+            if (applicationProperties == null) {
+                applicationProperties = new HashMap<>();
             }
+            propagateHeaders(exchange, applicationProperties);
+            final String correlationId = exchange.getMessage().getHeader(ServiceBusConstants.CORRELATION_ID, String.class);
+            final String sessionId = getConfiguration().getSessionId();
 
-            subscribeToMono(sendMessageAsync, exchange, noop -> {
-            }, callback);
+            if (inputBody instanceof Iterable<?>) {
+                serviceBusSenderOperations.sendMessages(convertBodyToList((Iterable<?>) inputBody),
+                        configurationOptionsProxy.getServiceBusTransactionContext(exchange), applicationProperties,
+                        correlationId,
+                        sessionId);
+            } else {
+                Object convertedBody = inputBody instanceof BinaryData ? inputBody
+                        : getConfiguration().isBinary() ? convertBodyToBinary(exchange)
+                        : exchange.getMessage().getBody(String.class);
+
+                serviceBusSenderOperations.sendMessages(convertedBody,
+                        configurationOptionsProxy.getServiceBusTransactionContext(exchange), applicationProperties,
+                        correlationId,
+                        sessionId);
+            }
         };
     }
 
     @SuppressWarnings("unchecked")
-    private BiConsumer<Exchange, AsyncCallback> scheduleMessages() {
-        return (exchange, callback) -> {
+    private Consumer<Exchange> scheduleMessages() {
+        return (exchange) -> {
             final Object inputBody = exchange.getMessage().getBody();
-            final Map<String, Object> applicationProperties
+            Map<String, Object> applicationProperties
                     = exchange.getMessage().getHeader(ServiceBusConstants.APPLICATION_PROPERTIES, Map.class);
-
-            Mono<List<Long>> scheduleMessagesAsync;
-
-            if (exchange.getMessage().getBody() instanceof Iterable) {
-                scheduleMessagesAsync
-                        = serviceBusSenderOperations.scheduleMessages(convertBodyToList((Iterable<Object>) inputBody),
-                                configurationOptionsProxy.getScheduledEnqueueTime(exchange),
-                                configurationOptionsProxy.getServiceBusTransactionContext(exchange),
-                                applicationProperties);
-            } else {
-                scheduleMessagesAsync
-                        = serviceBusSenderOperations.scheduleMessages(exchange.getMessage().getBody(String.class),
-                                configurationOptionsProxy.getScheduledEnqueueTime(exchange),
-                                configurationOptionsProxy.getServiceBusTransactionContext(exchange),
-                                applicationProperties);
+            if (applicationProperties == null) {
+                applicationProperties = new HashMap<>();
             }
+            propagateHeaders(exchange, applicationProperties);
+            final String correlationId = exchange.getMessage().getHeader(ServiceBusConstants.CORRELATION_ID, String.class);
+            final String sessionId = getConfiguration().getSessionId();
 
-            subscribeToMono(scheduleMessagesAsync, exchange,
-                    sequenceNumbers -> exchange.getMessage().setBody(sequenceNumbers), callback);
+            if (inputBody instanceof Iterable<?>) {
+                serviceBusSenderOperations.scheduleMessages(convertBodyToList((Iterable<?>) inputBody),
+                        configurationOptionsProxy.getScheduledEnqueueTime(exchange),
+                        configurationOptionsProxy.getServiceBusTransactionContext(exchange),
+                        applicationProperties,
+                        correlationId,
+                        sessionId);
+            } else {
+                Object convertedBody = inputBody instanceof BinaryData ? inputBody
+                        : getConfiguration().isBinary() ? convertBodyToBinary(exchange)
+                        : exchange.getMessage().getBody(String.class);
+                serviceBusSenderOperations.scheduleMessages(convertedBody,
+                        configurationOptionsProxy.getScheduledEnqueueTime(exchange),
+                        configurationOptionsProxy.getServiceBusTransactionContext(exchange),
+                        applicationProperties,
+                        correlationId,
+                        sessionId);
+            }
         };
     }
 
-    private List<String> convertBodyToList(final Iterable<Object> inputBody) {
-        return StreamSupport.stream(inputBody.spliterator(), false)
-                .map(body -> getEndpoint().getCamelContext().getTypeConverter().convertTo(String.class, body))
-                .collect(Collectors.toList());
+    private List<?> convertBodyToList(final Iterable<?> inputBody) {
+        return StreamSupport.stream(inputBody.spliterator(), false).map(this::convertMessageBody).toList();
     }
 
-    private <T> void subscribeToMono(
-            final Mono<T> inputMono, final Exchange exchange, final Consumer<T> resultsCallback, final AsyncCallback callback) {
-        inputMono
-                .subscribe(resultsCallback, error -> {
-                    // error but we continue
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Error processing async exchange with error: {}", error.getMessage());
-                    }
-                    exchange.setException(error);
-                    callback.done(false);
-                }, () -> {
-                    // we are done from everything, so mark it as sync done
-                    LOG.trace("All events with exchange have been sent successfully.");
-                    callback.done(false);
-                });
+    private Object convertBodyToBinary(Exchange exchange) {
+        Object body = exchange.getMessage().getBody();
+        if (body instanceof InputStream) {
+            return BinaryData.fromStream((InputStream) body);
+        } else if (body instanceof Path) {
+            return BinaryData.fromFile((Path) body);
+        } else if (body instanceof File) {
+            return BinaryData.fromFile(((File) body).toPath());
+        } else {
+            return BinaryData.fromBytes(exchange.getMessage().getBody(byte[].class));
+        }
+    }
+
+    private Object convertMessageBody(Object inputBody) {
+        TypeConverter typeConverter = getEndpoint().getCamelContext().getTypeConverter();
+        if (inputBody instanceof BinaryData) {
+            return inputBody;
+        } else if (getConfiguration().isBinary()) {
+            if (inputBody instanceof InputStream) {
+                return BinaryData.fromStream((InputStream) inputBody);
+            } else if (inputBody instanceof Path) {
+                return BinaryData.fromFile((Path) inputBody);
+            } else if (inputBody instanceof File) {
+                return BinaryData.fromFile(((File) inputBody).toPath());
+            } else {
+                return typeConverter.convertTo(byte[].class, inputBody);
+            }
+        } else {
+            return typeConverter.convertTo(String.class, inputBody);
+        }
+    }
+
+    private void propagateHeaders(Exchange exchange, Map<String, Object> applicationProperties) {
+        final HeaderFilterStrategy headerFilterStrategy = getConfiguration().getHeaderFilterStrategy();
+        applicationProperties.putAll(
+                exchange.getMessage().getHeaders().entrySet().stream()
+                        .filter(entry -> !headerFilterStrategy.applyFilterToCamelHeaders(entry.getKey(), entry.getValue(),
+                                exchange))
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 }

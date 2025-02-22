@@ -18,6 +18,8 @@ package org.apache.camel.component.aws2.ddb.client;
 
 import org.apache.camel.component.aws2.ddb.Ddb2Configuration;
 import org.apache.camel.component.aws2.ddb.client.impl.Ddb2ClientIAMOptimizedImpl;
+import org.apache.camel.component.aws2.ddb.client.impl.Ddb2ClientIAMProfileOptimizedImpl;
+import org.apache.camel.component.aws2.ddb.client.impl.Ddb2ClientSessionTokenImpl;
 import org.apache.camel.component.aws2.ddb.client.impl.Ddb2ClientStandardImpl;
 
 /**
@@ -35,7 +37,14 @@ public final class Ddb2ClientFactory {
      * @return               DynamoDBClient
      */
     public static Ddb2InternalClient getDynamoDBClient(Ddb2Configuration configuration) {
-        return Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())
-                ? new Ddb2ClientIAMOptimizedImpl(configuration) : new Ddb2ClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new Ddb2ClientIAMOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new Ddb2ClientIAMProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new Ddb2ClientSessionTokenImpl(configuration);
+        } else {
+            return new Ddb2ClientStandardImpl(configuration);
+        }
     }
 }

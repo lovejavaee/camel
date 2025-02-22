@@ -19,29 +19,41 @@ package org.apache.camel.maven.packaging;
 import java.io.File;
 import java.io.IOError;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import org.apache.camel.tooling.model.BaseOptionModel;
 import org.apache.camel.tooling.util.FileUtil;
 import org.apache.camel.tooling.util.PackageHelper;
+import org.apache.camel.tooling.util.Strings;
 import org.apache.maven.artifact.DependencyResolutionRequiredException;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
-import org.sonatype.plexus.build.incremental.BuildContext;
+import org.apache.velocity.Template;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.runtime.RuntimeInstance;
+import org.codehaus.plexus.build.BuildContext;
 
 public abstract class AbstractGeneratorMojo extends AbstractMojo {
 
@@ -49,6 +61,8 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
     public static final String NL = "\n";
 
     private static final Map<String, Class<?>> KNOWN_CLASSES_CACHE = new ConcurrentHashMap<>();
+    private static final RuntimeInstance VELOCITY = createVelocityRuntime();
+    private static final Map<String, Template> VELOCITY_TEMPLATES = new ConcurrentHashMap<>();
 
     /**
      * The maven project.
@@ -59,14 +73,12 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
     /**
      * Maven ProjectHelper.
      */
-    @Component
-    protected MavenProjectHelper projectHelper;
+    protected final MavenProjectHelper projectHelper;
 
     /**
      * build context to check changed files and mark them for refresh (used for m2e compatibility)
      */
-    @Component
-    protected BuildContext buildContext;
+    protected final BuildContext buildContext;
 
     private DynamicClassLoader projectClassLoader;
 
@@ -84,17 +96,15 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
         KNOWN_CLASSES_CACHE.put("int", int.class);
         KNOWN_CLASSES_CACHE.put("long", long.class);
         KNOWN_CLASSES_CACHE.put("boolean", boolean.class);
-
     }
 
-    public void execute(
-            MavenProject project,
-            MavenProjectHelper projectHelper,
-            BuildContext buildContext)
-            throws MojoFailureException, MojoExecutionException {
-        this.project = project;
+    protected AbstractGeneratorMojo(MavenProjectHelper projectHelper, BuildContext buildContext) {
         this.projectHelper = projectHelper;
         this.buildContext = buildContext;
+    }
+
+    public void execute(MavenProject project) throws MojoFailureException, MojoExecutionException {
+        this.project = project;
         execute();
     }
 
@@ -106,9 +116,26 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
         refresh(buildContext, file);
     }
 
+    protected String velocity(String templatePath, Map<String, Object> ctx) {
+        VelocityContext context = new VelocityContext(ctx);
+        Template template = VELOCITY_TEMPLATES.computeIfAbsent(templatePath, VELOCITY::getTemplate);
+
+        StringWriter writer = new StringWriter();
+        template.merge(context, writer);
+        return writer.toString();
+    }
+
+    private static RuntimeInstance createVelocityRuntime() {
+        Properties props = new Properties();
+        props.setProperty("resource.loaders", "class");
+        props.setProperty("resource.loader.class.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
+        RuntimeInstance velocity = new RuntimeInstance();
+        velocity.init(props);
+        return velocity;
+    }
+
     protected boolean updateResource(Path dir, String fileName, String data) {
-        boolean updated;
-        updated = updateResource(buildContext, dir.resolve(fileName), data);
+        boolean updated = updateResource(buildContext, dir.resolve(fileName), data);
         if (!fileName.endsWith(".java")) {
             Path outputDir = Paths.get(project.getBuild().getOutputDirectory());
             updated |= updateResource(buildContext, outputDir.resolve(fileName), data);
@@ -121,7 +148,6 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
     }
 
     public static String createProperties(MavenProject project, String key, String val) {
-        String data;
         StringBuilder properties = new StringBuilder(256);
         properties.append("# ").append(GENERATED_MSG).append(NL);
         properties.append(key).append("=").append(val).append(NL);
@@ -132,8 +158,13 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
         if (project.getDescription() != null) {
             properties.append("projectDescription=").append(project.getDescription()).append(NL);
         }
-        data = properties.toString();
-        return data;
+
+        String annotations = project.getProperties().getProperty("annotations");
+        if (!Strings.isNullOrEmpty(annotations)) {
+            properties.append("annotations=").append(annotations).append(NL);
+        }
+
+        return properties.toString();
     }
 
     public static void refresh(BuildContext buildContext, Path file) {
@@ -220,7 +251,7 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
         return optionClass;
     }
 
-    protected final DynamicClassLoader getProjectClassLoader() {
+    protected final ClassLoader getProjectClassLoader() {
         if (projectClassLoader == null) {
             try {
                 projectClassLoader = DynamicClassLoader.createDynamicClassLoader(project.getCompileClasspathElements());
@@ -233,5 +264,29 @@ public abstract class AbstractGeneratorMojo extends AbstractMojo {
 
     protected boolean isJsonFile(Path p, BasicFileAttributes a) {
         return a.isRegularFile() && p.toFile().getName().endsWith(PackageHelper.JSON_SUFIX);
+    }
+
+    @SuppressWarnings("unused") // use by velocity templates
+    public String canonicalClassName(String className) {
+        return Strings.canonicalClassName(className);
+    }
+
+    @SuppressWarnings("unused") // use by velocity templates
+    public String format(String fmt, Object... args) {
+        return String.format(fmt, args);
+    }
+
+    @SuppressWarnings("unused") // use by velocity templates
+    public TreeSet<?> newTreeSet() {
+        return new TreeSet<>();
+    }
+
+    @SuppressWarnings("unused") // use by velocity templates
+    public Set<BaseOptionModel> findConfigurations(Collection<? extends BaseOptionModel> options) {
+        final Set<String> found = new HashSet<>();
+        return options.stream()
+                .filter(o -> o.getConfigurationField() != null)
+                .filter(o -> found.add(o.getConfigurationClass()))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.camel.component.aws2.kinesis;
 
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.AsyncProcessor;
 import org.apache.camel.CamelContext;
@@ -28,21 +29,23 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
-import software.amazon.awssdk.services.kinesis.model.DescribeStreamRequest;
-import software.amazon.awssdk.services.kinesis.model.DescribeStreamResponse;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
+import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
+import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.SequenceNumberRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
-import software.amazon.awssdk.services.kinesis.model.StreamDescription;
 
+import static org.awaitility.Awaitility.await;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,49 +60,64 @@ public class KinesisConsumerClosedShardWithFailTest {
     private final CamelContext context = new DefaultCamelContext();
     private final Kinesis2Component component = new Kinesis2Component(context);
 
-    private Kinesis2Consumer undertest;
+    private Kinesis2Consumer underTest;
 
     @BeforeEach
     public void setup() {
-        Kinesis2Configuration configuration = new Kinesis2Configuration();
-        configuration.setAmazonKinesisClient(kinesisClient);
-        configuration.setIteratorType(ShardIteratorType.LATEST);
-        configuration.setShardClosed(Kinesis2ShardClosedStrategyEnum.fail);
-        configuration.setStreamName("streamName");
-        Kinesis2Endpoint endpoint = new Kinesis2Endpoint(null, configuration, component);
-        endpoint.start();
-        undertest = new Kinesis2Consumer(endpoint, processor);
-
         SequenceNumberRange range = SequenceNumberRange.builder().endingSequenceNumber("20").build();
         Shard shard = Shard.builder().shardId("shardId").sequenceNumberRange(range).build();
         ArrayList<Shard> shardList = new ArrayList<>();
         shardList.add(shard);
 
-        when(kinesisClient.getRecords(any(GetRecordsRequest.class)))
-                .thenReturn(GetRecordsResponse.builder().nextShardIterator("nextShardIterator").build());
-        when(kinesisClient.describeStream(any(DescribeStreamRequest.class)))
-                .thenReturn(DescribeStreamResponse.builder()
-                        .streamDescription(StreamDescription.builder().shards(shardList).build()).build());
-        when(kinesisClient.getShardIterator(any(GetShardIteratorRequest.class)))
+        when(kinesisClient
+                .getRecords(any(GetRecordsRequest.class)))
+                .thenReturn(GetRecordsResponse.builder().nextShardIterator(null).build());
+        when(kinesisClient
+                .getShardIterator(any(GetShardIteratorRequest.class)))
                 .thenReturn(GetShardIteratorResponse.builder().shardIterator("shardIterator").build());
+        when(kinesisClient
+                .listShards(any(ListShardsRequest.class)))
+                .thenReturn(ListShardsResponse.builder().shards(shardList).build());
+
+        component.start();
+
+        Kinesis2Configuration configuration = new Kinesis2Configuration();
+        configuration.setAmazonKinesisClient(kinesisClient);
+        configuration.setIteratorType(ShardIteratorType.LATEST);
+        configuration.setShardClosed(Kinesis2ShardClosedStrategyEnum.fail);
+        configuration.setStreamName("streamName");
+
+        Kinesis2Endpoint endpoint = new Kinesis2Endpoint("aws2-kinesis:foo", configuration, component);
+        endpoint.start();
+        underTest = new Kinesis2Consumer(endpoint, processor);
+        underTest.setConnection(component.getConnection());
+        underTest.start();
+        await().atMost(10, TimeUnit.SECONDS)
+                .until(() -> !(underTest.getCurrentShardList().isEmpty()));
     }
 
     @Test
     public void itObtainsAShardIteratorOnFirstPoll() {
-        assertThrows(ReachedClosedStatusException.class, () -> {
-            undertest.poll();
+        try {
+            underTest.poll();
+        } catch (Exception e) {
+            fail("The first call should not throw an exception");
+        }
+        assertThrows(IllegalStateException.class, () -> {
+            underTest.poll();
         });
 
-        final ArgumentCaptor<DescribeStreamRequest> describeStreamReqCap = ArgumentCaptor.forClass(DescribeStreamRequest.class);
         final ArgumentCaptor<GetShardIteratorRequest> getShardIteratorReqCap
                 = ArgumentCaptor.forClass(GetShardIteratorRequest.class);
-
-        verify(kinesisClient).describeStream(describeStreamReqCap.capture());
-        assertThat(describeStreamReqCap.getValue().streamName(), is("streamName"));
+        final ArgumentCaptor<ListShardsRequest> getListShardsCap
+                = ArgumentCaptor.forClass(ListShardsRequest.class);
 
         verify(kinesisClient).getShardIterator(getShardIteratorReqCap.capture());
         assertThat(getShardIteratorReqCap.getValue().streamName(), is("streamName"));
         assertThat(getShardIteratorReqCap.getValue().shardId(), is("shardId"));
         assertThat(getShardIteratorReqCap.getValue().shardIteratorType(), is(ShardIteratorType.LATEST));
+
+        verify(kinesisClient, atLeastOnce()).listShards(getListShardsCap.capture());
+        assertThat(getListShardsCap.getValue().streamName(), is("streamName"));
     }
 }

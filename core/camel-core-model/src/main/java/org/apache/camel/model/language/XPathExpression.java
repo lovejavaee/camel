@@ -22,7 +22,7 @@ import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 
-// TODO: camel4
+// TODO: camel4 (need jakarta api)
 import javax.xml.xpath.XPathFactory;
 
 import org.apache.camel.Expression;
@@ -39,16 +39,14 @@ public class XPathExpression extends NamespaceAwareExpression {
     @XmlTransient
     private Class<?> documentType;
     @XmlTransient
-    private Class<?> resultType;
-    @XmlTransient
     private XPathFactory xpathFactory;
 
     @XmlAttribute(name = "documentType")
     @Metadata(label = "advanced")
     private String documentTypeName;
-    @XmlAttribute(name = "resultType")
+    @XmlAttribute(name = "resultQName")
     @Metadata(defaultValue = "NODESET", enums = "NUMBER,STRING,BOOLEAN,NODESET,NODE")
-    private String resultTypeName;
+    private String resultQName;
     @XmlAttribute
     @Metadata(label = "advanced", javaType = "java.lang.Boolean")
     private String saxon;
@@ -71,6 +69,20 @@ public class XPathExpression extends NamespaceAwareExpression {
     public XPathExpression() {
     }
 
+    protected XPathExpression(XPathExpression source) {
+        super(source);
+        this.documentType = source.documentType;
+        this.xpathFactory = source.xpathFactory;
+        this.documentTypeName = source.documentTypeName;
+        this.resultQName = source.resultQName;
+        this.saxon = source.saxon;
+        this.factoryRef = source.factoryRef;
+        this.objectModel = source.objectModel;
+        this.logNamespaces = source.logNamespaces;
+        this.threadSafety = source.threadSafety;
+        this.preCompile = source.preCompile;
+    }
+
     public XPathExpression(String expression) {
         super(expression);
     }
@@ -82,16 +94,20 @@ public class XPathExpression extends NamespaceAwareExpression {
     private XPathExpression(Builder builder) {
         super(builder);
         this.documentType = builder.documentType;
-        this.resultType = builder.resultType;
         this.xpathFactory = builder.xpathFactory;
         this.documentTypeName = builder.documentTypeName;
-        this.resultTypeName = builder.resultTypeName;
+        this.resultQName = builder.resultQName;
         this.saxon = builder.saxon;
         this.factoryRef = builder.factoryRef;
         this.objectModel = builder.objectModel;
         this.logNamespaces = builder.logNamespaces;
         this.threadSafety = builder.threadSafety;
         this.preCompile = builder.preCompile;
+    }
+
+    @Override
+    public ExpressionDefinition copyDefinition() {
+        return new XPathExpression(this);
     }
 
     @Override
@@ -125,30 +141,15 @@ public class XPathExpression extends NamespaceAwareExpression {
         this.documentTypeName = documentTypeName;
     }
 
-    public Class<?> getResultType() {
-        return resultType;
+    public String getResultQName() {
+        return resultQName;
     }
 
     /**
-     * Sets the class of the result type (type from output).
-     * <p/>
-     * The default result type is NodeSet
+     * Sets the output type supported by XPath.
      */
-    public void setResultType(Class<?> resultType) {
-        this.resultType = resultType;
-    }
-
-    public String getResultTypeName() {
-        return resultTypeName;
-    }
-
-    /**
-     * Sets the class name of the result type (type from output)
-     * <p/>
-     * The default result type is NodeSet
-     */
-    public void setResultTypeName(String resultTypeName) {
-        this.resultTypeName = resultTypeName;
+    public void setResultQName(String resultQName) {
+        this.resultQName = resultQName;
     }
 
     /**
@@ -243,10 +244,9 @@ public class XPathExpression extends NamespaceAwareExpression {
     public static class Builder extends AbstractNamespaceAwareBuilder<Builder, XPathExpression> {
 
         private Class<?> documentType;
-        private Class<?> resultType;
         private XPathFactory xpathFactory;
         private String documentTypeName;
-        private String resultTypeName;
+        private String resultQName;
         private String saxon;
         private String factoryRef;
         private String objectModel;
@@ -261,16 +261,6 @@ public class XPathExpression extends NamespaceAwareExpression {
          */
         public Builder documentType(Class<?> documentType) {
             this.documentType = documentType;
-            return this;
-        }
-
-        /**
-         * Sets the class of the result type (type from output).
-         * <p/>
-         * The default result type is NodeSet
-         */
-        public Builder resultType(Class<?> resultType) {
-            this.resultType = resultType;
             return this;
         }
 
@@ -294,8 +284,18 @@ public class XPathExpression extends NamespaceAwareExpression {
          * <p/>
          * The default result type is NodeSet
          */
-        public Builder resultTypeName(String resultTypeName) {
-            this.resultTypeName = resultTypeName;
+        public Builder resultQName(String resultQName) {
+            this.resultQName = resultQName;
+            return this;
+        }
+
+        /**
+         * Sets the class name of the result type (type from output)
+         * <p/>
+         * The default result type is NodeSet
+         */
+        public Builder resultQName(ResultQName resultQName) {
+            this.resultQName = resultQName == null ? null : resultQName.name();
             return this;
         }
 
@@ -405,5 +405,17 @@ public class XPathExpression extends NamespaceAwareExpression {
         public XPathExpression end() {
             return new XPathExpression(this);
         }
+    }
+
+    /**
+     * {@code ResultQName} defines the possible class name of the result types that can be used.
+     */
+    @XmlTransient
+    public enum ResultQName {
+        NUMBER,
+        STRING,
+        BOOLEAN,
+        NODESET,
+        NODE
     }
 }

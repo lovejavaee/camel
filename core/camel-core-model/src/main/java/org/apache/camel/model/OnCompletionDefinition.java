@@ -66,11 +66,30 @@ public class OnCompletionDefinition extends OutputDefinition<OnCompletionDefinit
     @XmlAttribute(name = "useOriginalMessage")
     @Metadata(label = "advanced", javaType = "java.lang.Boolean")
     private String useOriginalMessage;
-    @XmlElement(name = "onWhen")
+    @Metadata(description = "To use an expression to only trigger routing this completion steps in specific situations")
+    @XmlElement
     @AsPredicate
-    private WhenDefinition onWhen;
+    private OnWhenDefinition onWhen;
 
     public OnCompletionDefinition() {
+    }
+
+    protected OnCompletionDefinition(OnCompletionDefinition source) {
+        super(source);
+        this.executorServiceBean = source.executorServiceBean;
+        this.routeScoped = source.routeScoped;
+        this.mode = source.mode;
+        this.onCompleteOnly = source.onCompleteOnly;
+        this.onFailureOnly = source.onFailureOnly;
+        this.parallelProcessing = source.parallelProcessing;
+        this.executorService = source.executorService;
+        this.useOriginalMessage = source.useOriginalMessage;
+        this.onWhen = source.onWhen != null ? source.onWhen.copyDefinition() : null;
+    }
+
+    @Override
+    public OnCompletionDefinition copyDefinition() {
+        return new OnCompletionDefinition(this);
     }
 
     public void setRouteScoped(boolean routeScoped) {
@@ -207,7 +226,7 @@ public class OnCompletionDefinition extends OutputDefinition<OnCompletionDefinit
      * @return           the builder
      */
     public OnCompletionDefinition onWhen(@AsPredicate Predicate predicate) {
-        setOnWhen(new WhenDefinition(predicate));
+        setOnWhen(new OnWhenDefinition(predicate));
         return this;
     }
 
@@ -215,9 +234,43 @@ public class OnCompletionDefinition extends OutputDefinition<OnCompletionDefinit
      * Will use the original input message body when an {@link org.apache.camel.Exchange} for this on completion.
      * <p/>
      * The original input message is defensively copied, and the copied message body is converted to
-     * {@link org.apache.camel.StreamCache} if possible, to ensure the body can be read when the original message is
-     * being used later. If the body is not converted to {@link org.apache.camel.StreamCache} then the body will not be
-     * able to re-read when accessed later.
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
+     * <p/>
+     * <b>Important:</b> The original input means the input message that are bounded by the current
+     * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
+     * are connected using internal endpoints such as direct or seda. When messages is passed via external endpoints
+     * such as JMS or HTTP then the consumer will create a new unit of work, with the message it received as input as
+     * the original input. Also some EIP patterns such as splitter, multicast, will create a new unit of work boundary
+     * for the messages in their sub-route (eg the split message); however these EIPs have an option named
+     * <tt>shareUnitOfWork</tt> which allows to combine with the parent unit of work in regard to error handling and
+     * therefore use the parent original message.
+     * <p/>
+     * By default this feature is off.
+     *
+     * @return     the builder
+     * @deprecated use {@link #useOriginalMessage()}
+     */
+    @Deprecated(since = "4.6.0")
+    public OnCompletionDefinition useOriginalBody() {
+        setUseOriginalMessage(Boolean.toString(true));
+        return this;
+    }
+
+    /**
+     * Will use the original input message when an {@link org.apache.camel.Exchange} for this on completion.
+     * <p/>
+     * The original input message is defensively copied, and the copied message body is converted to
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
      * <p/>
      * <b>Important:</b> The original input means the input message that are bounded by the current
      * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
@@ -232,7 +285,7 @@ public class OnCompletionDefinition extends OutputDefinition<OnCompletionDefinit
      *
      * @return the builder
      */
-    public OnCompletionDefinition useOriginalBody() {
+    public OnCompletionDefinition useOriginalMessage() {
         setUseOriginalMessage(Boolean.toString(true));
         return this;
     }
@@ -331,11 +384,11 @@ public class OnCompletionDefinition extends OutputDefinition<OnCompletionDefinit
         this.onFailureOnly = onFailureOnly;
     }
 
-    public WhenDefinition getOnWhen() {
+    public OnWhenDefinition getOnWhen() {
         return onWhen;
     }
 
-    public void setOnWhen(WhenDefinition onWhen) {
+    public void setOnWhen(OnWhenDefinition onWhen) {
         this.onWhen = onWhen;
     }
 
@@ -346,7 +399,26 @@ public class OnCompletionDefinition extends OutputDefinition<OnCompletionDefinit
     /**
      * Will use the original input message body when an {@link org.apache.camel.Exchange} for this on completion.
      * <p/>
+     * The original input message is defensively copied, and the copied message body is converted to
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
+     * <p/>
+     * <b>Important:</b> The original input means the input message that are bounded by the current
+     * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
+     * are connected using internal endpoints such as direct or seda. When messages is passed via external endpoints
+     * such as JMS or HTTP then the consumer will create a new unit of work, with the message it received as input as
+     * the original input. Also some EIP patterns such as splitter, multicast, will create a new unit of work boundary
+     * for the messages in their sub-route (eg the split message); however these EIPs have an option named
+     * <tt>shareUnitOfWork</tt> which allows to combine with the parent unit of work in regard to error handling and
+     * therefore use the parent original message.
+     * <p/>
      * By default this feature is off.
+     *
+     * @return the builder
      */
     public void setUseOriginalMessage(String useOriginalMessage) {
         this.useOriginalMessage = useOriginalMessage;

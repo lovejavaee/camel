@@ -24,14 +24,23 @@ import org.apache.camel.model.LoadBalancerDefinition;
 import org.apache.camel.spi.Metadata;
 
 /**
- * The destination endpoints are selected by random.
+ * The destination endpoints are selected randomly.
  */
 @Metadata(label = "eip,routing")
-@XmlRootElement(name = "random")
+@XmlRootElement(name = "randomLoadBalancer")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class RandomLoadBalancerDefinition extends LoadBalancerDefinition {
 
     public RandomLoadBalancerDefinition() {
+    }
+
+    protected RandomLoadBalancerDefinition(RandomLoadBalancerDefinition source) {
+        super(source);
+    }
+
+    @Override
+    public RandomLoadBalancerDefinition copyDefinition() {
+        return new RandomLoadBalancerDefinition(this);
     }
 
     @Override

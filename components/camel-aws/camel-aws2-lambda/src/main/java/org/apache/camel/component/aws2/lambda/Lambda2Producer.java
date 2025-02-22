@@ -27,6 +27,9 @@ import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.InvalidPayloadException;
 import org.apache.camel.Message;
+import org.apache.camel.health.HealthCheck;
+import org.apache.camel.health.HealthCheckHelper;
+import org.apache.camel.health.WritableHealthCheckRepository;
 import org.apache.camel.support.DefaultProducer;
 import org.apache.camel.util.CastUtils;
 import org.apache.camel.util.ObjectHelper;
@@ -84,6 +87,10 @@ import software.amazon.awssdk.services.lambda.model.VpcConfig;
 public class Lambda2Producer extends DefaultProducer {
 
     private static final Logger LOG = LoggerFactory.getLogger(Lambda2Producer.class);
+    public static final String MISSING_RESOURCE_ARN = "The resource ARN must be specified";
+
+    private HealthCheck producerHealthCheck;
+    private WritableHealthCheckRepository healthCheckRepository;
 
     public Lambda2Producer(final Endpoint endpoint) {
         super(endpoint);
@@ -488,7 +495,7 @@ public class Lambda2Producer extends DefaultProducer {
                 String resource = exchange.getIn().getHeader(Lambda2Constants.RESOURCE_ARN, String.class);
                 builder.resource(resource);
             } else {
-                throw new IllegalArgumentException("The resource ARN must be specified");
+                throw new IllegalArgumentException(MISSING_RESOURCE_ARN);
             }
             request = builder.build();
         }
@@ -514,7 +521,7 @@ public class Lambda2Producer extends DefaultProducer {
                 String resource = exchange.getIn().getHeader(Lambda2Constants.RESOURCE_ARN, String.class);
                 builder.resource(resource);
             } else {
-                throw new IllegalArgumentException("The resource ARN must be specified");
+                throw new IllegalArgumentException(MISSING_RESOURCE_ARN);
             }
             if (ObjectHelper.isNotEmpty(exchange.getIn().getHeader(Lambda2Constants.RESOURCE_TAGS))) {
                 Map<String, String> tags = exchange.getIn().getHeader(Lambda2Constants.RESOURCE_TAGS, Map.class);
@@ -546,7 +553,7 @@ public class Lambda2Producer extends DefaultProducer {
                 String resource = exchange.getIn().getHeader(Lambda2Constants.RESOURCE_ARN, String.class);
                 builder.resource(resource);
             } else {
-                throw new IllegalArgumentException("The resource ARN must be specified");
+                throw new IllegalArgumentException(MISSING_RESOURCE_ARN);
             }
             if (ObjectHelper.isNotEmpty(exchange.getIn().getHeader(Lambda2Constants.RESOURCE_TAG_KEYS))) {
                 List<String> tagKeys = exchange.getIn().getHeader(Lambda2Constants.RESOURCE_TAG_KEYS, List.class);
@@ -740,6 +747,30 @@ public class Lambda2Producer extends DefaultProducer {
 
     public static Message getMessageForResponse(final Exchange exchange) {
         return exchange.getMessage();
+    }
+
+    @Override
+    protected void doStart() throws Exception {
+        // health-check is optional so discover and resolve
+        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(
+                getEndpoint().getCamelContext(),
+                "producers",
+                WritableHealthCheckRepository.class);
+
+        if (healthCheckRepository != null) {
+            String id = getEndpoint().getId();
+            producerHealthCheck = new Lambda2ProducerHealthCheck(getEndpoint(), id);
+            producerHealthCheck.setEnabled(getEndpoint().getComponent().isHealthCheckProducerEnabled());
+            healthCheckRepository.addHealthCheck(producerHealthCheck);
+        }
+    }
+
+    @Override
+    protected void doStop() throws Exception {
+        if (healthCheckRepository != null && producerHealthCheck != null) {
+            healthCheckRepository.removeHealthCheck(producerHealthCheck);
+            producerHealthCheck = null;
+        }
     }
 
 }

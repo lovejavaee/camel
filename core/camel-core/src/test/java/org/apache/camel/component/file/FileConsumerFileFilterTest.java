@@ -28,11 +28,9 @@ import org.junit.jupiter.api.Test;
  */
 public class FileConsumerFileFilterTest extends ContextTestSupport {
 
-    private String fileUrl = fileUri("?initialDelay=0&delay=10&filter=#myFilter");
-
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("myFilter", new MyFileFilter<>());
         return jndi;
     }
@@ -66,10 +64,11 @@ public class FileConsumerFileFilterTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
-                from(fileUrl).convertBodyTo(String.class).to("mock:result");
+            public void configure() {
+                from(fileUri("?initialDelay=0&delay=10&filter=#myFilter"))
+                        .convertBodyTo(String.class).to("mock:result");
             }
         };
     }

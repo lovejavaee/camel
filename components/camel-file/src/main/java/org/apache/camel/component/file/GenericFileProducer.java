@@ -17,34 +17,37 @@
 package org.apache.camel.component.file;
 
 import java.io.File;
-import java.util.Collections;
+import java.io.InputStream;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.camel.AsyncCallback;
 import org.apache.camel.Exchange;
 import org.apache.camel.Expression;
+import org.apache.camel.support.DefaultAsyncProducer;
 import org.apache.camel.support.DefaultExchange;
-import org.apache.camel.support.DefaultProducer;
 import org.apache.camel.support.LRUCacheFactory;
+import org.apache.camel.support.MessageHelper;
 import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.FileUtil;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.camel.util.StringHelper;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Generic file producer
  */
-public class GenericFileProducer<T> extends DefaultProducer {
+public class GenericFileProducer<T> extends DefaultAsyncProducer {
     private static final Logger LOG = LoggerFactory.getLogger(GenericFileProducer.class);
 
     protected final GenericFileEndpoint<T> endpoint;
     protected GenericFileOperations<T> operations;
     // assume writing to 100 different files concurrently at most for the same
     // file producer
-    private final Map<String, Lock> locks = Collections.synchronizedMap(LRUCacheFactory.newLRUCache(100));
+    private final Map<String, Lock> locks = LRUCacheFactory.newLRUCache(100);
 
     protected GenericFileProducer(GenericFileEndpoint<T> endpoint, GenericFileOperations<T> operations) {
         super(endpoint);
@@ -61,7 +64,18 @@ public class GenericFileProducer<T> extends DefaultProducer {
     }
 
     @Override
-    public void process(Exchange exchange) throws Exception {
+    public boolean process(Exchange exchange, AsyncCallback callback) {
+        try {
+            doProcess(exchange);
+        } catch (Exception e) {
+            exchange.setException(e);
+        } finally {
+            callback.done(true);
+        }
+        return true;
+    }
+
+    protected void doProcess(Exchange exchange) throws Exception {
         // store any existing file header which we want to keep and propagate
         final String existing = exchange.getIn().getHeader(FileConstants.FILE_NAME, String.class);
 
@@ -76,6 +90,8 @@ public class GenericFileProducer<T> extends DefaultProducer {
         lock.lock();
         try {
             processExchange(exchange, target);
+        } catch (Exception e) {
+            exchange.setException(e);
         } finally {
             // do not remove as the locks cache has an upper bound
             // this ensure the locks is appropriate reused
@@ -135,27 +151,8 @@ public class GenericFileProducer<T> extends DefaultProducer {
                     targetExists = operations.existsFile(target);
                     if (targetExists) {
 
-                        LOG.trace("EagerDeleteTargetFile, target exists");
-
-                        if (endpoint.getFileExist() == GenericFileExist.Ignore) {
-                            // ignore but indicate that the file was written
-                            LOG.trace("An existing file already exists: {}. Ignore and do not override it.", target);
+                        if (handleExistingTargetEager(target)) {
                             return;
-                        } else if (endpoint.getFileExist() == GenericFileExist.Fail) {
-                            throw new GenericFileOperationFailedException(
-                                    "File already exist: " + target + ". Cannot write new file.");
-                        } else if (endpoint.getFileExist() == GenericFileExist.Move) {
-                            // move any existing file first
-                            this.endpoint.getMoveExistingFileStrategy().moveExistingFile(endpoint, operations, target);
-                        } else if (endpoint.isEagerDeleteTargetFile() && endpoint.getFileExist() == GenericFileExist.Override) {
-                            // we override the target so we do this by deleting
-                            // it so the temp file can be renamed later
-                            // with success as the existing target file have
-                            // been deleted
-                            LOG.trace("Eagerly deleting existing file: {}", target);
-                            if (!operations.deleteFile(target)) {
-                                throw new GenericFileOperationFailedException("Cannot delete file: " + target);
-                            }
                         }
                     }
                 }
@@ -163,9 +160,7 @@ public class GenericFileProducer<T> extends DefaultProducer {
                 // delete any pre existing temp file
                 if (endpoint.getFileExist() != GenericFileExist.TryRename && operations.existsFile(tempTarget)) {
                     LOG.trace("Deleting existing temp file: {}", tempTarget);
-                    if (!operations.deleteFile(tempTarget)) {
-                        throw new GenericFileOperationFailedException("Cannot delete file: " + tempTarget);
-                    }
+                    tryOverridingFile(tempTarget);
                 }
             }
 
@@ -182,24 +177,8 @@ public class GenericFileProducer<T> extends DefaultProducer {
                     targetExists = operations.existsFile(target);
                     if (targetExists) {
 
-                        LOG.trace("Not using EagerDeleteTargetFile, target exists");
-
-                        if (endpoint.getFileExist() == GenericFileExist.Ignore) {
-                            // ignore but indicate that the file was written
-                            LOG.trace("An existing file already exists: {}. Ignore and do not override it.", target);
+                        if (handleExistingTarget(target)) {
                             return;
-                        } else if (endpoint.getFileExist() == GenericFileExist.Fail) {
-                            throw new GenericFileOperationFailedException(
-                                    "File already exist: " + target + ". Cannot write new file.");
-                        } else if (endpoint.getFileExist() == GenericFileExist.Override) {
-                            // we override the target so we do this by deleting
-                            // it so the temp file can be renamed later
-                            // with success as the existing target file have
-                            // been deleted
-                            LOG.trace("Deleting existing file: {}", target);
-                            if (!operations.deleteFile(target)) {
-                                throw new GenericFileOperationFailedException("Cannot delete file: " + target);
-                            }
                         }
                     }
                 }
@@ -212,24 +191,14 @@ public class GenericFileProducer<T> extends DefaultProducer {
                 }
             }
 
+            // any checksum file to write?
+            if (endpoint.getChecksumFileAlgorithm() != null) {
+                writeChecksumFile(exchange, target);
+            }
+
             // any done file to write?
             if (endpoint.getDoneFileName() != null) {
-                String doneFileName = endpoint.createDoneFileName(target);
-                StringHelper.notEmpty(doneFileName, "doneFileName", endpoint);
-
-                // create empty exchange with empty body to write as the done
-                // file
-                Exchange empty = new DefaultExchange(exchange);
-                empty.getIn().setBody("");
-
-                LOG.trace("Writing done file: [{}]", doneFileName);
-                // delete any existing done file
-                if (operations.existsFile(doneFileName)) {
-                    if (!operations.deleteFile(doneFileName)) {
-                        throw new GenericFileOperationFailedException("Cannot delete existing done file: " + doneFileName);
-                    }
-                }
-                writeFile(empty, doneFileName);
+                writeDoneFile(exchange, target);
             }
 
             // let's store the name we really used in the header, so end-users
@@ -240,6 +209,103 @@ public class GenericFileProducer<T> extends DefaultProducer {
         }
 
         postWriteCheck(exchange);
+    }
+
+    private static void throwFileAlreadyExistException(String target) {
+        throw new GenericFileOperationFailedException(
+                "File already exist: " + target + ". Cannot write new file.");
+    }
+
+    private static boolean doIgnore(String target) {
+        // ignore but indicate that the file was written
+        LOG.trace("An existing file already exists: {}. Ignore and do not override it.", target);
+        return true;
+    }
+
+    private void tryOverridingFile(String target) {
+        if (!operations.deleteFile(target)) {
+            throw new GenericFileOperationFailedException("Cannot delete file: " + target);
+        }
+    }
+
+    private boolean handleExistingTargetEager(String target) {
+        LOG.trace("EagerDeleteTargetFile, target exists");
+
+        if (endpoint.getFileExist() == GenericFileExist.Ignore) {
+            return doIgnore(target);
+        } else if (endpoint.getFileExist() == GenericFileExist.Fail) {
+            throwFileAlreadyExistException(target);
+        } else if (endpoint.getFileExist() == GenericFileExist.Move) {
+            // move any existing file first
+            this.endpoint.getMoveExistingFileStrategy().moveExistingFile(endpoint, operations, target);
+        } else if (endpoint.isEagerDeleteTargetFile() && endpoint.getFileExist() == GenericFileExist.Override) {
+            // we override the target so we do this by deleting
+            // it so the temp file can be renamed later
+            // with success as the existing target file have
+            // been deleted
+            LOG.trace("Eagerly deleting existing file: {}", target);
+            tryOverridingFile(target);
+        }
+        return false;
+    }
+
+    private boolean handleExistingTarget(String target) {
+        LOG.trace("Not using EagerDeleteTargetFile, target exists");
+
+        if (endpoint.getFileExist() == GenericFileExist.Ignore) {
+            // ignore but indicate that the file was written
+            return doIgnore(target);
+        } else if (endpoint.getFileExist() == GenericFileExist.Fail) {
+            throwFileAlreadyExistException(target);
+        } else if (endpoint.getFileExist() == GenericFileExist.Override) {
+            // we override the target so we do this by deleting
+            // it so the temp file can be renamed later
+            // with success as the existing target file have
+            // been deleted
+            LOG.trace("Deleting existing file: {}", target);
+            tryOverridingFile(target);
+        }
+        return false;
+    }
+
+    private void writeDoneFile(Exchange exchange, String target) {
+        String doneFileName = endpoint.createDoneFileName(target);
+        StringHelper.notEmpty(doneFileName, "doneFileName", endpoint);
+
+        // create empty exchange with empty body to write as the done
+        // file
+        Exchange empty = new DefaultExchange(exchange);
+        empty.getIn().setBody("");
+
+        LOG.trace("Writing done file: [{}]", doneFileName);
+        // delete any existing done file
+        if (operations.existsFile(doneFileName)) {
+            if (!operations.deleteFile(doneFileName)) {
+                throw new GenericFileOperationFailedException("Cannot delete existing done file: " + doneFileName);
+            }
+        }
+        writeFile(empty, doneFileName);
+    }
+
+    protected void writeChecksumFile(Exchange exchange, String target) throws Exception {
+        String algorithm = endpoint.getChecksumFileAlgorithm();
+        String checksumFileName = target + "." + algorithm;
+
+        // create exchange with checksum as body to write as the checksum file
+        MessageHelper.resetStreamCache(exchange.getIn());
+        InputStream is = exchange.getIn().getMandatoryBody(InputStream.class);
+        Exchange checksumExchange = new DefaultExchange(exchange);
+        checksumExchange.getIn().setBody(new DigestUtils(algorithm).digestAsHex(is));
+
+        LOG.trace("Writing checksum file: [{}]", checksumFileName);
+        // delete any existing done file
+        if (operations.existsFile(checksumFileName)) {
+            if (!operations.deleteFile(checksumFileName)) {
+                throw new GenericFileOperationFailedException(
+                        "Cannot delete existing checksum file: " + checksumFileName);
+            }
+        }
+        writeFile(checksumExchange, checksumFileName);
     }
 
     /**
@@ -297,19 +363,10 @@ public class GenericFileProducer<T> extends DefaultProducer {
     public String createFileName(Exchange exchange) {
         String answer;
 
-        // overrule takes precedence
-        Object value;
-
         Object overrule = exchange.getIn().getHeader(FileConstants.OVERRULE_FILE_NAME);
-        if (overrule != null) {
-            if (overrule instanceof Expression) {
-                value = overrule;
-            } else {
-                value = exchange.getContext().getTypeConverter().convertTo(String.class, exchange, overrule);
-            }
-        } else {
-            value = exchange.getIn().getHeader(FileConstants.FILE_NAME);
-        }
+
+        // overrule takes precedence
+        final Object value = getOverrule(exchange, overrule);
 
         // if we have an overrule then override the existing header to use the
         // overrule computed name from this point forward
@@ -325,32 +382,17 @@ public class GenericFileProducer<T> extends DefaultProducer {
 
         // expression support
         Expression expression = endpoint.getFileName();
-        if (value instanceof Expression) {
-            expression = (Expression) value;
+        if (value instanceof Expression expression1) {
+            expression = expression1;
         }
 
         // evaluate the name as a String from the value
-        String name;
-        if (expression != null) {
-            LOG.trace("Filename evaluated as expression: {}", expression);
-            name = expression.evaluate(exchange, String.class);
-        } else {
-            name = exchange.getContext().getTypeConverter().convertTo(String.class, exchange, value);
-        }
-
-        // flatten name
-        if (name != null && endpoint.isFlatten()) {
-            // check for both windows and unix separators
-            int pos = Math.max(name.lastIndexOf('/'), name.lastIndexOf("\\"));
-            if (pos != -1) {
-                name = name.substring(pos + 1);
-            }
-        }
+        final String name = evaluateName(exchange, expression, value);
 
         // compute path by adding endpoint starting directory
         String endpointPath = endpoint.getConfiguration().getDirectory();
         String baseDir = "";
-        if (endpointPath.length() > 0) {
+        if (!endpointPath.isEmpty()) {
             // Its a directory so we should use it as a base path for the
             // filename
             // If the path isn't empty, we need to add a trailing / if it isn't
@@ -369,16 +411,7 @@ public class GenericFileProducer<T> extends DefaultProducer {
         }
 
         if (endpoint.isJailStartingDirectory()) {
-            // check for file must be within starting directory (need to compact
-            // first as the name can be using relative paths via ../ etc)
-            String compatchAnswer = FileUtil.compactPath(answer);
-            String compatchBaseDir = FileUtil.compactPath(baseDir);
-            if (!compatchAnswer.startsWith(compatchBaseDir)) {
-                throw new IllegalArgumentException(
-                        "Cannot write file with name: " + compatchAnswer
-                                                   + " as the filename is jailed to the starting directory: "
-                                                   + compatchBaseDir);
-            }
+            jailedCheck(answer, baseDir);
         }
 
         if (endpoint.getConfiguration().needToNormalize()) {
@@ -387,6 +420,59 @@ public class GenericFileProducer<T> extends DefaultProducer {
         }
 
         return answer;
+    }
+
+    private static Object getOverrule(Exchange exchange, Object overrule) {
+        Object value;
+
+        if (overrule != null) {
+            if (overrule instanceof Expression) {
+                value = overrule;
+            } else {
+                value = exchange.getContext().getTypeConverter().convertTo(String.class, exchange, overrule);
+            }
+        } else {
+            value = exchange.getIn().getHeader(FileConstants.FILE_NAME);
+        }
+        return value;
+    }
+
+    private static void jailedCheck(String answer, String baseDir) {
+        // check for file must be within starting directory (need to compact
+        // first as the name can be using relative paths via ../ etc)
+        String compatchAnswer = FileUtil.compactPath(answer);
+        String compatchBaseDir = FileUtil.compactPath(baseDir);
+        if (!compatchAnswer.startsWith(compatchBaseDir)) {
+            throw new IllegalArgumentException(
+                    "Cannot write file with name: " + compatchAnswer
+                                               + " as the filename is jailed to the starting directory: "
+                                               + compatchBaseDir);
+        }
+    }
+
+    private String evaluateName(Exchange exchange, Expression expression, Object value) {
+        String name;
+        if (expression != null) {
+            LOG.trace("Filename evaluated as expression: {}", expression);
+            name = expression.evaluate(exchange, String.class);
+        } else {
+            name = exchange.getContext().getTypeConverter().convertTo(String.class, exchange, value);
+        }
+
+        // flatten name
+        if (name != null && endpoint.isFlatten()) {
+            name = flattenName(name);
+        }
+        return name;
+    }
+
+    private static String flattenName(String name) {
+        // check for both windows and unix separators
+        int pos = Math.max(name.lastIndexOf('/'), name.lastIndexOf("\\"));
+        if (pos != -1) {
+            name = name.substring(pos + 1);
+        }
+        return name;
     }
 
     public String createTempFileName(Exchange exchange, String fileName) {
@@ -411,7 +497,9 @@ public class GenericFileProducer<T> extends DefaultProducer {
             answer = tempName;
         } else {
             // path should be prefixed before the temp name
-            StringBuilder sb = new StringBuilder(answer.substring(0, pos + 1));
+            final String prefix = answer.substring(0, pos + 1);
+            StringBuilder sb = new StringBuilder(tempName.length() + prefix.length() + 1);
+            sb.append(prefix);
             sb.append(tempName);
             answer = sb.toString();
         }
@@ -438,4 +526,5 @@ public class GenericFileProducer<T> extends DefaultProducer {
         super.doStop();
         ServiceHelper.stopService(locks);
     }
+
 }

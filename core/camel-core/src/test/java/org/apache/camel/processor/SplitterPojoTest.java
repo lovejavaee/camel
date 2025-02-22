@@ -37,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class SplitterPojoTest extends ContextTestSupport {
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("mySplitterBean", new MySplitterBean());
         return jndi;
     }
@@ -55,8 +55,8 @@ public class SplitterPojoTest extends ContextTestSupport {
     }
 
     @Test
-    public void testSplitMessageWithPojoBean() throws Exception {
-        String users[] = { "James", "Jonathan", "Hadrian", "Claus", "Willem" };
+    public void testSplitMessageWithPojoBean() {
+        String[] users = { "James", "Jonathan", "Hadrian", "Claus", "Willem" };
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.reset();
         mock.expectedMessageCount(5);

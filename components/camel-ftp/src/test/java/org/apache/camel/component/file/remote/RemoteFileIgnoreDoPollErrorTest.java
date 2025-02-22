@@ -19,6 +19,7 @@ package org.apache.camel.component.file.remote;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
@@ -32,6 +33,7 @@ import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,14 +72,14 @@ public class RemoteFileIgnoreDoPollErrorTest {
     @Test
     public void testReadDirErrorIsHandled() {
         RemoteFileConsumer<Object> consumer = getRemoteFileConsumer("true", true);
-        boolean result = consumer.doSafePollSubDirectory("anyPath", "adir", new ArrayList<>(), 0);
+        boolean result = consumer.doSafePollSubDirectory(null, "anyPath", "adir", new ArrayList<>(), 0);
         assertTrue(result);
     }
 
     @Test
     public void testReadDirErrorIsHandledWithNoMorePoll() {
         RemoteFileConsumer<Object> consumer = getRemoteFileConsumer("false", true);
-        boolean result = consumer.doSafePollSubDirectory("anyPath", "adir", new ArrayList<>(), 0);
+        boolean result = consumer.doSafePollSubDirectory(null, "anyPath", "adir", new ArrayList<>(), 0);
         assertFalse(result);
     }
 
@@ -87,9 +89,9 @@ public class RemoteFileIgnoreDoPollErrorTest {
         List<GenericFile<Object>> list = Collections.emptyList();
 
         Exception ex = assertThrows(GenericFileOperationFailedException.class,
-                () -> consumer.doSafePollSubDirectory("anyPath", "adir", list, 0));
+                () -> consumer.doSafePollSubDirectory(null, "anyPath", "adir", list, 0));
 
-        assertTrue(ex.getCause() instanceof IllegalStateException);
+        assertInstanceOf(IllegalStateException.class, ex.getCause());
     }
 
     @Test
@@ -98,7 +100,7 @@ public class RemoteFileIgnoreDoPollErrorTest {
         List<GenericFile<Object>> list = Collections.emptyList();
 
         Exception ex = assertThrows(GenericFileOperationFailedException.class,
-                () -> consumer.doSafePollSubDirectory("anyPath", "adir", list, 0));
+                () -> consumer.doSafePollSubDirectory(null, "anyPath", "adir", list, 0));
 
         assertNull(ex.getCause());
     }
@@ -111,6 +113,7 @@ public class RemoteFileIgnoreDoPollErrorTest {
         return new RemoteFileConsumer<>(remoteFileEndpoint, null, null, null) {
             @Override
             protected boolean doPollDirectory(
+                    Exchange dynamic,
                     String absolutePath, String dirName, List<GenericFile<Object>> genericFiles, int depth) {
                 if ("IllegalStateException".equals(doPollResult)) {
                     throw new IllegalStateException("Problem");
@@ -122,12 +125,13 @@ public class RemoteFileIgnoreDoPollErrorTest {
             }
 
             @Override
-            protected boolean pollDirectory(String fileName, List<GenericFile<Object>> genericFiles, int depth) {
+            protected boolean pollDirectory(
+                    Exchange dynamic, String fileName, List<GenericFile<Object>> genericFiles, int depth) {
                 return false;
             }
 
             @Override
-            protected boolean isMatched(GenericFile<Object> file, String doneFileName, Object[] files) {
+            protected boolean isMatched(Supplier<GenericFile<Object>> file, String doneFileName, Object[] files) {
                 return false;
             }
 
@@ -139,6 +143,11 @@ public class RemoteFileIgnoreDoPollErrorTest {
             @Override
             protected void updateFileHeaders(GenericFile<Object> genericFile, Message message) {
                 // noop
+            }
+
+            @Override
+            protected Supplier<String> getRelativeFilePath(String endpointPath, String path, String absolutePath, Object file) {
+                return null;
             }
         };
     }

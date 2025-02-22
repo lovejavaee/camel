@@ -28,11 +28,9 @@ import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
 
 public class ZipSplitterRouteIssueTest extends CamelTestSupport {
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void deleteTestDirs() {
         deleteDirectory("target/zip");
-        super.setUp();
     }
 
     @Test

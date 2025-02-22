@@ -130,6 +130,18 @@ public class FlexibleAggregationStrategy<E> implements AggregationStrategy {
     }
 
     /**
+     * Store the result of this Aggregation Strategy (whether an atomic element or a Collection) in a variable with the
+     * designated name.
+     *
+     * @param  variableName The variable name.
+     * @return              This instance.
+     */
+    public FlexibleAggregationStrategy<E> storeInVariable(String variableName) {
+        this.injector = new VariableInjector(castAs, variableName);
+        return this;
+    }
+
+    /**
      * Store the result of this Aggregation Strategy (whether an atomic element or a Collection) in an IN message header
      * with the designated name.
      *
@@ -291,9 +303,7 @@ public class FlexibleAggregationStrategy<E> implements AggregationStrategy {
                 collection = collectionType.cast(oldValue);
             }
 
-            if (collection != null) {
-                collection.add(toInsert);
-            }
+            collection.add(toInsert);
 
         } catch (ClassCastException exception) {
             if (!ignoreInvalidCasts) {
@@ -334,7 +344,7 @@ public class FlexibleAggregationStrategy<E> implements AggregationStrategy {
     }
 
     private class PropertyInjector extends FlexibleAggregationStrategyInjector {
-        private String propertyName;
+        private final String propertyName;
 
         PropertyInjector(Class<E> type, String propertyName) {
             super(type);
@@ -372,11 +382,51 @@ public class FlexibleAggregationStrategy<E> implements AggregationStrategy {
         public void setValueAsCollection(Exchange exchange, Collection<E> obj) {
             exchange.setProperty(propertyName, obj);
         }
+    }
 
+    private class VariableInjector extends FlexibleAggregationStrategyInjector {
+        private final String variableName;
+
+        VariableInjector(Class<E> type, String variableName) {
+            super(type);
+            this.variableName = variableName;
+        }
+
+        @Override
+        public void prepareAggregationExchange(Exchange exchange) {
+            exchange.removeVariable(variableName);
+        }
+
+        @Override
+        public E getValue(Exchange exchange) {
+            return exchange.getVariable(variableName, type);
+        }
+
+        @Override
+        public void setValue(Exchange exchange, E obj) {
+            exchange.setVariable(variableName, obj);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Collection<E> getValueAsCollection(Exchange exchange, Class<? extends Collection> type) {
+            Object value = exchange.getVariable(variableName);
+            if (value == null) {
+                // empty so create a new collection to host this
+                return exchange.getContext().getInjector().newInstance(type);
+            } else {
+                return exchange.getVariable(variableName, type);
+            }
+        }
+
+        @Override
+        public void setValueAsCollection(Exchange exchange, Collection<E> obj) {
+            exchange.setVariable(variableName, obj);
+        }
     }
 
     private class HeaderInjector extends FlexibleAggregationStrategyInjector {
-        private String headerName;
+        private final String headerName;
 
         HeaderInjector(Class<E> type, String headerName) {
             super(type);

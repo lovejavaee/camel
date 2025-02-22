@@ -32,9 +32,8 @@ import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.protocol.DefaultHttpProcessor;
 import org.apache.hc.core5.http.protocol.HttpProcessor;
+import org.apache.hc.core5.http.protocol.RequestValidateHost;
 import org.apache.hc.core5.http.protocol.ResponseContent;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -50,24 +49,20 @@ public class HttpAuthenticationTest extends BaseHttpTest {
     private final String user = "camel";
     private final String password = "password";
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/search",
                         new AuthenticationValidationHandler(GET.name(), null, null, getExpectedContent(), user, password))
                 .create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -75,7 +70,7 @@ public class HttpAuthenticationTest extends BaseHttpTest {
     }
 
     @Test
-    public void basicAuthenticationShouldSuccess() throws Exception {
+    public void basicAuthenticationShouldSuccess() {
         Exchange exchange = template.request("http://localhost:"
                                              + localServer.getLocalPort() + "/search?authUsername=" + user + "&authPassword="
                                              + password,
@@ -86,7 +81,7 @@ public class HttpAuthenticationTest extends BaseHttpTest {
     }
 
     @Test
-    public void basicAuthenticationPreemptiveShouldSuccess() throws Exception {
+    public void basicAuthenticationPreemptiveShouldSuccess() {
         Exchange exchange = template.request("http://localhost:"
                                              + localServer.getLocalPort() + "/search?authUsername=" + user + "&authPassword="
                                              + password + "&authenticationPreemptive=true",
@@ -97,7 +92,7 @@ public class HttpAuthenticationTest extends BaseHttpTest {
     }
 
     @Test
-    public void basicAuthenticationShouldFailWithoutCreds() throws Exception {
+    public void basicAuthenticationShouldFailWithoutCreds() {
         Exchange exchange
                 = template.request("http://localhost:" + localServer.getLocalPort()
                                    + "/search?throwExceptionOnFailure=false",
@@ -108,7 +103,7 @@ public class HttpAuthenticationTest extends BaseHttpTest {
     }
 
     @Test
-    public void basicAuthenticationShouldFailWithWrongCreds() throws Exception {
+    public void basicAuthenticationShouldFailWithWrongCreds() {
         Exchange exchange = template
                 .request("http://localhost:" + localServer.getLocalPort()
                          + "/search?throwExceptionOnFailure=false&authUsername=camel&authPassword=wrong",
@@ -121,6 +116,7 @@ public class HttpAuthenticationTest extends BaseHttpTest {
     @Override
     protected HttpProcessor getBasicHttpProcessor() {
         List<HttpRequestInterceptor> requestInterceptors = new ArrayList<>();
+        requestInterceptors.add(new RequestValidateHost());
         requestInterceptors.add(new RequestBasicAuth());
         List<HttpResponseInterceptor> responseInterceptors = new ArrayList<>();
         responseInterceptors.add(new ResponseContent());

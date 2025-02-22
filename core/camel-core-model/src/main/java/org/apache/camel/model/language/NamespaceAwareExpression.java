@@ -16,7 +16,9 @@
  */
 package org.apache.camel.model.language;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +27,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 
+import org.apache.camel.model.ProcessorDefinitionHelper;
 import org.apache.camel.model.PropertyDefinition;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.NamespaceAware;
@@ -35,7 +38,7 @@ import org.apache.camel.support.builder.Namespaces;
  * {@link XQueryExpression}
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-public abstract class NamespaceAwareExpression extends SingleInputExpressionDefinition implements NamespaceAware {
+public abstract class NamespaceAwareExpression extends SingleInputTypedExpressionDefinition implements NamespaceAware {
 
     @XmlElement(name = "namespace")
     @Metadata(label = "common")
@@ -44,6 +47,12 @@ public abstract class NamespaceAwareExpression extends SingleInputExpressionDefi
     private Map<String, String> namespaces;
 
     protected NamespaceAwareExpression() {
+    }
+
+    protected NamespaceAwareExpression(NamespaceAwareExpression source) {
+        super(source);
+        this.namespace = ProcessorDefinitionHelper.deepCopyDefinitions(source.namespace);
+        this.namespaces = source.namespaces != null ? new LinkedHashMap<>(source.namespaces) : null;
     }
 
     protected NamespaceAwareExpression(String expression) {
@@ -72,6 +81,10 @@ public abstract class NamespaceAwareExpression extends SingleInputExpressionDefi
     }
 
     public List<PropertyDefinition> getNamespace() {
+        if (namespace == null && namespaces != null && !namespaces.isEmpty()) {
+            namespace = new ArrayList<>();
+            namespaces.forEach((k, v) -> namespace.add(new PropertyDefinition(k, v)));
+        }
         return namespace;
     }
 
@@ -99,7 +112,7 @@ public abstract class NamespaceAwareExpression extends SingleInputExpressionDefi
      */
     @XmlTransient
     @SuppressWarnings("unchecked")
-    abstract static class AbstractNamespaceAwareBuilder<
+    protected abstract static class AbstractNamespaceAwareBuilder<
             T extends AbstractNamespaceAwareBuilder<T, E>, E extends NamespaceAwareExpression>
             extends AbstractBuilder<T, E> {
 

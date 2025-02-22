@@ -19,22 +19,22 @@ package org.apache.camel.tooling.maven;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.camel.Service;
+
 /**
  * Pragmatic Maven download/resolution API that should replace usage of Ivy/Grape and Shrinkwrap across Camel.
  */
-public interface MavenDownloader {
+public interface MavenDownloader extends Service {
 
     /**
      * Main resolution method. Using Maven Resolver, a list of maven coordinates (in the form of
      * {@code groupId:artifactId[:packaging[:classifier]]:version}) is used to download artifacts from configured Maven
      * repositories.
      *
-     * @param  dependencyGAVs     a list of Maven coordinates
-     * @param  extraRepositories  nullable list of additional repositories to use (except the discovered ones)
-     * @param  transitively       whether to download/resolve dependencies transitively
-     * @param  useApacheSnapshots whether to include Apache Snapshots repository in the list of used repositories
-     * @return
-     * @throws {@link             MavenResolutionException} that can hold a list of repositories used during resolution.
+     * @param dependencyGAVs     a list of Maven coordinates
+     * @param extraRepositories  nullable list of additional repositories to use (except the discovered ones)
+     * @param transitively       whether to download/resolve dependencies transitively
+     * @param useApacheSnapshots whether to include Apache Snapshots repository in the list of used repositories
      */
     List<MavenArtifact> resolveArtifacts(
             List<String> dependencyGAVs, Set<String> extraRepositories,
@@ -44,10 +44,9 @@ public interface MavenDownloader {
     /**
      * Resolves available versions for groupId + artifactId from single remote repository.
      *
-     * @param  groupId
-     * @param  artifactId
-     * @param  repository external repository to use (defaults to Maven Central if {@code null})
-     * @return
+     * @param groupId    groupId
+     * @param artifactId artifactId
+     * @param repository external repository to use (defaults to Maven Central if {@code null})
      */
     List<MavenGav> resolveAvailableVersions(String groupId, String artifactId, String repository)
             throws MavenResolutionException;
@@ -56,12 +55,76 @@ public interface MavenDownloader {
      * Existing, configured {@link MavenDownloader} can be used as a template to create customized version which shares
      * most of the configuration except underlying {@code org.eclipse.aether.RepositorySystemSession}, which can't be
      * shared.
-     *
-     * @param  localRepository
-     * @param  connectTimeout
-     * @param  requestTimeout
-     * @return
      */
     MavenDownloader customize(String localRepository, int connectTimeout, int requestTimeout);
+
+    /**
+     * To use a listener when downloading from remote repositories.
+     */
+    void setRemoteArtifactDownloadListener(RemoteArtifactDownloadListener listener);
+
+    /**
+     * Set a flag determining Maven update behavior. See the description of {@code -U,--update-snapshots} Maven option.
+     * When set to {@code true}, Maven metadata (to determine newest SNAPSHOT or RELEASE or LATEST version) is always
+     * fetched.
+     */
+    void setFresh(boolean fresh);
+
+    /**
+     * Sets maven downloader in offline mode
+     */
+    void setOffline(boolean offline);
+
+    /**
+     * Configure comma-separated list of repositories to use (in addition to the ones discovered from Maven settings).
+     */
+    void setRepos(String repos);
+
+    /**
+     * Configure a location of {@code settings-security.xml} (when not set, defaults to
+     * {@code ~/.m2/settings-security.xml} unless {@link #setMavenSettingsLocation(String)} is set explicitly set to
+     * {@code "false"}.
+     */
+    void setMavenSettingsSecurityLocation(String mavenSettingsSecurity);
+
+    /**
+     * Configure a location of {@code settings.xml} (when not set, defaults to {@code ~/.m2/settings.xml} unless it's
+     * explicitly set to {@code "false"}.
+     */
+    void setMavenSettingsLocation(String mavenSettings);
+
+    /**
+     * Gets the repository resolver.
+     */
+    RepositoryResolver getRepositoryResolver();
+
+    /**
+     * Sets a custom repository resolver.
+     */
+    void setRepositoryResolver(RepositoryResolver repositoryResolver);
+
+    /**
+     * Sets whether maven central repository should be included and as first in the list of repositories. This can be
+     * used to turn of maven central for users that may use their own maven proxy.
+     */
+    void setMavenCentralEnabled(boolean mavenCentralEnabled);
+
+    /**
+     * Sets whether maven central repository should be included and as first in the list of repositories. This can be
+     * used to turn of maven central for users that may use their own maven proxy.
+     */
+    boolean isMavenCentralEnabled();
+
+    /**
+     * Sets whether using SNAPSHOT versions of Apache Camel is enabled. If enabled then SNAPSHOT can be downloaded from
+     * the ASF SNAPSHOT maven repository.
+     */
+    void setMavenApacheSnapshotEnabled(boolean mavenApacheSnapshotEnabled);
+
+    /**
+     * Sets whether using SNAPSHOT versions of Apache Camel is enabled. If enabled then SNAPSHOT can be downloaded from
+     * the ASF SNAPSHOT maven repository.
+     */
+    boolean isMavenApacheSnapshotEnabled();
 
 }

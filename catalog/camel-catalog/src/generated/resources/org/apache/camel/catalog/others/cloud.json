@@ -4,12 +4,12 @@
     "name": "cloud",
     "title": "Cloud",
     "description": "Camel Cloud support",
-    "deprecated": false,
+    "deprecated": true,
     "firstVersion": "3.0",
     "label": "core,cloud",
     "supportLevel": "Stable",
     "groupId": "org.apache.camel",
     "artifactId": "camel-cloud",
-    "version": "4.0.0-SNAPSHOT"
+    "version": "4.11.0-SNAPSHOT"
   }
 }

@@ -19,6 +19,7 @@ package org.apache.camel.util;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -43,7 +44,7 @@ public final class FileUtil {
      */
     private static final String USER_DIR_KEY = "user.dir";
     private static final File USER_DIR = new File(System.getProperty(USER_DIR_KEY));
-    private static boolean windowsOs = initWindowsOs();
+    private static final boolean IS_WINDOWS = initWindowsOs();
 
     private FileUtil() {
         // Utils method
@@ -80,9 +81,10 @@ public final class FileUtil {
      * Returns true, if the OS is windows
      */
     public static boolean isWindows() {
-        return windowsOs;
+        return IS_WINDOWS;
     }
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     public static File createTempFile(String prefix, String suffix, File parentDir) throws IOException {
         Objects.requireNonNull(parentDir);
 
@@ -275,7 +277,6 @@ public final class FileUtil {
 
     /**
      * Compacts a path by stacking it and reducing <tt>..</tt>, and uses the given separator.
-     *
      */
     public static String compactPath(String path, char separator) {
         return compactPath(path, String.valueOf(separator));
@@ -325,21 +326,20 @@ public final class FileUtil {
         Deque<String> stack = new ArrayDeque<>();
 
         // separator can either be windows or unix style
-        String separatorRegex = "\\\\|/";
+        String separatorRegex = "[\\\\/]";
         String[] parts = path.split(separatorRegex);
         for (String part : parts) {
             if (part.equals("..") && !stack.isEmpty() && !"..".equals(stack.peek())) {
                 // only pop if there is a previous path, which is not a ".." path either
                 stack.pop();
-            } else if (part.equals(".") || part.isEmpty()) {
-                // do nothing because we don't want a path like foo/./bar or foo//bar
-            } else {
+            } else if (!part.equals(".") && !part.isEmpty()) {
                 stack.push(part);
             }
+            // else do nothing because we don't want a path like foo/./bar or foo//bar
         }
 
         // build path based on stack
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(256);
         if (scheme != null) {
             sb.append(scheme);
             sb.append(":");
@@ -379,13 +379,18 @@ public final class FileUtil {
     }
 
     private static void delete(File f) {
-        if (!f.delete()) {
+        try {
+            Files.delete(f.toPath());
+        } catch (IOException e) {
             try {
                 Thread.sleep(RETRY_SLEEP_MILLIS);
             } catch (InterruptedException ex) {
-                // Ignore Exception
+                LOG.info("Interrupted while trying to delete file {}", f, e);
+                Thread.currentThread().interrupt();
             }
-            if (!f.delete()) {
+            try {
+                Files.delete(f.toPath());
+            } catch (IOException ex) {
                 f.deleteOnExit();
             }
         }
@@ -401,8 +406,21 @@ public final class FileUtil {
      * @throws java.io.IOException       is thrown if error renaming file
      */
     public static boolean renameFile(File from, File to, boolean copyAndDeleteOnRenameFail) throws IOException {
+        return renameFile(from.toPath(), to.toPath(), copyAndDeleteOnRenameFail);
+    }
+
+    /**
+     * Renames a file.
+     *
+     * @param  from                      the from file
+     * @param  to                        the to file
+     * @param  copyAndDeleteOnRenameFail whether to fallback and do copy and delete, if renameTo fails
+     * @return                           <tt>true</tt> if the file was renamed, otherwise <tt>false</tt>
+     * @throws java.io.IOException       is thrown if error renaming file
+     */
+    public static boolean renameFile(Path from, Path to, boolean copyAndDeleteOnRenameFail) throws IOException {
         // do not try to rename non existing files
-        if (!from.exists()) {
+        if (!Files.exists(from)) {
             return false;
         }
 
@@ -415,12 +433,18 @@ public final class FileUtil {
                 LOG.debug("Retrying attempt {} to rename file from: {} to: {}", count, from, to);
             }
 
-            renamed = from.renameTo(to);
+            try {
+                Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
+                renamed = true;
+            } catch (IOException e) {
+                // failed
+            }
             if (!renamed && count > 0) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    // ignore
+                    LOG.info("Interrupted while trying to rename file from {} to {}", from, to, e);
+                    Thread.currentThread().interrupt();
                 }
             }
             count++;
@@ -450,8 +474,21 @@ public final class FileUtil {
      * @throws IOException If an I/O error occurs during copy or delete operations.
      */
     public static boolean renameFileUsingCopy(File from, File to) throws IOException {
+        return renameFileUsingCopy(from.toPath(), to.toPath());
+    }
+
+    /**
+     * Rename file using copy and delete strategy. This is primarily used in environments where the regular rename
+     * operation is unreliable.
+     *
+     * @param  from        the file to be renamed
+     * @param  to          the new target file
+     * @return             <tt>true</tt> if the file was renamed successfully, otherwise <tt>false</tt>
+     * @throws IOException If an I/O error occurs during copy or delete operations.
+     */
+    public static boolean renameFileUsingCopy(Path from, Path to) throws IOException {
         // do not try to rename non existing files
-        if (!from.exists()) {
+        if (!Files.exists(from)) {
             return false;
         }
 
@@ -475,7 +512,18 @@ public final class FileUtil {
      * @throws IOException If an I/O error occurs during copy operation
      */
     public static void copyFile(File from, File to) throws IOException {
-        Files.copy(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        copyFile(from.toPath(), to.toPath());
+    }
+
+    /**
+     * Copies the file
+     *
+     * @param  from        the source file
+     * @param  to          the destination file
+     * @throws IOException If an I/O error occurs during copy operation
+     */
+    public static void copyFile(Path from, Path to) throws IOException {
+        Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
     }
 
     /**
@@ -487,8 +535,20 @@ public final class FileUtil {
      * @param file the file to delete
      */
     public static boolean deleteFile(File file) {
+        return deleteFile(file.toPath());
+    }
+
+    /**
+     * Deletes the file.
+     * <p/>
+     * This implementation will attempt to delete the file up till three times with one second delay, which can mitigate
+     * problems on deleting files on some platforms such as Windows.
+     *
+     * @param file the file to delete
+     */
+    public static boolean deleteFile(Path file) {
         // do not try to delete non existing files
-        if (!file.exists()) {
+        if (!Files.exists(file)) {
             return false;
         }
 
@@ -499,12 +559,17 @@ public final class FileUtil {
         while (!deleted && count < 3) {
             LOG.debug("Retrying attempt {} to delete file: {}", count, file);
 
-            deleted = file.delete();
-            if (!deleted && count > 0) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    // ignore
+            try {
+                Files.delete(file);
+                deleted = true;
+            } catch (IOException e) {
+                if (count > 0) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ie) {
+                        LOG.info("Interrupted while trying to delete file {}", file, e);
+                        Thread.currentThread().interrupt();
+                    }
                 }
             }
             count++;
@@ -523,7 +588,7 @@ public final class FileUtil {
      * makes the logic consistent across all OS platforms.
      *
      * @param  file the file
-     * @return      <tt>true</ff> if its an absolute path, <tt>false</tt> otherwise.
+     * @return      <tt>true</ff> if it's an absolute path, <tt>false</tt> otherwise.
      */
     public static boolean isAbsolute(File file) {
         if (isWindows()) {

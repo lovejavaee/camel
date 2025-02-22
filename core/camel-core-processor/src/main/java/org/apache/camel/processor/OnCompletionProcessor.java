@@ -34,6 +34,7 @@ import org.apache.camel.Route;
 import org.apache.camel.Traceable;
 import org.apache.camel.spi.IdAware;
 import org.apache.camel.spi.RouteIdAware;
+import org.apache.camel.spi.SynchronizationRouteAware;
 import org.apache.camel.support.AsyncProcessorSupport;
 import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.SynchronizationAdapter;
@@ -200,6 +201,10 @@ public class OnCompletionProcessor extends AsyncProcessorSupport implements Trac
             exchange.setRollbackOnlyLast(rollbackOnlyLast);
             exchange.getExchangeExtension().setRedeliveryExhausted(exhausted);
             if (cause != null) {
+                // if there is any exception in onCompletionProcessor, the exception should be suppressed
+                if (exchange.isFailed()) {
+                    cause.addSuppressed(exchange.getException());
+                }
                 exchange.setException(cause);
             }
         }
@@ -261,17 +266,27 @@ public class OnCompletionProcessor extends AsyncProcessorSupport implements Trac
         }
 
         @Override
-        @SuppressWarnings("unchecked")
-        public void onAfterRoute(Route route, Exchange exchange) {
-            // route scope = remember we have been at this route
-            if (routeScoped && route.getRouteId().equals(routeId)) {
-                List<String> routeIds = exchange.getProperty(ExchangePropertyKey.ON_COMPLETION_ROUTE_IDS, List.class);
-                if (routeIds == null) {
-                    routeIds = new ArrayList<>();
-                    exchange.setProperty(ExchangePropertyKey.ON_COMPLETION_ROUTE_IDS, routeIds);
+        public SynchronizationRouteAware getRouteSynchronization() {
+            return new SynchronizationRouteAware() {
+                @Override
+                public void onBeforeRoute(Route route, Exchange exchange) {
+                    // NO-OP
                 }
-                routeIds.add(route.getRouteId());
-            }
+
+                @Override
+                public void onAfterRoute(Route route, Exchange exchange) {
+                    // route scope = remember we have been at this route
+                    if (routeScoped && route.getRouteId().equals(routeId)) {
+                        @SuppressWarnings("unchecked")
+                        List<String> routeIds = exchange.getProperty(ExchangePropertyKey.ON_COMPLETION_ROUTE_IDS, List.class);
+                        if (routeIds == null) {
+                            routeIds = new ArrayList<>();
+                            exchange.setProperty(ExchangePropertyKey.ON_COMPLETION_ROUTE_IDS, routeIds);
+                        }
+                        routeIds.add(route.getRouteId());
+                    }
+                }
+            };
         }
 
         @Override
@@ -408,47 +423,57 @@ public class OnCompletionProcessor extends AsyncProcessorSupport implements Trac
         }
 
         @Override
-        public void onAfterRoute(Route route, Exchange exchange) {
-            LOG.debug("onAfterRoute from Route {}", route.getRouteId());
-            // route scope = should be from this route
-            if (routeScoped && !route.getRouteId().equals(routeId)) {
-                return;
-            }
+        public SynchronizationRouteAware getRouteSynchronization() {
+            return new SynchronizationRouteAware() {
+                @Override
+                public void onBeforeRoute(Route route, Exchange exchange) {
+                    // NO-OP
+                }
 
-            // global scope = should be from the original route
-            if (!routeScoped && (!route.getRouteId().equals(routeId) || !exchange.getFromRouteId().equals(routeId))) {
-                return;
-            }
+                @Override
+                public void onAfterRoute(Route route, Exchange exchange) {
+                    LOG.debug("onAfterRoute from Route {}", route.getRouteId());
+                    // route scope = should be from this route
+                    if (routeScoped && !route.getRouteId().equals(routeId)) {
+                        return;
+                    }
 
-            if (exchange.isFailed() && onCompleteOnly) {
-                return;
-            }
+                    // global scope = should be from the original route
+                    if (!routeScoped && (!route.getRouteId().equals(routeId) || !exchange.getFromRouteId().equals(routeId))) {
+                        return;
+                    }
 
-            if (!exchange.isFailed() && onFailureOnly) {
-                return;
-            }
+                    if (exchange.isFailed() && onCompleteOnly) {
+                        return;
+                    }
 
-            if (onWhen != null && !onWhen.matches(exchange)) {
-                // predicate did not match so do not route the onComplete
-                return;
-            }
+                    if (!exchange.isFailed() && onFailureOnly) {
+                        return;
+                    }
 
-            // must use a copy as we don't want it to cause side effects of the original exchange
-            final Exchange copy = prepareExchange(exchange);
+                    if (onWhen != null && !onWhen.matches(exchange)) {
+                        // predicate did not match so do not route the onComplete
+                        return;
+                    }
 
-            if (executorService != null) {
-                executorService.submit(new Callable<Exchange>() {
-                    public Exchange call() throws Exception {
+                    // must use a copy as we don't want it to cause side effects of the original exchange
+                    final Exchange copy = prepareExchange(exchange);
+
+                    if (executorService != null) {
+                        executorService.submit(new Callable<Exchange>() {
+                            public Exchange call() throws Exception {
+                                LOG.debug("Processing onAfterRoute: {}", copy);
+                                doProcess(processor, copy);
+                                return copy;
+                            }
+                        });
+                    } else {
+                        // run without thread-pool
                         LOG.debug("Processing onAfterRoute: {}", copy);
                         doProcess(processor, copy);
-                        return copy;
                     }
-                });
-            } else {
-                // run without thread-pool
-                LOG.debug("Processing onAfterRoute: {}", copy);
-                doProcess(processor, copy);
-            }
+                }
+            };
         }
 
         @Override

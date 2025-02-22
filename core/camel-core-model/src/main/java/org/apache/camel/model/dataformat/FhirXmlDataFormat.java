@@ -26,7 +26,7 @@ import org.apache.camel.spi.Metadata;
 /**
  * Marshall and unmarshall FHIR objects to/from XML.
  */
-@Metadata(firstVersion = "2.21.0", label = "dataformat,transformation,hl7,xml", title = "FHIR XML")
+@Metadata(firstVersion = "2.21.0", label = "dataformat,transformation,health,xml", title = "FHIR XML")
 @XmlRootElement(name = "fhirXml")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class FhirXmlDataFormat extends FhirDataformat {
@@ -37,6 +37,15 @@ public class FhirXmlDataFormat extends FhirDataformat {
 
     private FhirXmlDataFormat(Builder builder) {
         super("fhirXml", builder);
+    }
+
+    protected FhirXmlDataFormat(FhirXmlDataFormat source) {
+        super(source);
+    }
+
+    @Override
+    public FhirXmlDataFormat copyDefinition() {
+        return new FhirXmlDataFormat(this);
     }
 
     /**

@@ -37,7 +37,7 @@ import org.springframework.batch.core.launch.JobLauncher;
  * Send messages to Spring Batch for further processing.
  */
 @UriEndpoint(firstVersion = "2.10.0", scheme = "spring-batch", title = "Spring Batch", syntax = "spring-batch:jobName",
-             producerOnly = true, category = { Category.SPRING, Category.BATCH, Category.SCHEDULING })
+             remote = false, producerOnly = true, category = { Category.WORKFLOW })
 public class SpringBatchEndpoint extends DefaultEndpoint {
 
     @UriPath
@@ -73,6 +73,11 @@ public class SpringBatchEndpoint extends DefaultEndpoint {
         this.allResolvedJobLaunchers = allResolvedJobLaunchers;
         this.jobName = jobName;
         this.jobRegistry = jobRegistry;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

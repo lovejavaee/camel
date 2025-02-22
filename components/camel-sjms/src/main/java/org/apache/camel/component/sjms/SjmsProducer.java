@@ -95,7 +95,8 @@ public class SjmsProducer extends DefaultAsyncProducer {
 
     protected void initReplyManager() {
         if (!started.get()) {
-            synchronized (this) {
+            lock.lock();
+            try {
                 if (started.get()) {
                     return;
                 }
@@ -136,6 +137,8 @@ public class SjmsProducer extends DefaultAsyncProducer {
                     Thread.currentThread().setContextClassLoader(oldClassLoader);
                 }
                 started.set(true);
+            } finally {
+                lock.unlock();
             }
         }
     }
@@ -168,12 +171,7 @@ public class SjmsProducer extends DefaultAsyncProducer {
 
         name = "JmsReplyManagerOnTimeout[" + replyTo + "]";
         // allow the timeout thread to timeout so during normal operation we do not have a idle thread
-        int max = getEndpoint().getComponent().getReplyToOnTimeoutMaxConcurrentConsumers();
-        if (max <= 0) {
-            throw new IllegalArgumentException("The option replyToOnTimeoutMaxConcurrentConsumers must be >= 1");
-        }
-        ExecutorService replyManagerExecutorService
-                = getEndpoint().getCamelContext().getExecutorServiceManager().newThreadPool(replyManager, name, 0, max);
+        ExecutorService replyManagerExecutorService = createReplyManagerExecutor(replyManager, name);
         replyManager.setOnTimeoutExecutorService(replyManagerExecutorService);
 
         ServiceHelper.startService(replyManager);
@@ -193,18 +191,26 @@ public class SjmsProducer extends DefaultAsyncProducer {
 
         name = "JmsReplyManagerOnTimeout[" + getEndpoint().getEndpointConfiguredDestinationName() + "]";
         // allow the timeout thread to timeout so during normal operation we do not have a idle thread
-        int max = getEndpoint().getComponent().getReplyToOnTimeoutMaxConcurrentConsumers();
-        if (max <= 0) {
-            throw new IllegalArgumentException("The option replyToOnTimeoutMaxConcurrentConsumers must be >= 1");
-        }
-        ExecutorService replyManagerExecutorService
-                = getEndpoint().getCamelContext().getExecutorServiceManager().newThreadPool(temporaryQueueReplyManager, name, 0,
-                        max);
+        ExecutorService replyManagerExecutorService = createReplyManagerExecutor(temporaryQueueReplyManager, name);
         temporaryQueueReplyManager.setOnTimeoutExecutorService(replyManagerExecutorService);
 
         ServiceHelper.startService(temporaryQueueReplyManager);
 
         return temporaryQueueReplyManager;
+    }
+
+    private ExecutorService createReplyManagerExecutor(ReplyManager temporaryQueueReplyManager, String name) {
+        int max = doGetMax();
+        return getEndpoint().getCamelContext().getExecutorServiceManager().newThreadPool(temporaryQueueReplyManager, name, 0,
+                max);
+    }
+
+    private int doGetMax() {
+        int max = getEndpoint().getComponent().getReplyToOnTimeoutMaxConcurrentConsumers();
+        if (max <= 0) {
+            throw new IllegalArgumentException("The option replyToOnTimeoutMaxConcurrentConsumers must be >= 1");
+        }
+        return max;
     }
 
     /**

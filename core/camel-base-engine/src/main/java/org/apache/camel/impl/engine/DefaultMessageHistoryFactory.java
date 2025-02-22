@@ -47,7 +47,7 @@ public class DefaultMessageHistoryFactory extends ServiceSupport implements Mess
     }
 
     @Override
-    public MessageHistory newMessageHistory(String routeId, NamedNode node, long timestamp, Exchange exchange) {
+    public MessageHistory newMessageHistory(String routeId, NamedNode node, Exchange exchange) {
         if (nodePatternParts != null) {
             String name = node.getShortName();
             for (String part : nodePatternParts) {
@@ -63,7 +63,9 @@ public class DefaultMessageHistoryFactory extends ServiceSupport implements Mess
             msg = exchange.getMessage().copy();
         }
 
-        return new DefaultMessageHistory(routeId, node, timestamp, msg);
+        DefaultMessageHistory answer = new DefaultMessageHistory(routeId, node, msg);
+        answer.setAcceptDebugger(node.acceptDebugger(exchange));
+        return answer;
     }
 
     @ManagedAttribute(description = "Whether message history is enabled")

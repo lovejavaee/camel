@@ -37,12 +37,12 @@ import java.util.Map.Entry;
 import org.apache.camel.CamelExchangeException;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePropertyKey;
+import org.apache.camel.LineNumberAware;
 import org.apache.camel.Message;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.TypeConverter;
 import org.apache.camel.component.file.GenericFile;
 import org.apache.camel.component.http.helper.HttpMethodHelper;
-import org.apache.camel.converter.stream.CachedOutputStream;
 import org.apache.camel.http.base.HttpOperationFailedException;
 import org.apache.camel.http.base.cookie.CookieHandler;
 import org.apache.camel.http.common.HttpHelper;
@@ -54,8 +54,9 @@ import org.apache.camel.support.GZIPHelper;
 import org.apache.camel.support.MessageHelper;
 import org.apache.camel.support.ObjectHelper;
 import org.apache.camel.support.SynchronizationAdapter;
+import org.apache.camel.support.builder.OutputStreamBuilder;
+import org.apache.camel.support.http.HttpUtil;
 import org.apache.camel.util.IOHelper;
-import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.URISupport;
 import org.apache.camel.util.UnsafeUriCharactersEncoder;
 import org.apache.hc.client5.http.classic.HttpClient;
@@ -75,13 +76,14 @@ import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.FileEntity;
 import org.apache.hc.core5.http.io.entity.InputStreamEntity;
+import org.apache.hc.core5.http.io.entity.NullEntity;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.protocol.BasicHttpContext;
 import org.apache.hc.core5.http.protocol.HttpContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HttpProducer extends DefaultProducer {
+public class HttpProducer extends DefaultProducer implements LineNumberAware {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpProducer.class);
 
@@ -111,16 +113,7 @@ public class HttpProducer extends DefaultProducer {
         super.doInit();
 
         String range = getEndpoint().getOkStatusCodeRange();
-        if (!range.contains(",")) {
-            // default is 200-299 so lets optimize for this
-            if (range.contains("-")) {
-                minOkRange = Integer.parseInt(StringHelper.before(range, "-"));
-                maxOkRange = Integer.parseInt(StringHelper.after(range, "-"));
-            } else {
-                minOkRange = Integer.parseInt(range);
-                maxOkRange = minOkRange;
-            }
-        }
+        parseStatusRange(range);
 
         // optimize and build default url when there are no override headers
         String url = getEndpoint().getHttpUri().toASCIIString();
@@ -137,6 +130,20 @@ public class HttpProducer extends DefaultProducer {
         defaultUri = uri;
         defaultUrl = uri.toASCIIString();
         defaultHttpHost = URIUtils.extractHost(uri);
+    }
+
+    private void parseStatusRange(String range) {
+        if (!range.contains(",")) {
+            if (!HttpUtil.parseStatusRange(range, this::setRanges)) {
+                minOkRange = Integer.parseInt(range);
+                maxOkRange = minOkRange;
+            }
+        }
+    }
+
+    private void setRanges(int minOkRange, int maxOkRange) {
+        this.minOkRange = minOkRange;
+        this.maxOkRange = maxOkRange;
     }
 
     @Override
@@ -199,37 +206,8 @@ public class HttpProducer extends DefaultProducer {
                         // use an iterator as there can be multiple values. (must not use a delimiter, and allow empty values)
                         final Iterator<?> it = ObjectHelper.createIterator(headerValue, null, true);
 
-                        // the value to add as request header
-                        List<String> multiValues = null;
-                        String prev = null;
-
-                        // if its a multi value then check each value if we can add it and for multi values they
-                        // should be combined into a single value
-                        while (it.hasNext()) {
-                            String value = tc.convertTo(String.class, it.next());
-                            if (value != null && !strategy.applyFilterToCamelHeaders(key, value, exchange)) {
-                                if (prev == null) {
-                                    prev = value;
-                                } else {
-                                    // only create array for multi values when really needed
-                                    if (multiValues == null) {
-                                        multiValues = new ArrayList<>();
-                                        multiValues.add(prev);
-                                    }
-                                    multiValues.add(value);
-                                }
-                            }
-                        }
-
-                        // add the value(s) as a http request header
-                        if (multiValues != null) {
-                            // use the default toString of a ArrayList to create in the form [xxx, yyy]
-                            // if multi valued, for a single value, then just output the value as is
-                            String s = multiValues.size() > 1 ? multiValues.toString() : multiValues.get(0);
-                            httpRequest.addHeader(key, s);
-                        } else if (prev != null) {
-                            httpRequest.addHeader(key, prev);
-                        }
+                        HttpUtil.applyHeader(strategy, exchange, it, tc, key,
+                                (multiValues, prev) -> applyHeader(httpRequest, key, multiValues, prev));
                     }
                 }
             }
@@ -266,7 +244,7 @@ public class HttpProducer extends DefaultProducer {
 
         // lets store the result in the output message.
         try {
-            executeMethod(
+            executeMethod(exchange,
                     httpHost, httpRequest,
                     httpResponse -> {
                         try {
@@ -348,6 +326,18 @@ public class HttpProducer extends DefaultProducer {
         }
     }
 
+    private static void applyHeader(HttpUriRequest httpRequest, String key, List<String> multiValues, String prev) {
+        // add the value(s) as a http request header
+        if (multiValues != null) {
+            // use the default toString of a ArrayList to create in the form [xxx, yyy]
+            // if multi valued, for a single value, then just output the value as is
+            String s = multiValues.size() > 1 ? multiValues.toString() : multiValues.get(0);
+            httpRequest.addHeader(key, s);
+        } else if (prev != null) {
+            httpRequest.addHeader(key, prev);
+        }
+    }
+
     @Override
     public HttpEndpoint getEndpoint() {
         return (HttpEndpoint) super.getEndpoint();
@@ -359,17 +349,7 @@ public class HttpProducer extends DefaultProducer {
             throws IOException, ClassNotFoundException {
         // We just make the out message is not create when extractResponseBody throws exception
         Object response = extractResponseBody(httpResponse, exchange, getEndpoint().isIgnoreResponseBody());
-        Message answer = exchange.getOut();
-
-        // optimize for 200 response code as the boxing is outside the cached integers
-        if (responseCode == 200) {
-            answer.setHeader(HttpConstants.HTTP_RESPONSE_CODE, OK_RESPONSE_CODE);
-        } else {
-            answer.setHeader(HttpConstants.HTTP_RESPONSE_CODE, responseCode);
-        }
-        if (httpResponse.getReasonPhrase() != null) {
-            answer.setHeader(HttpConstants.HTTP_RESPONSE_TEXT, httpResponse.getReasonPhrase());
-        }
+        final Message answer = createResponseMessage(exchange, httpResponse, responseCode);
         answer.setBody(response);
 
         if (!getEndpoint().isSkipResponseHeaders()) {
@@ -418,6 +398,21 @@ public class HttpProducer extends DefaultProducer {
         if (getEndpoint().isCopyHeaders()) {
             MessageHelper.copyHeaders(exchange.getIn(), answer, httpProtocolHeaderFilterStrategy, false);
         }
+    }
+
+    private static Message createResponseMessage(Exchange exchange, ClassicHttpResponse httpResponse, int responseCode) {
+        Message answer = exchange.getOut();
+
+        // optimize for 200 response code as the boxing is outside the cached integers
+        if (responseCode == 200) {
+            answer.setHeader(HttpConstants.HTTP_RESPONSE_CODE, OK_RESPONSE_CODE);
+        } else {
+            answer.setHeader(HttpConstants.HTTP_RESPONSE_CODE, responseCode);
+        }
+        if (httpResponse.getReasonPhrase() != null) {
+            answer.setHeader(HttpConstants.HTTP_RESPONSE_TEXT, httpResponse.getReasonPhrase());
+        }
+        return answer;
     }
 
     protected Exception populateHttpOperationFailedException(
@@ -478,13 +473,23 @@ public class HttpProducer extends DefaultProducer {
      * @return             the response
      * @throws IOException can be thrown
      */
-    protected <T> T executeMethod(HttpHost httpHost, HttpUriRequest httpRequest, HttpClientResponseHandler<T> handler)
-            throws IOException {
-        HttpContext localContext = HttpClientContext.create();
+    protected <T> T executeMethod(
+            Exchange exchange, HttpHost httpHost, HttpUriRequest httpRequest, HttpClientResponseHandler<T> handler)
+            throws IOException, HttpException {
+        // use a local context per execution
+        HttpContext localContext;
         if (httpContext != null) {
             localContext = new BasicHttpContext(httpContext);
+        } else {
+            localContext = HttpClientContext.create();
         }
-        return httpClient.execute(httpHost, httpRequest, localContext, handler);
+        if (getEndpoint().getHttpActivityListener() != null) {
+            localContext.setAttribute("org.apache.camel.Exchange", exchange);
+            localContext.setAttribute("org.apache.hc.core5.http.HttpHost", httpHost);
+        }
+        // execute open that does not automatic close response input-stream (this is done in exchange on-completion by Camel)
+        ClassicHttpResponse res = httpClient.executeOpen(httpHost, httpRequest, localContext);
+        return handler.handleResponse(res);
     }
 
     /**
@@ -537,6 +542,12 @@ public class HttpProducer extends DefaultProducer {
             // find the charset and set it to the Exchange
             HttpHelper.setCharsetFromContentType(contentType, exchange);
         }
+
+        if (ignoreResponseBody) {
+            // ignore response
+            return null;
+        }
+
         // if content type is a serialized java object then de-serialize it back to a Java object
         if (contentType != null && contentType.equals(HttpConstants.CONTENT_TYPE_JAVA_SERIALIZED_OBJECT)) {
             // only deserialize java if allowed
@@ -547,59 +558,45 @@ public class HttpProducer extends DefaultProducer {
                 return null;
             }
         } else {
-            if (!getEndpoint().isDisableStreamCache()) {
-                if (ignoreResponseBody) {
-                    // ignore response
-                    return null;
-                }
-                int max = getEndpoint().getComponent().getResponsePayloadStreamingThreshold();
-                if (max > 0) {
-                    // optimize when we have content-length for small sizes to avoid creating streaming objects
-                    long len = entity.getContentLength();
-                    if (len > 0 && len <= max) {
-                        int i = (int) len;
-                        byte[] arr = new byte[i];
-                        int read = 0;
-                        int offset = 0;
-                        int remain = i;
-                        while ((read = is.read(arr, offset, remain)) > 0 && remain > 0) {
-                            offset += read;
-                            remain -= read;
+            if (entity.isStreaming()) {
+                if (getEndpoint().isDisableStreamCache()) {
+                    // use the response as-is
+                    return is;
+                } else {
+                    int max = getEndpoint().getComponent().getResponsePayloadStreamingThreshold();
+                    if (max > 0) {
+                        // optimize when we have content-length for small sizes to avoid creating streaming objects
+                        long len = entity.getContentLength();
+                        if (len > 0 && len <= max) {
+                            int i = (int) len;
+                            byte[] arr = new byte[i];
+                            int read;
+                            int offset = 0;
+                            int remain = i;
+                            while ((read = is.read(arr, offset, remain)) > 0 && remain > 0) {
+                                offset += read;
+                                remain -= read;
+                            }
+                            IOHelper.close(is);
+                            return arr;
                         }
-                        IOHelper.close(is);
-                        return arr;
                     }
+                    // else for bigger payloads then wrap the response in a stream cache so its re-readable
+                    return doExtractResponseBodyAsStream(is, exchange);
                 }
-                // else for bigger payloads then wrap the response in a stream cache so its re-readable
-                return doExtractResponseBodyAsStream(is, exchange);
             } else {
-                // use the response stream as-is
+                // use the response as-is
                 return is;
             }
         }
     }
 
-    private InputStream doExtractResponseBodyAsStream(InputStream is, Exchange exchange) throws IOException {
+    private Object doExtractResponseBodyAsStream(InputStream is, Exchange exchange) throws IOException {
         // As httpclient is using a AutoCloseInputStream, it will be closed when the connection is closed
         // we need to cache the stream for it.
-        CachedOutputStream cos = null;
-        try {
-            // This CachedOutputStream will not be closed when the exchange is onCompletion
-            cos = new CachedOutputStream(exchange, false);
-            IOHelper.copy(is, cos);
-            // When the InputStream is closed, the CachedOutputStream will be closed
-            return cos.getWrappedInputStream();
-        } catch (IOException ex) {
-            // try to close the CachedOutputStream when we get the IOException
-            try {
-                cos.close();
-            } catch (IOException ignore) {
-                //do nothing here
-            }
-            throw ex;
-        } finally {
-            IOHelper.close(is, "Extracting response body", LOG);
-        }
+        OutputStreamBuilder osb = OutputStreamBuilder.withExchange(exchange);
+        IOHelper.copy(is, osb);
+        return osb.build();
     }
 
     /**
@@ -635,21 +632,7 @@ public class HttpProducer extends DefaultProducer {
         // the exchange can have some headers that override the default url and forces to create
         // a new url that is dynamic based on header values
         // these checks are checks that is done in HttpHelper.createURL and HttpHelper.createURI methods
-        boolean create = false;
-        Message in = exchange.getIn();
-        if (in.getHeader(HttpConstants.REST_HTTP_URI) != null) {
-            create = true;
-        } else if (in.getHeader(HttpConstants.HTTP_URI) != null && !getEndpoint().isBridgeEndpoint()) {
-            create = true;
-        } else if (in.getHeader(HttpConstants.HTTP_PATH) != null) {
-            create = true;
-        } else if (in.getHeader(HttpConstants.REST_HTTP_QUERY) != null) {
-            create = true;
-        } else if (in.getHeader(HttpConstants.HTTP_RAW_QUERY) != null) {
-            create = true;
-        } else if (in.getHeader(HttpConstants.HTTP_QUERY) != null) {
-            create = true;
-        }
+        final boolean create = isCreateNewURL(exchange);
 
         if (create) {
             // creating the url to use takes 2-steps
@@ -690,6 +673,25 @@ public class HttpProducer extends DefaultProducer {
         return method;
     }
 
+    private boolean isCreateNewURL(Exchange exchange) {
+        boolean create = false;
+        Message in = exchange.getIn();
+        if (in.getHeader(HttpConstants.REST_HTTP_URI) != null) {
+            create = true;
+        } else if (in.getHeader(HttpConstants.HTTP_URI) != null && !getEndpoint().isBridgeEndpoint()) {
+            create = true;
+        } else if (in.getHeader(HttpConstants.HTTP_PATH) != null) {
+            create = true;
+        } else if (in.getHeader(HttpConstants.REST_HTTP_QUERY) != null) {
+            create = true;
+        } else if (in.getHeader(HttpConstants.HTTP_RAW_QUERY) != null) {
+            create = true;
+        } else if (in.getHeader(HttpConstants.HTTP_QUERY) != null) {
+            create = true;
+        }
+        return create;
+    }
+
     /**
      * Creates a holder object for the data to send to the remote server.
      *
@@ -704,7 +706,7 @@ public class HttpProducer extends DefaultProducer {
         Object body = in.getBody();
         try {
             if (body == null) {
-                return null;
+                return NullEntity.INSTANCE;
             } else if (body instanceof HttpEntity entity) {
                 answer = entity;
                 // special optimized for using these 3 type converters for common message payload types
@@ -772,15 +774,13 @@ public class HttpProducer extends DefaultProducer {
                                 charset = cs.name();
                             }
                         }
-                        final StringEntity entity;
-                        if (contentType != null) {
-                            entity = new StringEntity(content, contentType);
-                        } else if (charset != null) {
-                            entity = new StringEntity(content, null, charset, false);
-                        } else {
-                            entity = new StringEntity(content, null, null, false);
+
+                        // sync contentType.charset and charset
+                        if (contentType != null && contentType.getCharset() == null && charset != null) {
+                            contentType = ContentType.parse(contentType + ";charset=" + charset);
                         }
-                        answer = entity;
+
+                        answer = new StringEntity(content, contentType, false);
                     }
 
                     // fallback as input stream
@@ -808,4 +808,23 @@ public class HttpProducer extends DefaultProducer {
         this.httpClient = httpClient;
     }
 
+    @Override
+    public int getLineNumber() {
+        return getEndpoint().getLineNumber();
+    }
+
+    @Override
+    public void setLineNumber(int lineNumber) {
+        // noop
+    }
+
+    @Override
+    public String getLocation() {
+        return getEndpoint().getLocation();
+    }
+
+    @Override
+    public void setLocation(String location) {
+        // noop
+    }
 }

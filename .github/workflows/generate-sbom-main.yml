@@ -28,7 +28,7 @@ jobs:
   build:
     if: github.repository == 'apache/camel'
     permissions:
-      contents: write # to create branch (peter-evans/create-pull-request)
+      contents: write
       pull-requests: write # to create a PR (peter-evans/create-pull-request)
 
     runs-on: ubuntu-latest
@@ -36,27 +36,27 @@ jobs:
       matrix:
         java: [ '17' ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
       - id: install-mvnd
         uses: ./.github/actions/install-mvnd
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
           cache: 'maven'
       - name: mvn build and sbom generation
-        run: ${{ steps.install-mvnd.outputs.mvnd-dir }}/mvnd -l build.log -Dmvnd.threads=2 -V -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 --no-transfer-progress -e -Psbom,fastinstall -DskipTests verify
+        run: ./mvnw -B -l build.log -Psbom -Dquickly verify
       - name: archive logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         if: always()
         with:
           name: build.log
           path: build.log
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@67ccf781d68cd99b580ae25a5c18a1cc84ffff1f # v7.0.6
         with:
           base: main
           token: ${{ secrets.GITHUB_TOKEN }}

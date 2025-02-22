@@ -16,6 +16,9 @@
  */
 package org.apache.camel.spi;
 
+import java.util.List;
+import java.util.Map;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.NamedNode;
 
@@ -42,17 +45,35 @@ public interface ModelToXMLDumper {
     /**
      * Dumps the definition as XML
      *
-     * @param  context                  the CamelContext
-     * @param  definition               the definition, such as a {@link org.apache.camel.NamedNode}
-     * @param  resolvePlaceholders      whether to resolve property placeholders in the dumped XML
-     * @param  resolveDelegateEndpoints whether to resolve delegate endpoints in the dumped XML (limited to endpoints
-     *                                  used in uri attributes in the model)
-     * @return                          the output in XML (is formatted)
-     * @throws Exception                is throw if error marshalling to XML
+     * @param  context             the CamelContext
+     * @param  definition          the definition, such as a {@link org.apache.camel.NamedNode}
+     * @param  resolvePlaceholders whether to resolve property placeholders in the dumped XML
+     * @param  generatedIds        whether to include auto generated IDs
+     * @return                     the output in XML (is formatted)
+     * @throws Exception           is throw if error marshalling to XML
      */
     String dumpModelAsXml(
-            CamelContext context, NamedNode definition,
-            boolean resolvePlaceholders, boolean resolveDelegateEndpoints)
+            CamelContext context, NamedNode definition, boolean resolvePlaceholders, boolean generatedIds)
             throws Exception;
+
+    /**
+     * Dumps the beans as XML
+     *
+     * @param  context   the CamelContext
+     * @param  beans     list of beans (BeanFactoryDefinition)
+     * @return           the output in XML (is formatted)
+     * @throws Exception is throw if error marshalling to XML
+     */
+    String dumpBeansAsXml(CamelContext context, List<Object> beans) throws Exception;
+
+    /**
+     * Dumps the global data formats as XML
+     *
+     * @param  context     the CamelContext
+     * @param  dataFormats list of data formats (DataFormatDefinition)
+     * @return             the output in XML (is formatted)
+     * @throws Exception   is throw if error marshalling to XML
+     */
+    String dumpDataFormatsAsXml(CamelContext context, Map<String, Object> dataFormats) throws Exception;
 
 }

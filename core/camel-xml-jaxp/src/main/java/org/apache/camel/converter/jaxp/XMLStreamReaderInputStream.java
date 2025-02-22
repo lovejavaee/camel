@@ -32,11 +32,11 @@ import javax.xml.stream.XMLStreamWriter;
  */
 class XMLStreamReaderInputStream extends InputStream {
     private static final int BUFFER_SIZE = 4096;
-    private XMLStreamReader reader;
+    private final XMLStreamReader reader;
     private XMLStreamWriter writer;
-    private TrimmableByteArrayOutputStream chunk;
-    private byte[] buffer;
-    private String charset;
+    private final TrimmableByteArrayOutputStream chunk;
+    private final byte[] buffer;
+    private final String charset;
     private int bpos;
 
     XMLStreamReaderInputStream(XMLStreamReader reader, String charset, XMLOutputFactory outfactory) {
@@ -58,7 +58,7 @@ class XMLStreamReaderInputStream extends InputStream {
     @Override
     public int read() throws IOException {
         byte[] ba = new byte[1];
-        return read(ba, 0, 1) == 1 ? ba[0] : -1;
+        return read(ba, 0, 1) == 1 ? ba[0] & 0xFF : -1;
     }
 
     @Override
@@ -69,7 +69,7 @@ class XMLStreamReaderInputStream extends InputStream {
             if (n < 0) {
                 break;
             }
-            int clen = len > n ? n : len;
+            int clen = Math.min(len, n);
             System.arraycopy(buffer, 0, b, off, clen);
             System.arraycopy(buffer, clen, buffer, 0, buffer.length - clen);
             bpos -= clen;
@@ -141,7 +141,7 @@ class XMLStreamReaderInputStream extends InputStream {
                     }
                 }
             }
-            final int csize = chunk.size() < buffer.length - bpos ? chunk.size() : buffer.length - bpos;
+            final int csize = Math.min(chunk.size(), buffer.length - bpos);
             if (csize > 0) {
                 System.arraycopy(chunk.getByteArray(), 0, buffer, bpos, csize);
                 bpos += csize;

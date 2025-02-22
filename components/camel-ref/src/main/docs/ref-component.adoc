@@ -5,6 +5,7 @@
 :description: Route messages to an endpoint looked up dynamically by name in the Camel Registry.
 :since: 1.2
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 :core:
 //Manually maintained attributes
@@ -41,8 +42,9 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
+== Usage
 
-== Runtime lookup
+=== Runtime lookup
 
 This component can be used when you need dynamic discovery of endpoints
 in the Registry where you can compute the URI at
@@ -72,7 +74,7 @@ Registry such as:
 </camelContext>
 ----
 
-== Sample
+== Example
 
 Bind endpoints to the Camel registry:
 [source,java]
@@ -81,7 +83,7 @@ context.getRegistry().bind("endpoint1", context.getEndpoint("direct:start"));
 context.getRegistry().bind("endpoint2", context.getEndpoint("log:end"));
 ----
 
-Use the `ref` URI scheme to refer to endpoints bond to the Camel registry:
+Use the `ref` URI scheme to refer to endpoint's bond to the Camel registry:
 [source,java]
 ----
 public class MyRefRoutes extends RouteBuilder {

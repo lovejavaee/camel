@@ -16,29 +16,23 @@
  */
 package org.apache.camel.http.common;
 
-import org.apache.camel.support.DefaultHeaderFilterStrategy;
+import java.util.Set;
 
-public class HttpHeaderFilterStrategy extends DefaultHeaderFilterStrategy {
+import org.apache.camel.support.http.HttpUtil;
+
+/**
+ * @deprecated use {@link org.apache.camel.http.base.HttpHeaderFilterStrategy}
+ */
+@Deprecated
+public class HttpHeaderFilterStrategy extends org.apache.camel.http.base.HttpHeaderFilterStrategy {
 
     public HttpHeaderFilterStrategy() {
         initialize();
     }
 
     protected void initialize() {
-        getOutFilter().add("content-length");
-        getOutFilter().add("content-type");
-        getOutFilter().add("host");
-        // Add the filter for the Generic Message header
-        // http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.5
-        getOutFilter().add("cache-control");
-        getOutFilter().add("connection");
-        getOutFilter().add("date");
-        getOutFilter().add("pragma");
-        getOutFilter().add("trailer");
-        getOutFilter().add("transfer-encoding");
-        getOutFilter().add("upgrade");
-        getOutFilter().add("via");
-        getOutFilter().add("warning");
+        final Set<String> outFilter = getOutFilter();
+        HttpUtil.addCommonFilters(outFilter);
 
         setLowerCase(true);
 
@@ -47,4 +41,5 @@ public class HttpHeaderFilterStrategy extends DefaultHeaderFilterStrategy {
         setOutFilterStartsWith(CAMEL_FILTER_STARTS_WITH);
         setInFilterStartsWith(CAMEL_FILTER_STARTS_WITH);
     }
+
 }

@@ -5,6 +5,7 @@
 :description: Send and receive messages to/from an XMPP chat server.
 :since: 1.0
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: xmpp
@@ -59,8 +60,9 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
+== Usage
 
-== Headers and setting Subject or Language
+=== Headers and setting Subject or Language
 
 Camel sets the message IN headers as properties on the XMPP message. You
 can configure a `HeaderFilterStategy` if you need custom filtering of

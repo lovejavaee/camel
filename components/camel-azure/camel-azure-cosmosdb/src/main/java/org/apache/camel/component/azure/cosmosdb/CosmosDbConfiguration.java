@@ -20,12 +20,15 @@ import com.azure.cosmos.ConsistencyLevel;
 import com.azure.cosmos.CosmosAsyncClient;
 import com.azure.cosmos.models.ChangeFeedProcessorOptions;
 import com.azure.cosmos.models.CosmosQueryRequestOptions;
+import com.azure.cosmos.models.IndexingPolicy;
 import com.azure.cosmos.models.ThroughputProperties;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 import org.apache.camel.spi.UriPath;
+
+import static org.apache.camel.component.azure.cosmosdb.CredentialType.SHARED_ACCOUNT_KEY;
 
 @UriParams
 public class CosmosDbConfiguration implements Cloneable {
@@ -35,7 +38,7 @@ public class CosmosDbConfiguration implements Cloneable {
     @UriPath
     private String containerName;
     @UriParam(label = "security", secret = true)
-    @Metadata(required = true)
+    @Metadata(required = false)
     private String accountKey;
     @UriParam(label = "common")
     @Metadata(required = true)
@@ -63,6 +66,8 @@ public class CosmosDbConfiguration implements Cloneable {
     private boolean createDatabaseIfNotExists;
     @UriParam(label = "common", defaultValue = "false")
     private boolean createContainerIfNotExists;
+    @UriParam(label = "common, advanced")
+    private IndexingPolicy indexingPolicy;
     @UriParam(label = "common")
     private ThroughputProperties throughputProperties;
     @UriParam(label = "consumer", defaultValue = "false")
@@ -87,6 +92,9 @@ public class CosmosDbConfiguration implements Cloneable {
     private CosmosQueryRequestOptions queryRequestOptions;
     @UriParam(label = "producer", defaultValue = "listDatabases")
     private CosmosDbOperationsDefinition operation = CosmosDbOperationsDefinition.listDatabases;
+    @UriParam(label = "security", enums = "SHARED_ACCOUNT_KEY,AZURE_IDENTITY",
+              defaultValue = "SHARED_ACCOUNT_KEY")
+    private CredentialType credentialType = SHARED_ACCOUNT_KEY;
 
     public CosmosDbConfiguration() {
     }
@@ -124,6 +132,17 @@ public class CosmosDbConfiguration implements Cloneable {
 
     public void setAccountKey(String accountKey) {
         this.accountKey = accountKey;
+    }
+
+    public CredentialType getCredentialType() {
+        return credentialType;
+    }
+
+    /**
+     * Determines the credential strategy to adopt
+     */
+    public void setCredentialType(CredentialType credentialType) {
+        this.credentialType = credentialType;
     }
 
     /**
@@ -172,7 +191,8 @@ public class CosmosDbConfiguration implements Cloneable {
     }
 
     /**
-     * Sets if the component should create Cosmos database automatically in case it doesn't exist in Cosmos account
+     * Sets if the component should create the Cosmos database automatically in case it doesn't exist in the Cosmos
+     * account
      */
     public boolean isCreateDatabaseIfNotExists() {
         return createDatabaseIfNotExists;
@@ -183,7 +203,8 @@ public class CosmosDbConfiguration implements Cloneable {
     }
 
     /**
-     * Sets if the component should create Cosmos container automatically in case it doesn't exist in Cosmos database
+     * Sets if the component should create the Cosmos container automatically in case it doesn't exist in the Cosmos
+     * database
      */
     public boolean isCreateContainerIfNotExists() {
         return createContainerIfNotExists;
@@ -194,8 +215,8 @@ public class CosmosDbConfiguration implements Cloneable {
     }
 
     /**
-     * Sets if the component should create Cosmos lease database for the consumer automatically in case it doesn't exist
-     * in Cosmos account
+     * Sets if the component should create the Cosmos lease database for the consumer automatically in case it doesn't
+     * exist in the Cosmos account
      */
     public boolean isCreateLeaseDatabaseIfNotExists() {
         return createLeaseDatabaseIfNotExists;
@@ -279,7 +300,7 @@ public class CosmosDbConfiguration implements Cloneable {
      * statistics, system information like cpu/memory and send it to cosmos monitoring service, which will be helpful
      * during debugging.
      * <p>
-     * DEFAULT value is false indicating this is opt in feature, by default no telemetry collection.
+     * DEFAULT value is false indicating this is an opt-in feature, by default no telemetry collection.
      */
     public boolean isClientTelemetryEnabled() {
         return clientTelemetryEnabled;
@@ -291,7 +312,7 @@ public class CosmosDbConfiguration implements Cloneable {
 
     /**
      * Enables connections sharing across multiple Cosmos Clients. The default is false. When you have multiple
-     * instances of Cosmos Client in the same JVM interacting to multiple Cosmos accounts, enabling this allows
+     * instances of Cosmos Client in the same JVM interacting with multiple Cosmos accounts, enabling this allows
      * connection sharing in Direct mode if possible between instances of Cosmos Client.
      *
      * Please note, when setting this option, the connection configuration (e.g., socket timeout config, idle timeout
@@ -369,8 +390,8 @@ public class CosmosDbConfiguration implements Cloneable {
      * Delete operations on CosmosItem.
      *
      * In Consumer, it is enabled by default because of the ChangeFeed in the consumer that needs this flag to be
-     * enabled and thus is shouldn't be overridden. In Producer, it advised to disable it since it reduces the network
-     * overhead
+     * enabled, and thus it shouldn't be overridden. In Producer, it is advised to disable it since it reduces the
+     * network overhead
      */
     public boolean isContentResponseOnWriteEnabled() {
         return contentResponseOnWriteEnabled;
@@ -385,7 +406,7 @@ public class CosmosDbConfiguration implements Cloneable {
      * workers. The lease container can be stored in the same account as the monitored container or in a separate
      * account.
      *
-     * It will be auto created if {@link createLeaseContainerIfNotExists} is set to true.
+     * It will be auto-created if {@link createLeaseContainerIfNotExists} is set to true.
      */
     public String getLeaseContainerName() {
         return leaseContainerName;
@@ -399,7 +420,7 @@ public class CosmosDbConfiguration implements Cloneable {
      * Sets the lease database where the {@link leaseContainerName} will be stored. If it is not specified, this
      * component will store the lease container in the same database that is specified in {@link databaseName}.
      *
-     * It will be auto created if {@link createLeaseDatabaseIfNotExists} is set to true.
+     * It will be auto-created if {@link createLeaseDatabaseIfNotExists} is set to true.
      */
     public String getLeaseDatabaseName() {
         return leaseDatabaseName;
@@ -453,6 +474,18 @@ public class CosmosDbConfiguration implements Cloneable {
 
     public void setOperation(CosmosDbOperationsDefinition operation) {
         this.operation = operation;
+    }
+
+    /**
+     * The CosmosDB Indexing Policy that will be set in case of container creation, this option is related to
+     * {@link createLeaseContainerIfNotExists} and it will be taken into account when the latter is true.
+     */
+    public IndexingPolicy getIndexingPolicy() {
+        return indexingPolicy;
+    }
+
+    public void setIndexingPolicy(IndexingPolicy indexingPolicy) {
+        this.indexingPolicy = indexingPolicy;
     }
 
     // *************************************************

@@ -16,11 +16,16 @@
  */
 package org.apache.camel.component.arangodb;
 
+import java.util.Map;
+
 import com.arangodb.ArangoDB;
+import com.arangodb.http.HttpProtocolConfig;
+import io.vertx.core.Vertx;
 import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -32,16 +37,18 @@ import org.apache.camel.util.ObjectHelper;
  * Perform operations on ArangoDb when used as a Document Database, or as a Graph Database
  */
 @UriEndpoint(firstVersion = "3.5.0", scheme = "arangodb", title = "ArangoDb", syntax = "arangodb:database",
-             category = { Category.DATABASE, Category.NOSQL }, producerOnly = true, headersClass = ArangoDbConstants.class)
-public class ArangoDbEndpoint extends DefaultEndpoint {
-    private ArangoDB arango;
+             category = { Category.DATABASE }, producerOnly = true, headersClass = ArangoDbConstants.class)
+public class ArangoDbEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     @UriPath(description = "database name")
     @Metadata(required = true)
     private String database;
-
     @UriParam
     private ArangoDbConfiguration configuration;
+    @UriParam(label = "advanced")
+    private ArangoDB arangoDB;
+    @UriParam(label = "advanced")
+    private Vertx vertx;
 
     public ArangoDbEndpoint() {
     }
@@ -49,6 +56,24 @@ public class ArangoDbEndpoint extends DefaultEndpoint {
     public ArangoDbEndpoint(String uri, ArangoDbComponent component, ArangoDbConfiguration configuration) {
         super(uri, component);
         this.configuration = configuration;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        return configuration.getHost() + ":" + configuration.getPort();
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "http";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (configuration.getUser() != null) {
+            return Map.of("username", configuration.getUser());
+        }
+        return null;
     }
 
     public Producer createProducer() {
@@ -59,12 +84,26 @@ public class ArangoDbEndpoint extends DefaultEndpoint {
         throw new UnsupportedOperationException("You cannot receive messages at this endpoint: " + getEndpointUri());
     }
 
-    public ArangoDB getArango() {
-        return arango;
+    public ArangoDB getArangoDB() {
+        return arangoDB;
     }
 
-    public void setArango(ArangoDB arango) {
-        this.arango = arango;
+    /**
+     * To use an existing ArangDB client.
+     */
+    public void setArangoDB(ArangoDB arangoDB) {
+        this.arangoDB = arangoDB;
+    }
+
+    public Vertx getVertx() {
+        return vertx;
+    }
+
+    /**
+     * To use an existing Vertx instance in the ArangoDB client.
+     */
+    public void setVertx(Vertx vertx) {
+        this.vertx = vertx;
     }
 
     public ArangoDbConfiguration getConfiguration() {
@@ -79,7 +118,7 @@ public class ArangoDbEndpoint extends DefaultEndpoint {
     protected void doStart() throws Exception {
         super.doStart();
 
-        if (arango == null) {
+        if (arangoDB == null) {
 
             final ArangoDB.Builder builder = new ArangoDB.Builder();
 
@@ -91,7 +130,11 @@ public class ArangoDbEndpoint extends DefaultEndpoint {
                 builder.user(configuration.getUser()).password(configuration.getPassword());
             }
 
-            arango = builder.build();
+            if (vertx != null) {
+                builder.protocolConfig(HttpProtocolConfig.builder().vertx(vertx).build());
+            }
+
+            arangoDB = builder.build();
         }
 
     }
@@ -99,9 +142,8 @@ public class ArangoDbEndpoint extends DefaultEndpoint {
     @Override
     protected void doShutdown() throws Exception {
         super.doShutdown();
-        if (arango != null) {
-            arango.shutdown();
+        if (arangoDB != null) {
+            arangoDB.shutdown();
         }
     }
-
 }

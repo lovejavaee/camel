@@ -18,6 +18,8 @@ package org.apache.camel.component.aws2.ec2.client;
 
 import org.apache.camel.component.aws2.ec2.AWS2EC2Configuration;
 import org.apache.camel.component.aws2.ec2.client.impl.AWS2EC2ClientIAMOptimizedImpl;
+import org.apache.camel.component.aws2.ec2.client.impl.AWS2EC2ClientIAMProfileOptimizedImpl;
+import org.apache.camel.component.aws2.ec2.client.impl.AWS2EC2ClientSessionTokenImpl;
 import org.apache.camel.component.aws2.ec2.client.impl.AWS2EC2ClientStandardImpl;
 
 /**
@@ -35,7 +37,14 @@ public final class AWS2EC2ClientFactory {
      * @return               Ec2Client
      */
     public static AWS2EC2InternalClient getEc2Client(AWS2EC2Configuration configuration) {
-        return Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())
-                ? new AWS2EC2ClientIAMOptimizedImpl(configuration) : new AWS2EC2ClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new AWS2EC2ClientIAMOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new AWS2EC2ClientIAMProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new AWS2EC2ClientSessionTokenImpl(configuration);
+        } else {
+            return new AWS2EC2ClientStandardImpl(configuration);
+        }
     }
 }

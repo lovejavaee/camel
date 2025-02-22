@@ -23,6 +23,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 
 import org.apache.camel.Endpoint;
+import org.apache.camel.NamedNode;
 import org.apache.camel.builder.EndpointConsumerBuilder;
 import org.apache.camel.spi.Metadata;
 
@@ -35,6 +36,8 @@ import org.apache.camel.spi.Metadata;
 public class FromDefinition extends OptionalIdentifiedDefinition<FromDefinition> implements EndpointRequiredDefinition {
 
     @XmlTransient
+    private RouteDefinition parent;
+    @XmlTransient
     private Endpoint endpoint;
     @XmlTransient
     private EndpointConsumerBuilder endpointConsumerBuilder;
@@ -42,6 +45,8 @@ public class FromDefinition extends OptionalIdentifiedDefinition<FromDefinition>
     @XmlAttribute
     @Metadata(required = true)
     private String uri;
+    @XmlAttribute
+    private String variableReceive;
 
     public FromDefinition() {
     }
@@ -59,6 +64,22 @@ public class FromDefinition extends OptionalIdentifiedDefinition<FromDefinition>
     public FromDefinition(EndpointConsumerBuilder endpointConsumerBuilder) {
         this();
         setEndpointConsumerBuilder(endpointConsumerBuilder);
+    }
+
+    FromDefinition copy() {
+        FromDefinition copy = new FromDefinition();
+        copy.parent = this.parent;
+        copy.endpoint = this.endpoint;
+        copy.endpointConsumerBuilder = this.endpointConsumerBuilder;
+        copy.uri = this.uri;
+        copy.variableReceive = this.variableReceive;
+        copy.setCamelContext(this.getCamelContext());
+        copy.setId(this.getId());
+        copy.setCustomId(this.getCustomId());
+        copy.setDescription(this.getDescription());
+        copy.setLineNumber(this.getLineNumber());
+        copy.setLocation(this.getLocation());
+        return copy;
     }
 
     @Override
@@ -90,6 +111,15 @@ public class FromDefinition extends OptionalIdentifiedDefinition<FromDefinition>
         }
     }
 
+    @Override
+    public NamedNode getParent() {
+        return parent;
+    }
+
+    public void setParent(RouteDefinition parent) {
+        this.parent = parent;
+    }
+
     // Properties
     // -----------------------------------------------------------------------
 
@@ -105,6 +135,18 @@ public class FromDefinition extends OptionalIdentifiedDefinition<FromDefinition>
     public void setUri(String uri) {
         clear();
         this.uri = uri;
+    }
+
+    public String getVariableReceive() {
+        return variableReceive;
+    }
+
+    /**
+     * To use a variable to store a copy of the received message body (only body, not headers). This is handy for easy
+     * access to the received message body via variables.
+     */
+    public void setVariableReceive(String variableReceive) {
+        this.variableReceive = variableReceive;
     }
 
     /**

@@ -264,9 +264,8 @@ class KameletTest extends YamlTestSupport {
                     beans:
                       - name: "myProcessor"
                         type: "#class:${MySetBody.class.name}"
-                        property:
-                          - key: "payload"
-                            value: "test-payload"
+                        properties:
+                          payload: "test-payload"
                     from:
                       uri: "kamelet:source"
                       steps:
@@ -299,12 +298,12 @@ class KameletTest extends YamlTestSupport {
                     id: "myTemplate"  
                     parameters:
                       - name: "myParameter"
-                        default-value: "myDefaultValue"
+                        defaultValue: "myDefaultValue"
                         description: "myParameterDescription"
                     from: 
                       uri: "kamelet:source"
                       steps:
-                        - set-body: 
+                        - setBody: 
                             constant: "{{myParameter}}"
                 - from:
                     uri: "direct:start"
@@ -332,12 +331,12 @@ class KameletTest extends YamlTestSupport {
                     id: "myTemplate"  
                     parameters:
                       - name: "myParameter"
-                        default-value: "myDefaultValue"
+                        defaultValue: "myDefaultValue"
                         description: "myParameterDescription"
                     from: 
                       uri: "kamelet:source"
                       steps:
-                        - set-body: 
+                        - setBody: 
                             constant: "{{myParameter}}"
                 - from:
                     uri: "direct:start"

@@ -56,9 +56,9 @@ public class AsyncEndpointEventNotifierTest extends ContextTestSupport {
 
     @Override
     protected CamelContext createCamelContext() throws Exception {
-        DefaultCamelContext context = new DefaultCamelContext(createRegistry());
+        DefaultCamelContext context = new DefaultCamelContext(createCamelRegistry());
         context.getManagementStrategy().addEventNotifier(new EventNotifierSupport() {
-            public void notify(CamelEvent event) throws Exception {
+            public void notify(CamelEvent event) {
                 try {
                     ExchangeSentEvent sent = (ExchangeSentEvent) event;
                     time.set(sent.getTimeTaken());
@@ -69,8 +69,7 @@ public class AsyncEndpointEventNotifierTest extends ContextTestSupport {
 
             public boolean isEnabled(CamelEvent event) {
                 // we only want the async endpoint
-                if (event instanceof ExchangeSentEvent) {
-                    ExchangeSentEvent sent = (ExchangeSentEvent) event;
+                if (event instanceof ExchangeSentEvent sent) {
                     return sent.getEndpoint().getEndpointUri().startsWith("async");
                 }
                 return false;
@@ -80,10 +79,10 @@ public class AsyncEndpointEventNotifierTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.addComponent("async", new MyAsyncComponent());
 
                 from("direct:start").to("mock:before").to("async:bye:camel?delay=250").to("mock:result");

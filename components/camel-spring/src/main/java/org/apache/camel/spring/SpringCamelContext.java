@@ -70,12 +70,14 @@ public class SpringCamelContext extends DefaultCamelContext
 
     public SpringCamelContext() {
         super(false);
-        setManagementMBeanAssembler(new SpringManagementMBeanAssembler(this));
+        getCamelContextExtension().setManagementMBeanAssembler(new SpringManagementMBeanAssembler(this));
     }
 
     public SpringCamelContext(ApplicationContext applicationContext) {
         this();
         setApplicationContext(applicationContext);
+        // force creating injector that works with spring
+        getInjector();
     }
 
     /**
@@ -272,7 +274,7 @@ public class SpringCamelContext extends DefaultCamelContext
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(128);
         sb.append("SpringCamelContext(").append(getName()).append(")");
         if (applicationContext != null) {
             sb.append(" with spring id ").append(applicationContext.getId());
@@ -292,7 +294,11 @@ public class SpringCamelContext extends DefaultCamelContext
         // (explained in comment in the onApplicationEvent method)
         // we use LOWEST_PRECEDENCE here as this is taken into account
         // only when stopping and then in reversed order
-        return LOWEST_PRECEDENCE;
+        return Integer.MAX_VALUE - 2049;
+        // we need to be less than max value as spring-boot comes with
+        // graceful shutdown services (the http server in spring boot)
+        // that must shutdown before camel, and they have max value - 2048,
+        // so we use 2049 to have a higher gap
     }
 
     @Override

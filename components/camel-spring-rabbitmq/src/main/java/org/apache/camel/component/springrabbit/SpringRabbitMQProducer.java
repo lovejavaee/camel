@@ -27,12 +27,14 @@ import org.apache.camel.FailedToCreateProducerException;
 import org.apache.camel.support.DefaultAsyncProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.AsyncRabbitTemplate;
 import org.springframework.amqp.rabbit.RabbitMessageFuture;
 import org.springframework.amqp.rabbit.connection.Connection;
 import org.springframework.amqp.rabbit.connection.RabbitUtils;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 public class SpringRabbitMQProducer extends DefaultAsyncProducer {
@@ -52,7 +54,7 @@ public class SpringRabbitMQProducer extends DefaultAsyncProducer {
     }
 
     public RabbitTemplate getInOnlyTemplate() {
-        if (inOutTemplate == null) {
+        if (inOnlyTemplate == null) {
             inOnlyTemplate = getEndpoint().createInOnlyTemplate();
         }
         return inOnlyTemplate;
@@ -79,6 +81,16 @@ public class SpringRabbitMQProducer extends DefaultAsyncProducer {
         super.doStart();
         if (getEndpoint().isTestConnectionOnStartup()) {
             testConnectionOnStartup();
+        }
+        if (getEndpoint().isAutoDeclareProducer()) {
+            // auto declare but without spring
+            AmqpAdmin admin = getEndpoint().getComponent().getAmqpAdmin();
+            if (admin == null) {
+                RabbitAdmin ra = new RabbitAdmin(getEndpoint().getConnectionFactory());
+                ra.setIgnoreDeclarationExceptions(getEndpoint().getComponent().isIgnoreDeclarationExceptions());
+                admin = ra;
+            }
+            getEndpoint().declareElements(null, admin);
         }
     }
 
@@ -126,25 +138,12 @@ public class SpringRabbitMQProducer extends DefaultAsyncProducer {
 
     protected boolean processInOut(Exchange exchange, AsyncCallback callback) {
         // header take precedence over endpoint
-        String exchangeName = (String) exchange.getMessage().removeHeader(SpringRabbitMQConstants.EXCHANGE_OVERRIDE_NAME);
-        if (exchangeName == null) {
-            exchangeName = getEndpoint().getExchangeName();
-        }
-        exchangeName = SpringRabbitMQHelper.isDefaultExchange(exchangeName) ? "" : exchangeName;
+        final String exchangeName = getExchangeName(exchange);
 
-        String routingKey = (String) exchange.getMessage().removeHeader(SpringRabbitMQConstants.ROUTING_OVERRIDE_KEY);
-        if (routingKey == null) {
-            routingKey = getEndpoint().getRoutingKey();
-        }
+        final String routingKey
+                = getValue(exchange, SpringRabbitMQConstants.ROUTING_OVERRIDE_KEY, getEndpoint().getRoutingKey());
 
-        Object body = exchange.getMessage().getBody();
-        Message msg;
-        if (body instanceof Message) {
-            msg = (Message) body;
-        } else {
-            MessageProperties mp = getEndpoint().getMessagePropertiesConverter().toMessageProperties(exchange);
-            msg = getEndpoint().getMessageConverter().toMessage(body, mp);
-        }
+        final Message msg = getMessage(exchange);
 
         try {
             // will use RabbitMQ direct reply-to
@@ -180,19 +179,7 @@ public class SpringRabbitMQProducer extends DefaultAsyncProducer {
         return true;
     }
 
-    protected boolean processInOnly(Exchange exchange, AsyncCallback callback) {
-        // header take precedence over endpoint
-        String exchangeName = (String) exchange.getMessage().removeHeader(SpringRabbitMQConstants.EXCHANGE_OVERRIDE_NAME);
-        if (exchangeName == null) {
-            exchangeName = getEndpoint().getExchangeName();
-        }
-        exchangeName = SpringRabbitMQHelper.isDefaultExchange(exchangeName) ? "" : exchangeName;
-
-        String routingKey = (String) exchange.getMessage().removeHeader(SpringRabbitMQConstants.ROUTING_OVERRIDE_KEY);
-        if (routingKey == null) {
-            routingKey = getEndpoint().getRoutingKey();
-        }
-
+    private Message getMessage(Exchange exchange) {
         Object body = exchange.getMessage().getBody();
         Message msg;
         if (body instanceof Message) {
@@ -201,6 +188,17 @@ public class SpringRabbitMQProducer extends DefaultAsyncProducer {
             MessageProperties mp = getEndpoint().getMessagePropertiesConverter().toMessageProperties(exchange);
             msg = getEndpoint().getMessageConverter().toMessage(body, mp);
         }
+        return msg;
+    }
+
+    protected boolean processInOnly(Exchange exchange, AsyncCallback callback) {
+        // header take precedence over endpoint
+        final String exchangeName = getExchangeName(exchange);
+
+        final String routingKey
+                = getValue(exchange, SpringRabbitMQConstants.ROUTING_OVERRIDE_KEY, getEndpoint().getRoutingKey());
+
+        final Message msg = getMessage(exchange);
 
         final String ex = exchangeName;
         final String rk = routingKey;
@@ -231,6 +229,20 @@ public class SpringRabbitMQProducer extends DefaultAsyncProducer {
 
         callback.done(true);
         return true;
+    }
+
+    private String getValue(Exchange exchange, String routingOverrideKey, String defaultValue) {
+        String routingKey = (String) exchange.getMessage().removeHeader(routingOverrideKey);
+        if (routingKey == null) {
+            return defaultValue;
+        }
+        return routingKey;
+    }
+
+    private String getExchangeName(Exchange exchange) {
+        String exchangeName
+                = getValue(exchange, SpringRabbitMQConstants.EXCHANGE_OVERRIDE_NAME, getEndpoint().getExchangeName());
+        return SpringRabbitMQHelper.isDefaultExchange(exchangeName) ? "" : exchangeName;
     }
 
     /**

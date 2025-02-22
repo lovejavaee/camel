@@ -21,7 +21,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import org.apache.camel.cloud.ServiceDefinition;
 import org.apache.camel.util.ObjectHelper;
@@ -29,7 +28,10 @@ import org.apache.camel.util.StringHelper;
 
 /**
  * A static list of known servers Camel Service Call EIP.
+ *
+ * @deprecated since 4.7
  */
+@Deprecated(since = "4.7")
 public class StaticServiceDiscovery extends DefaultServiceDiscovery {
     private final List<ServiceDefinition> services;
 
@@ -106,7 +108,7 @@ public class StaticServiceDiscovery extends DefaultServiceDiscovery {
     public List<ServiceDefinition> getServices(String name) {
         return services.stream()
                 .filter(s -> Objects.isNull(s.getName()) || Objects.equals(name, s.getName()))
-                .collect(Collectors.toUnmodifiableList());
+                .toList();
     }
 
     // *************************************************************************

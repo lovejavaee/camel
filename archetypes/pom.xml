@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
         <relativePath>../parent</relativePath>
     </parent>
 
@@ -96,7 +96,6 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
-                <version>1.1.0</version>
                 <executions>
                     <execution>
                         <id>default-cli</id>
@@ -126,28 +125,5 @@
             </plugin>
 
         </plugins>
-
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-eclipse-plugin</artifactId>
-                    <configuration>
-                        <buildcommands>
-                            <java.lang.String>com.atlassw.tools.eclipse.checkstyle.CheckstyleBuilder</java.lang.String>
-                        </buildcommands>
-                        <projectnatures>
-                            <nature>com.atlassw.tools.eclipse.checkstyle.CheckstyleNature</nature>
-                        </projectnatures>
-                        <additionalConfig>
-                            <file>
-                                <name>.checkstyle</name>
-                                <location>/camel-eclipse-checkstyle</location>
-                            </file>
-                        </additionalConfig>
-                    </configuration>
-                </plugin>
-            </plugins>
-        </pluginManagement>
     </build>
 </project>

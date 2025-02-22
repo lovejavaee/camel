@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class MessageSupportTest extends ContextTestSupport {
 
     @Test
-    public void testSetBodyType() throws Exception {
+    public void testSetBodyType() {
         Exchange exchange = new DefaultExchange(context);
         Message in = exchange.getIn();
         in.setBody("123", Integer.class);
@@ -45,12 +45,8 @@ public class MessageSupportTest extends ContextTestSupport {
         Exchange exchange = new DefaultExchange(context);
         Message in = exchange.getIn();
 
-        try {
-            in.getMandatoryBody();
-            fail("Should have thrown an exception");
-        } catch (InvalidPayloadException e) {
-            // expected
-        }
+        assertThrows(InvalidPayloadException.class, in::getMandatoryBody,
+                "Should have thrown an exception");
 
         in.setBody("Hello World");
 
@@ -104,7 +100,7 @@ public class MessageSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testCopyOverExchange() throws Exception {
+    public void testCopyOverExchange() {
         Exchange exchange = new DefaultExchange(context);
         Message in = exchange.getIn();
         in.setBody("Bye World");
@@ -118,13 +114,13 @@ public class MessageSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testNoMessageTimestamp() throws Exception {
+    public void testNoMessageTimestamp() {
         Exchange exchange = new DefaultExchange(context);
         assertEquals(0L, exchange.getMessage().getMessageTimestamp());
     }
 
     @Test
-    public void testMessageTimestamp() throws Exception {
+    public void testMessageTimestamp() {
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setHeader(Exchange.MESSAGE_TIMESTAMP, 1234L);
         assertEquals(1234L, exchange.getMessage().getMessageTimestamp());

@@ -16,11 +16,13 @@
  */
 package org.apache.camel.component.hazelcast;
 
+import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
 import org.apache.camel.Component;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
@@ -29,7 +31,7 @@ import org.apache.camel.support.DefaultEndpoint;
 /**
  * The hazelcast component allows you to work with the Hazelcast distributed data grid / cache.
  */
-public abstract class HazelcastDefaultEndpoint extends DefaultEndpoint {
+public abstract class HazelcastDefaultEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     protected HazelcastCommand command;
     @UriPath
@@ -41,16 +43,36 @@ public abstract class HazelcastDefaultEndpoint extends DefaultEndpoint {
     protected String hazelcastInstanceName;
     @UriParam
     private HazelcastOperation defaultOperation;
+    @UriParam
+    @Metadata(supportFileReference = true)
+    private String hazelcastConfigUri;
 
-    public HazelcastDefaultEndpoint(HazelcastInstance hazelcastInstance, String endpointUri, Component component) {
+    protected HazelcastDefaultEndpoint(HazelcastInstance hazelcastInstance, String endpointUri, Component component) {
         this(hazelcastInstance, endpointUri, component, null);
     }
 
-    public HazelcastDefaultEndpoint(HazelcastInstance hazelcastInstance, String endpointUri, Component component,
-                                    String cacheName) {
+    protected HazelcastDefaultEndpoint(HazelcastInstance hazelcastInstance, String endpointUri, Component component,
+                                       String cacheName) {
         super(endpointUri, component);
         this.cacheName = cacheName;
         this.hazelcastInstance = hazelcastInstance;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        var members = hazelcastInstance.getCluster().getMembers();
+        if (!members.isEmpty()) {
+            Member member = members.iterator().next();
+            String host = member.getAddress().getHost();
+            int port = member.getAddress().getPort();
+            return host + ":" + port;
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "hazelcast";
     }
 
     @Override
@@ -115,4 +137,14 @@ public abstract class HazelcastDefaultEndpoint extends DefaultEndpoint {
         return defaultOperation;
     }
 
+    public String getHazelcastConfigUri() {
+        return hazelcastConfigUri;
+    }
+
+    /**
+     * Hazelcast configuration file.
+     */
+    public void setHazelcastConfigUri(String hazelcastConfigUri) {
+        this.hazelcastConfigUri = hazelcastConfigUri;
+    }
 }

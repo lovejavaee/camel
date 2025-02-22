@@ -14,35 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.camel.test.infra.kafka.services;
 
 import org.apache.camel.test.infra.common.services.ContainerService;
 import org.apache.camel.test.infra.kafka.common.KafkaProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
-/**
- * A KafkaContainer that supports JAAS+SASL based authentication
- */
 public class ContainerLocalAuthKafkaService implements KafkaService, ContainerService<KafkaContainer> {
     private static final Logger LOG = LoggerFactory.getLogger(ContainerLocalAuthKafkaService.class);
-    private final KafkaContainer kafka;
+    protected final KafkaContainer kafka;
 
     public static class TransientAuthenticatedKafkaContainer extends KafkaContainer {
         public TransientAuthenticatedKafkaContainer(String jaasConfigFile) {
-            super(DockerImageName.parse(ContainerLocalKafkaService.KAFKA3_IMAGE_NAME));
-
-            withEmbeddedZookeeper();
+            super(DockerImageName.parse(System.getProperty(
+                    KafkaProperties.KAFKA_CONTAINER,
+                    KafkaServiceFactory.ContainerLocalKafkaService.KAFKA3_IMAGE_NAME))
+                    .asCompatibleSubstituteFor("apache/kafka"));
 
             final MountableFile mountableFile = MountableFile.forClasspathResource(jaasConfigFile);
             LOG.debug("Using mountable file at: {}", mountableFile.getFilesystemPath());
-            withCopyFileToContainer(mountableFile, "/tmp/kafka-jaas.config");
-
-            withEnv("KAFKA_OPTS", "-Djava.security.auth.login.config=/tmp/kafka-jaas.config")
+            withCopyFileToContainer(mountableFile, "/tmp/kafka-jaas.config")
+                    .withEnv("KAFKA_OPTS", "-Djava.security.auth.login.config=/tmp/kafka-jaas.config")
                     .withEnv("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:9093,BROKER://0.0.0.0:9092")
                     .withEnv("KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL", "PLAIN")
                     .withEnv("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "PLAINTEXT:SASL_PLAINTEXT,BROKER:PLAINTEXT")

@@ -5,6 +5,7 @@
 :description: Transfer data securely and reliably using the AS2 protocol (RFC4130).
 :since: 2.22
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: as2
@@ -31,7 +32,6 @@ for this component:
 
 == URI format
 
-[source]
 ----
 as2://apiName/methodName
 ----

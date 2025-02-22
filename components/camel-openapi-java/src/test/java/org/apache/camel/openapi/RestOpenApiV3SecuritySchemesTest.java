@@ -16,20 +16,16 @@
  */
 package org.apache.camel.openapi;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import io.apicurio.datamodels.Library;
-import io.apicurio.datamodels.openapi.models.OasDocument;
+import io.swagger.v3.oas.models.OpenAPI;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.impl.engine.DefaultClassResolver;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RestOpenApiV3SecuritySchemesTest extends CamelTestSupport {
@@ -43,36 +39,37 @@ public class RestOpenApiV3SecuritySchemesTest extends CamelTestSupport {
             public void configure() {
                 rest()
                         .securityDefinitions()
-                            .oauth2("petstore_auth_implicit")// OAuth implicit
-                                .authorizationUrl("https://petstore.swagger.io/oauth/dialog")
-                                .refreshUrl("https://petstore.swagger.io/oauth/refresh")
-                            .end()
-                            .oauth2("oauth_password")
-                                .flow("password")
-                                .tokenUrl("https://petstore.swagger.io/oauth/token")
-                            .end()
-                            .oauth2("oauth2_accessCode")// OAuth access code
-                                .authorizationUrl("https://petstore.swagger.io/oauth/dialog")
-                                .tokenUrl("https://petstore.swagger.io/oauth/token")
-                            .end()
-                            .apiKey("api_key_header")
-                                .withHeader("myHeader")
-                            .end()
-                            .apiKey("api_key_query")
-                                .withQuery("myQuery")
-                            .end()
-                            .apiKey("api_key_cookie", "API Key using cookie")
-                                .withCookie("myCookie")
-                            .end()
-                            .openIdConnect("openIdConnect_auth", "https://petstore.swagger.io/openidconnect")
-                            .mutualTLS("mutualTLS_auth")
+                        .oauth2("petstore_auth_implicit")// OAuth implicit
+                        .authorizationUrl("https://petstore.swagger.io/oauth/dialog")
+                        .refreshUrl("https://petstore.swagger.io/oauth/refresh")
+                        .end()
+                        .oauth2("oauth_password")
+                        .flow("password")
+                        .tokenUrl("https://petstore.swagger.io/oauth/token")
+                        .end()
+                        .oauth2("oauth2_accessCode")// OAuth access code
+                        .authorizationUrl("https://petstore.swagger.io/oauth/dialog")
+                        .tokenUrl("https://petstore.swagger.io/oauth/token")
+                        .end()
+                        .apiKey("api_key_header")
+                        .withHeader("myHeader")
+                        .end()
+                        .apiKey("api_key_query")
+                        .withQuery("myQuery")
+                        .end()
+                        .apiKey("api_key_cookie", "API Key using cookie")
+                        .withCookie("myCookie")
+                        .end()
+                        .openIdConnect("openIdConnect_auth", "https://petstore.swagger.io/openidconnect")
+                        .mutualTLS("mutualTLS_auth")
                         .end();
             }
         };
     }
 
-    @Test
-    public void testSecuritySchemesV3() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = { "3.0", "3.1" })
+    public void testSecuritySchemesV3(String version) throws Exception {
         BeanConfig config = new BeanConfig();
         config.setHost("localhost:8080");
         config.setSchemes(new String[] { "http" });
@@ -80,55 +77,36 @@ public class RestOpenApiV3SecuritySchemesTest extends CamelTestSupport {
         config.setTitle("Camel User store");
         config.setLicense("Apache 2.0");
         config.setLicenseUrl("https://www.apache.org/licenses/LICENSE-2.0.html");
+        config.setVersion(version);
 
         RestOpenApiReader reader = new RestOpenApiReader();
-        OasDocument openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
+        OpenAPI openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
                 new DefaultClassResolver());
         assertNotNull(openApi);
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        Object dump = Library.writeNode(openApi);
-        String json = mapper.writeValueAsString(dump);
-
+        String json = RestOpenApiSupport.getJsonFromOpenAPIAsString(openApi, config);
         log.info(json);
-
         json = json.replace("\n", " ").replaceAll("\\s+", " ");
 
-        assertTrue(json.contains("\"petstore_auth_implicit\" : { \"flows\" : { \"implicit\" : { \"authorizationUrl\" : " +
+        assertTrue(json.contains(
+                "\"petstore_auth_implicit\" : { \"type\" : \"oauth2\", \"flows\" : { \"implicit\" : { \"authorizationUrl\" : " +
                                  "\"https://petstore.swagger.io/oauth/dialog\", \"refreshUrl\" : " +
-                                 "\"https://petstore.swagger.io/oauth/refresh\" } }, \"type\" : \"oauth2\" }"));
-        assertTrue(json.contains("\"oauth_password\" : { \"flows\" : { \"password\" : { \"tokenUrl\" : " +
-                                 "\"https://petstore.swagger.io/oauth/token\" } }, \"type\" : \"oauth2\" }"));
-        assertTrue(json.contains("\"oauth2_accessCode\" : { \"flows\" : { \"authorizationCode\" : { \"authorizationUrl\" : " +
+                                 "\"https://petstore.swagger.io/oauth/refresh\" } } }"));
+        assertTrue(
+                json.contains("\"oauth_password\" : { \"type\" : \"oauth2\", \"flows\" : { \"password\" : { \"tokenUrl\" : " +
+                              "\"https://petstore.swagger.io/oauth/token\" } } }"));
+        assertTrue(json.contains(
+                "\"oauth2_accessCode\" : { \"type\" : \"oauth2\", \"flows\" : { \"authorizationCode\" : { \"authorizationUrl\" : "
+                                 +
                                  "\"https://petstore.swagger.io/oauth/dialog\", \"tokenUrl\" : " +
-                                 "\"https://petstore.swagger.io/oauth/token\" } }, \"type\" : \"oauth2\" }"));
+                                 "\"https://petstore.swagger.io/oauth/token\" } } }"));
         assertTrue(
                 json.contains("\"api_key_header\" : { \"type\" : \"apiKey\", \"name\" : \"myHeader\", \"in\" : \"header\" }"));
         assertTrue(json.contains("\"api_key_query\" : { \"type\" : \"apiKey\", \"name\" : \"myQuery\", \"in\" : \"query\" }"));
         assertTrue(json.contains("\"api_key_cookie\" : { \"type\" : \"apiKey\", \"description\" : \"API Key using cookie\", " +
                                  "\"name\" : \"myCookie\", \"in\" : \"cookie\" }"));
-        assertTrue(
-                json.contains("\"openIdConnect_auth\" : { \"openIdConnectUrl\" : " +
-                              "\"https://petstore.swagger.io/openidconnect\", \"type\" : \"openIdConnect\" }"));
+
         assertTrue(json.contains("\"mutualTLS_auth\" : { \"type\" : \"mutualTLS\" }"));
     }
 
-    @Test
-    public void testSecuritySchemesV2() {
-        BeanConfig config = new BeanConfig();
-        config.setHost("localhost:8080");
-        config.setSchemes(new String[] { "http" });
-        config.setBasePath("/api");
-        config.setTitle("Camel User store");
-        config.setLicense("Apache 2.0");
-        config.setLicenseUrl("https://www.apache.org/licenses/LICENSE-2.0.html");
-        config.setVersion("2.0");
-
-        RestOpenApiReader reader = new RestOpenApiReader();
-        assertThrows(IllegalStateException.class,
-                () -> reader.read(context, context.getRestDefinitions(), config, context.getName(),
-                        new DefaultClassResolver()));
-    }
 }

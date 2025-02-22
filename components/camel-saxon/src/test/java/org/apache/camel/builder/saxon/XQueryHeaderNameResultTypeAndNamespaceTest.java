@@ -26,11 +26,13 @@ import org.junit.jupiter.api.Test;
  * Test XPath DSL with the ability to apply XPath on a header
  */
 public class XQueryHeaderNameResultTypeAndNamespaceTest extends CamelTestSupport {
+
     @Test
     public void testXPathWithNamespace() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:55");
         mock.expectedBodiesReceived("body");
         mock.expectedHeaderReceived("cheeseDetails", "<number xmlns=\"http://acme.com/cheese\">55</number>");
+        mock.expectedHeaderReceived("numberExists", "true");
 
         template.sendBodyAndHeader("direct:in", "body", "cheeseDetails",
                 "<number xmlns=\"http://acme.com/cheese\">55</number>");
@@ -43,12 +45,16 @@ public class XQueryHeaderNameResultTypeAndNamespaceTest extends CamelTestSupport
         return new RouteBuilder() {
             public void configure() {
                 Namespaces ns = new Namespaces("c", "http://acme.com/cheese");
-
+                var xq = expression().xquery().expression("/c:number = 55").namespaces(ns).resultType(Integer.class)
+                        .source("header:cheeseDetails").end();
+                var xqExist = expression().xquery().expression("exists(/c:number)").namespaces(ns).resultType(String.class)
+                        .source("header:cheeseDetails").end();
                 from("direct:in").choice()
-                        .when().xquery("/c:number = 55", Integer.class, ns, "cheeseDetails")
-                        .to("mock:55")
+                        .when(xq)
+                            .setHeader("numberExists", xqExist)
+                            .to("mock:55")
                         .otherwise()
-                        .to("mock:other")
+                            .to("mock:other")
                         .end();
             }
         };

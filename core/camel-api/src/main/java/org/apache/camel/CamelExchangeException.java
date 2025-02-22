@@ -16,11 +16,13 @@
  */
 package org.apache.camel;
 
+import java.io.Serial;
+
 /**
  * An exception caused by a specific message {@link Exchange}
  */
 public class CamelExchangeException extends CamelException {
-    private static final long serialVersionUID = -8721487431101572630L;
+    private static final @Serial long serialVersionUID = -8721487431101572630L;
     // exchange is not guaranteed to be serializable so we set it as transient
     private final transient Exchange exchange;
 
@@ -52,18 +54,18 @@ public class CamelExchangeException extends CamelException {
      * @return          an error message (without stacktrace from exception)
      */
     public static String createExceptionMessage(String message, Exchange exchange, Throwable cause) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(1024);
         if (message != null) {
             sb.append(message);
         }
         if (exchange != null) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append(". ");
             }
             sb.append(exchange);
         }
         if (cause != null) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append(". ");
             }
             sb.append("Caused by: [").append(cause.getClass().getName()).append(" - ")

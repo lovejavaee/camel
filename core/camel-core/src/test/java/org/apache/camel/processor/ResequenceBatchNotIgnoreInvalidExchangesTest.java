@@ -17,18 +17,20 @@
 package org.apache.camel.processor;
 
 import org.apache.camel.builder.RouteBuilder;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
-/**
- *
- */
+@DisabledOnOs(value = { OS.LINUX },
+              architectures = { "s390x" },
+              disabledReason = "This test does not run reliably multiple platforms (see CAMEL-21438)")
 public class ResequenceBatchNotIgnoreInvalidExchangesTest extends ResequenceStreamNotIgnoreInvalidExchangesTest {
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
-                from("direct:start").resequence(header("seqno")).batch().timeout(50).to("mock:result");
+            public void configure() {
+                from("direct:start").resequence(header("seqno")).batch().timeout(150).to("mock:result");
             }
         };
     }

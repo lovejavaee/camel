@@ -26,6 +26,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.DoubleSupplier;
@@ -63,24 +64,33 @@ public class DataSetList extends AbstractList<Map<String, Object>> implements Da
     @Override
     public Iterator<Map<String, Object>> iterator() {
         dataSet.goTop();
+
         return new Iterator<Map<String, Object>>() {
-            private boolean hasNext = dataSet.next();
+            Optional<Record> nextData = Optional.empty();
 
+            @Override
             public boolean hasNext() {
-                return hasNext;
-            }
-
-            public Map<String, Object> next() {
-                // because of a limitation in split() we need to create an object for the current position
-                // otherwise strangeness occurs when the same object is used to represent each row
-                Map<String, Object> result = FlatpackConverter.toMap(dataSet);
-                hasNext = dataSet.next();
-                return result;
+                if (nextData.isPresent()) {
+                    return true;
+                } else {
+                    if (DataSetList.this.next()) {
+                        nextData = dataSet.getRecord();
+                    } else {
+                        nextData = Optional.empty();
+                    }
+                    return nextData.isPresent();
+                }
             }
 
             @Override
-            public void remove() {
-                throw new UnsupportedOperationException("remove() not supported");
+            public Map<String, Object> next() {
+                if (nextData.isPresent() || hasNext()) {
+                    final Record line = nextData.orElse(null);
+                    nextData = Optional.empty();
+                    return FlatpackConverter.toMap(line);
+                } else {
+                    throw new NoSuchElementException();
+                }
             }
         };
     }

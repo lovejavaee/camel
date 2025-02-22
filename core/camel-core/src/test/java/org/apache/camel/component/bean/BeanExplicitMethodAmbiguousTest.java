@@ -25,51 +25,50 @@ import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BeanExplicitMethodAmbiguousTest extends ContextTestSupport {
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("dummy", new MyDummyBean());
         return jndi;
     }
 
     @Test
-    public void testBeanExplicitMethodAmbiguous() throws Exception {
-        try {
-            template.requestBody("direct:hello", "Camel");
-            fail("Should thrown an exception");
-        } catch (Exception e) {
-            AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
-            assertEquals(2, cause.getMethods().size());
-        }
+    public void testBeanExplicitMethodAmbiguous() {
+        Exception e = assertThrows(Exception.class,
+                () -> template.requestBody("direct:hello", "Camel"),
+                "Should thrown an exception");
+
+        AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
+        assertEquals(2, cause.getMethods().size());
     }
 
     @Test
-    public void testBeanExplicitMethodHandler() throws Exception {
+    public void testBeanExplicitMethodHandler() {
         String out = template.requestBody("direct:bye", "Camel", String.class);
         assertEquals("Bye Camel", out);
     }
 
     @Test
-    public void testBeanExplicitMethodInvocationStringBody() throws Exception {
+    public void testBeanExplicitMethodInvocationStringBody() {
         String out = template.requestBody("direct:foo", "Camel", String.class);
         assertEquals("String", out);
     }
 
     @Test
-    public void testBeanExplicitMethodInvocationInputStreamBody() throws Exception {
+    public void testBeanExplicitMethodInvocationInputStreamBody() {
         String out = template.requestBody("direct:foo", new ByteArrayInputStream("Camel".getBytes()), String.class);
         assertEquals("InputStream", out);
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:hello").bean("dummy", "hello", BeanScope.Singleton);
 
                 from("direct:bye").bean("dummy", BeanScope.Singleton);

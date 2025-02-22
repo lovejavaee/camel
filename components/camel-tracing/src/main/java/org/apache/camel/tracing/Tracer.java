@@ -17,13 +17,10 @@
 package org.apache.camel.tracing;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.ServiceLoader;
-import java.util.Set;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.CamelContextAware;
 import org.apache.camel.Component;
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
@@ -31,8 +28,10 @@ import org.apache.camel.NamedNode;
 import org.apache.camel.Route;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.StaticService;
+import org.apache.camel.api.management.ManagedAttribute;
 import org.apache.camel.spi.CamelEvent;
 import org.apache.camel.spi.CamelLogger;
+import org.apache.camel.spi.CamelTracingService;
 import org.apache.camel.spi.InterceptStrategy;
 import org.apache.camel.spi.LogListener;
 import org.apache.camel.spi.RoutePolicy;
@@ -48,7 +47,7 @@ import org.apache.camel.util.StringHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class Tracer extends ServiceSupport implements RoutePolicyFactory, StaticService, CamelContextAware {
+public abstract class Tracer extends ServiceSupport implements CamelTracingService, RoutePolicyFactory, StaticService {
     protected static final Map<String, SpanDecorator> DECORATORS = new HashMap<>();
     static final AutoCloseable NOOP_CLOSEABLE = () -> {
     };
@@ -70,7 +69,7 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
     protected boolean encoding;
     private final TracingLogListener logListener = new TracingLogListener();
     private final TracingEventNotifier eventNotifier = new TracingEventNotifier();
-    private Set<String> excludePatterns = new HashSet<>(0);
+    private String excludePatterns;
     private InterceptStrategy tracingStrategy;
     private CamelContext camelContext;
 
@@ -120,14 +119,16 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
         this.camelContext = camelContext;
     }
 
-    public Set<String> getExcludePatterns() {
+    @ManagedAttribute
+    public String getExcludePatterns() {
         return excludePatterns;
     }
 
-    public void setExcludePatterns(Set<String> excludePatterns) {
+    public void setExcludePatterns(String excludePatterns) {
         this.excludePatterns = excludePatterns;
     }
 
+    @ManagedAttribute
     public boolean isEncoding() {
         return encoding;
     }
@@ -136,20 +137,10 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
         this.encoding = encoding;
     }
 
-    /**
-     * Adds an exclude pattern that will disable tracing for Camel messages that matches the pattern.
-     *
-     * @param pattern the pattern such as route id, endpoint url
-     */
-    public void addExcludePattern(String pattern) {
-        excludePatterns.add(pattern);
-    }
-
     @Override
     public RoutePolicy createRoutePolicy(CamelContext camelContext, String routeId, NamedNode route) {
         init(camelContext);
         return new TracingRoutePolicy();
-
     }
 
     /**
@@ -167,7 +158,7 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
     }
 
     @Override
-    protected void doInit() throws Exception {
+    protected void doInit() {
         ObjectHelper.notNull(camelContext, "CamelContext", this);
 
         camelContext.getManagementStrategy().addEventNotifier(eventNotifier);
@@ -182,10 +173,18 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
         initTracer();
         initContextPropagators();
         ServiceHelper.startService(eventNotifier);
+
+        if (Boolean.TRUE.equals(camelContext.isUseMDCLogging())) {
+            LOG.warn("Initialized tracing component to put trace_id and span_id into MDC. " +
+                     "This is a deprecated feature and may disappear in the future. " +
+                     "You should replace it with the specific MDC instrumentation provided by your tracing/telemetry SDK instead. "
+                     +
+                     "See the tracing component documentation to learn more about it.");
+        }
     }
 
     @Override
-    protected void doShutdown() throws Exception {
+    protected void doShutdown() {
         // stop event notifier
         camelContext.getManagementStrategy().removeEventNotifier(eventNotifier);
         ServiceHelper.stopService(eventNotifier);
@@ -198,20 +197,17 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
         SpanDecorator sd = null;
 
         String uri = endpoint.getEndpointUri();
-        String splitURI[] = StringHelper.splitOnCharacter(uri, ":", 2);
+        String[] splitURI = StringHelper.splitOnCharacter(uri, ":", 2);
         if (splitURI[1] != null) {
             String scheme = splitURI[0];
             sd = DECORATORS.get(scheme);
         }
-        if (sd == null) {
-            // okay there was no decorator found via component name (scheme), then try FQN
-            if (endpoint instanceof DefaultEndpoint) {
-                Component comp = ((DefaultEndpoint) endpoint).getComponent();
-                String fqn = comp.getClass().getName();
-                // lookup via FQN
-                sd = DECORATORS.values().stream().filter(d -> fqn.equals(d.getComponentClassName())).findFirst()
-                        .orElse(null);
-            }
+        if (sd == null && endpoint instanceof DefaultEndpoint de) {
+            Component comp = de.getComponent();
+            String fqn = comp.getClass().getName();
+            // lookup via FQN
+            sd = DECORATORS.values().stream().filter(d -> fqn.equals(d.getComponentClassName())).findFirst()
+                    .orElse(null);
         }
         if (sd == null) {
             sd = SpanDecorator.DEFAULT;
@@ -222,8 +218,9 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
 
     private boolean isExcluded(Exchange exchange, Endpoint endpoint) {
         String url = endpoint.getEndpointUri();
-        if (url != null && !excludePatterns.isEmpty()) {
-            for (String pattern : excludePatterns) {
+        if (url != null && excludePatterns != null) {
+            for (String pattern : excludePatterns.split(",")) {
+                pattern = pattern.trim();
                 if (EndpointHelper.matchEndpoint(exchange.getContext(), url, pattern)) {
                     return true;
                 }
@@ -246,8 +243,7 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
         @Override
         public void notify(CamelEvent event) throws Exception {
             try {
-                if (event instanceof CamelEvent.ExchangeSendingEvent) {
-                    CamelEvent.ExchangeSendingEvent ese = (CamelEvent.ExchangeSendingEvent) event;
+                if (event instanceof CamelEvent.ExchangeSendingEvent ese) {
                     SpanDecorator sd = getSpanDecorator(ese.getEndpoint());
                     if (shouldExclude(sd, ese.getExchange(), ese.getEndpoint())) {
                         return;
@@ -260,11 +256,10 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
                     sd.pre(span, ese.getExchange(), ese.getEndpoint());
                     inject(span, injectAdapter);
                     ActiveSpanManager.activate(ese.getExchange(), span);
-                    if (LOG.isTraceEnabled()) {
-                        LOG.trace("Tracing: start client span={}", span);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Tracing: start client span: {} with parent {}", span, parent);
                     }
-                } else if (event instanceof CamelEvent.ExchangeSentEvent) {
-                    CamelEvent.ExchangeSentEvent ese = (CamelEvent.ExchangeSentEvent) event;
+                } else if (event instanceof CamelEvent.ExchangeSentEvent ese) {
                     SpanDecorator sd = getSpanDecorator(ese.getEndpoint());
                     if (shouldExclude(sd, ese.getExchange(), ese.getEndpoint())) {
                         return;
@@ -272,26 +267,25 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
 
                     SpanAdapter span = ActiveSpanManager.getSpan(ese.getExchange());
                     if (span != null) {
-                        if (LOG.isTraceEnabled()) {
-                            LOG.trace("Tracing: start client span={}", span);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Tracing: stop client span: {}", span);
                         }
                         sd.post(span, ese.getExchange(), ese.getEndpoint());
                         ActiveSpanManager.deactivate(ese.getExchange());
                         finishSpan(span);
                     } else {
-                        LOG.warn("Tracing: could not find managed span for exchange={}", ese.getExchange());
+                        LOG.warn("Tracing: could not find managed span for exchange: {}", ese.getExchange());
                     }
-                } else if (event instanceof CamelEvent.ExchangeAsyncProcessingStartedEvent) {
-                    CamelEvent.ExchangeAsyncProcessingStartedEvent eap = (CamelEvent.ExchangeAsyncProcessingStartedEvent) event;
+                } else if (event instanceof CamelEvent.ExchangeAsyncProcessingStartedEvent eap) {
 
                     // no need to filter scopes here. It's ok to close a scope multiple times and
-                    // implementations check if scope being disposed is current
+                    // implementations check if the scope being disposed is current
                     // and should not do anything if scopes don't match.
                     ActiveSpanManager.endScope(eap.getExchange());
                 }
             } catch (Exception t) {
                 // This exception is ignored
-                LOG.warn("Tracing: Failed to capture tracing data", t);
+                LOG.warn("Tracing: Failed to capture tracing data. This exception is ignored.", t);
             }
         }
 
@@ -302,7 +296,6 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
     }
 
     private final class TracingRoutePolicy extends RoutePolicySupport {
-
         @Override
         public void onExchangeBegin(Route route, Exchange exchange) {
             try {
@@ -316,12 +309,12 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
                         sd.getReceiverSpanKind(), parent);
                 sd.pre(span, exchange, route.getEndpoint());
                 ActiveSpanManager.activate(exchange, span);
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("Tracing: start server span={}", span);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Tracing: start server span={} with parent {}", span, parent);
                 }
             } catch (Exception t) {
                 // This exception is ignored
-                LOG.warn("Tracing: Failed to capture tracing data", t);
+                LOG.warn("Tracing: Failed to capture tracing data. This exception is ignored.", t);
             }
         }
 
@@ -333,19 +326,19 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
                 }
                 SpanAdapter span = ActiveSpanManager.getSpan(exchange);
                 if (span != null) {
-                    if (LOG.isTraceEnabled()) {
-                        LOG.trace("Tracing: finish server span={}", span);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Tracing: finish server span={}", span);
                     }
                     SpanDecorator sd = getSpanDecorator(route.getEndpoint());
                     sd.post(span, exchange, route.getEndpoint());
                     finishSpan(span);
                     ActiveSpanManager.deactivate(exchange);
                 } else {
-                    LOG.warn("Tracing: could not find managed span for exchange={}", exchange);
+                    LOG.warn("Tracing: could not find managed span for exchange: {}", exchange);
                 }
             } catch (Exception t) {
                 // This exception is ignored
-                LOG.warn("Tracing: Failed to capture tracing data", t);
+                LOG.warn("Tracing: Failed to capture tracing data. This exception is ignored.", t);
             }
         }
     }
@@ -363,7 +356,7 @@ public abstract class Tracer extends ServiceSupport implements RoutePolicyFactor
                 }
             } catch (Exception t) {
                 // This exception is ignored
-                LOG.warn("Tracing: Failed to capture tracing data", t);
+                LOG.warn("Tracing: Failed to capture tracing data. This exception is ignored.", t);
             }
             return message;
         }

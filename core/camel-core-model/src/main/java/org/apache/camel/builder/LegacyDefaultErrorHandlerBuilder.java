@@ -33,9 +33,9 @@ import org.apache.camel.support.ExpressionToPredicateAdapter;
 import org.slf4j.LoggerFactory;
 
 /**
- * Legacy error handler for XML DSL in camel-spring-xml/camel-blueprint
+ * Legacy error handler for XML DSL in camel-spring-xml
  */
-@Deprecated
+@Deprecated(since = "3.17.0")
 public class LegacyDefaultErrorHandlerBuilder extends LegacyErrorHandlerBuilderSupport
         implements DefaultErrorHandlerProperties {
 

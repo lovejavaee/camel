@@ -41,7 +41,6 @@ import co.elastic.clients.elasticsearch.core.MsearchResponse;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.UpdateRequest;
-import co.elastic.clients.elasticsearch.core.UpdateResponse;
 import co.elastic.clients.elasticsearch.indices.DeleteIndexRequest;
 import co.elastic.clients.elasticsearch.indices.DeleteIndexResponse;
 import co.elastic.clients.elasticsearch.indices.ExistsRequest;
@@ -81,7 +80,6 @@ class ElasticsearchProducer extends DefaultAsyncProducer {
     private static final Logger LOG = LoggerFactory.getLogger(ElasticsearchProducer.class);
 
     protected final ElasticsearchConfiguration configuration;
-    private final Object mutex = new Object();
     private volatile RestClient client;
     private Sniffer sniffer;
 
@@ -173,6 +171,11 @@ class ElasticsearchProducer extends DefaultAsyncProducer {
             Integer from = message.getHeader(ElasticsearchConstants.PARAM_FROM, Integer.class);
             if (from == null) {
                 message.setHeader(ElasticsearchConstants.PARAM_FROM, configuration.getFrom());
+            }
+
+            Boolean enableDocumentOnlyMode = message.getHeader(ElasticsearchConstants.PARAM_DOCUMENT_MODE, Boolean.class);
+            if (enableDocumentOnlyMode == null) {
+                message.setHeader(ElasticsearchConstants.PARAM_DOCUMENT_MODE, configuration.isEnableDocumentOnlyMode());
             }
 
             boolean configWaitForActiveShards = false;
@@ -384,10 +387,10 @@ class ElasticsearchProducer extends DefaultAsyncProducer {
      * Updates asynchronously a document.
      */
     private void processUpdateAsync(ActionContext ctx, Class<?> documentClass) {
-        UpdateRequest.Builder updateRequestBuilder = ctx.getMessage().getBody(UpdateRequest.Builder.class);
+        UpdateRequest.Builder<?, ?> updateRequestBuilder = ctx.getMessage().getBody(UpdateRequest.Builder.class);
         onComplete(
                 ctx.getClient().update(updateRequestBuilder.build(), documentClass)
-                        .thenApply(r -> ((UpdateResponse<?>) r).id()),
+                        .thenApply(WriteResponseBase::id),
                 ctx);
     }
 
@@ -473,7 +476,8 @@ class ElasticsearchProducer extends DefaultAsyncProducer {
 
     private void startClient() {
         if (client == null) {
-            synchronized (mutex) {
+            lock.lock();
+            try {
                 if (client == null) {
                     LOG.info("Connecting to the ElasticSearch cluster: {}", configuration.getClusterName());
                     if (configuration.getHostAddressesList() != null
@@ -483,6 +487,8 @@ class ElasticsearchProducer extends DefaultAsyncProducer {
                         LOG.warn("Incorrect ip address and port parameters settings for ElasticSearch cluster");
                     }
                 }
+            } finally {
+                lock.unlock();
             }
         }
     }

@@ -16,17 +16,18 @@
  */
 package org.apache.camel.impl.event;
 
+import java.io.Serial;
 import java.util.EventObject;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.spi.CamelEvent;
 
 public class ServiceStopFailureEvent extends EventObject implements CamelEvent.ServiceStopFailureEvent {
-    private static final long serialVersionUID = 4139591666998762617L;
+    private static final @Serial long serialVersionUID = 4139591666998762617L;
 
-    private CamelContext context;
-    private Object service;
-    private Throwable cause;
+    private final CamelContext context;
+    private final Object service;
+    private final Throwable cause;
     private long timestamp;
 
     public ServiceStopFailureEvent(CamelContext context, Object service, Throwable cause) {

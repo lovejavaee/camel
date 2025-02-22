@@ -36,20 +36,20 @@ public class XsltRouteXsltWithErrorTest extends ContextTestSupport {
     public void testXsltWithError() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("xslt:org/apache/camel/component/xslt/transform-with-error.xsl");
             }
         });
-        try {
-            context.start();
-            fail("Should have thrown exception");
-        } catch (Exception e) {
-            TransformerConfigurationException cause = ObjectHelper.getException(TransformerConfigurationException.class, e);
-            assertNotNull(cause);
-            // not sure if XSLT errors may be i18n and not english always so
-            // just check for the spelling mistake of select -> slect
-            assertTrue(cause.getMessage().contains("slect"));
-        }
+
+        Exception e = assertThrows(Exception.class,
+                () -> context.start(),
+                "Should have thrown exception");
+
+        TransformerConfigurationException cause = ObjectHelper.getException(TransformerConfigurationException.class, e);
+        assertNotNull(cause);
+        // not sure if XSLT errors may be i18n and not english always so
+        // just check for the spelling mistake of select -> slect
+        assertTrue(cause.getMessage().contains("slect"));
     }
 
 }

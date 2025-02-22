@@ -2,9 +2,10 @@
 :doctitle: AWS Kinesis
 :shortname: aws2-kinesis
 :artifactid: camel-aws2-kinesis
-:description: Consume and produce records from and to AWS Kinesis Streams using AWS SDK version 2.x.
+:description: Consume and produce records from and to AWS Kinesis Streams.
 :since: 3.2
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: AWS
@@ -14,13 +15,15 @@
 
 *{component-header}*
 
-The AWS2 Kinesis component supports receiving messages from and sending messages to Amazon Kinesis (no Batch supported)
-service.
+The AWS2 Kinesis component supports consuming messages from and producing messages to Amazon Kinesis service.
+
+The AWS2 Kinesis component also supports Synchronous and Asynchronous Client, which means you choose what fits best your requirements,
+so if you need the connection (client) to be async, there's a property of 'asyncClient' (in DSL also can be found) needs to be turned true.
 
 Prerequisites
 
 You must have a valid Amazon Web Services developer account, and be
-signed up to use Amazon Kinesis. More information are available
+signed up to use Amazon Kinesis. More information is available
 at https://aws.amazon.com/kinesis/[AWS Kinesis]
 
 
@@ -30,9 +33,11 @@ at https://aws.amazon.com/kinesis/[AWS Kinesis]
 aws2-kinesis://stream-name[?options]
 -----------------------------------
 
-The stream needs to be created prior to it being used. +
- You can append query options to the URI in the following format,
-?options=value&option2=value&...
+The stream needs to be created prior to it being used.
+
+You can append query options to the URI in the following format:
+
+`?options=value&option2=value&...`
 
 
 // component-configure options: START
@@ -48,39 +53,60 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
-
 Required Kinesis component options
 
 You have to provide the KinesisClient in the
 Registry with proxies and relevant credentials
 configured.
 
-== Batch Consumer
-
-This component implements the Batch Consumer.
-
-This allows you for instance to know how many messages exists in this
-batch and for instance let the Aggregator
-aggregate this number of messages.
-
-== Usage
-
-=== Static credentials vs Default Credential Provider
-
-You have the possibility of avoiding the usage of explicit static credentials, by specifying the useDefaultCredentialsProvider option and set it to true.
-
- - Java system properties - aws.accessKeyId and aws.secretKey
- - Environment variables - AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
- - Web Identity Token from AWS STS.
- - The shared credentials and config files.
- - Amazon ECS container credentials - loaded from the Amazon ECS if the environment variable AWS_CONTAINER_CREDENTIALS_RELATIVE_URI is set.
- - Amazon EC2 Instance profile credentials. 
-
-For more information about this you can look at https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/credentials.html[AWS credentials documentation]
-
 // component headers: START
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
+
+== Usage
+
+=== Batch Consumer
+
+This component implements the Batch Consumer.
+
+This allows you, for instance, to know how many messages exist in this
+batch and for instance, let the Aggregator
+aggregate this number of messages.
+
+The consumer is able to consume either from a single specific shard or
+all available shards (multiple shards consumption) of Amazon Kinesis, therefore, if you leave the 'shardId'
+property in the DSL configuration empty, then it'll consume all available shards
+otherwise only the specified shard corresponding to the shardId will be consumed.
+
+=== Batch Producer
+
+This component implements the Batch Producer.
+
+This allows you to send multiple messages in a single request to Amazon Kinesis.
+Messages with batch size more than 500 is allowed. Producer will split them into multiple requests.
+
+The batch type needs to implement the `Iterable` interface. For example, it can be a `List`, `Set` or any other collection type.
+The message type can be one or more of types `byte[]`, `ByteBuffer`, UTF-8 `String`, or `InputStream`. Other types are not supported.
+
+
+=== Static credentials, Default Credential Provider and Profile Credentials Provider
+
+You have the possibility of avoiding the usage of explicit static credentials by specifying the useDefaultCredentialsProvider option and set it to true.
+
+The order of evaluation for Default Credentials Provider is the following:
+
+- Java system properties - `aws.accessKeyId` and `aws.secretKey`.
+- Environment variables - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+- Web Identity Token from AWS STS.
+- The shared credentials and config files.
+- Amazon ECS container credentials - loaded from the Amazon ECS if the environment variable `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` is set.
+- Amazon EC2 Instance profile credentials.
+
+You have also the possibility of using Profile Credentials Provider, by specifying the useProfileCredentialsProvider option to true and profileCredentialsName to the profile name.
+
+Only one of static, default and profile credentials could be used at the same time.
+
+For more information about this you can look at https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/credentials.html[AWS credentials documentation]
 
 === AmazonKinesis configuration
 
@@ -100,6 +126,24 @@ that is the default when creating a new ClientConfiguration instance,
 however, a
 different http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/AWSCredentialsProvider.html[AWSCredentialsProvider]
 can be specified when calling createClient(...).
+
+=== AWS Kinesis KCL Consumer
+
+The component supports also the KCL (Kinesis Client Library) for consuming from a Kinesis Data Stream.
+
+To enable this feature you'll need to set two different parameter in your endpoint:
+
+[source,java]
+--------------------------------------------------------------------------------------------------------------------
+from("aws2-kinesis://mykinesisstream?asyncClient=true&useDefaultCredentialsProvider=true&useKclConsumers=true")
+  .to("log:out?showAll=true");
+--------------------------------------------------------------------------------------------------------------------
+
+This feature will make possible to automatically checkpointing the Shard Iterations by combining the usage of KCL, DynamoDB Table and CloudWatch alarms.
+
+Everything will work out of the box, by simply using your AWS Credentials.
+
+NOTE: In the beginning the consumer will require 60/70 seconds for preparing everything, listing the shards, creating/querying the Lease table on Dynamo DB. Keep it in mind while working with the KCL consumer.
 
 == Dependencies
 

@@ -40,7 +40,6 @@ public class BeanInvokeAsyncTest extends ContextTestSupport {
     private volatile CompletableFuture<Object> callFuture;
     private volatile String receivedBody;
     private volatile CountDownLatch methodInvoked;
-    private Future<Object> sendFuture;
 
     @Test
     public void testDoSomething() throws Exception {
@@ -66,17 +65,17 @@ public class BeanInvokeAsyncTest extends ContextTestSupport {
     }
 
     @Test
-    public void testThrowSomething() throws Exception {
-        try {
-            runTestSendBody(m -> m.expectedMessageCount(0), "SomeProblem", this::throwSomething);
-            fail("Exception expected");
-        } catch (ExecutionException e) {
-            boolean b1 = e.getCause() instanceof CamelExecutionException;
-            assertTrue(b1);
-            boolean b = e.getCause().getCause() instanceof IllegalStateException;
-            assertTrue(b);
-            assertEquals("SomeProblem", e.getCause().getCause().getMessage());
-        }
+    public void testThrowSomething() {
+
+        ExecutionException e = assertThrows(ExecutionException.class,
+                () -> runTestSendBody(m -> m.expectedMessageCount(0), "SomeProblem", this::throwSomething),
+                "Exception expected");
+
+        boolean b1 = e.getCause() instanceof CamelExecutionException;
+        assertTrue(b1);
+        boolean b = e.getCause().getCause() instanceof IllegalStateException;
+        assertTrue(b);
+        assertEquals("SomeProblem", e.getCause().getCause().getMessage());
     }
 
     private void runTestSendBody(String expectedBody, String sentBody, Function<String, String> processor) throws Exception {
@@ -91,7 +90,7 @@ public class BeanInvokeAsyncTest extends ContextTestSupport {
 
         callFuture = new CompletableFuture<>();
         methodInvoked = new CountDownLatch(1);
-        sendFuture = template.asyncSendBody("direct:entry", sentBody);
+        Future<Object> sendFuture = template.asyncSendBody("direct:entry", sentBody);
 
         assertTrue(methodInvoked.await(5, TimeUnit.SECONDS));
         assertEquals(0, mock.getReceivedCounter());
@@ -112,10 +111,10 @@ public class BeanInvokeAsyncTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:entry").bean(BeanInvokeAsyncTest.this, "asyncMethod").to("mock:result");
             }
         };

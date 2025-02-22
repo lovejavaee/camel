@@ -5,30 +5,21 @@
 :description: Security using Shiro
 :since: 2.5
 :supportlevel: Stable
+:tabs-sync-option:
 //Manually maintained attributes
 :camel-spring-boot-name: shiro
 
 *Since Camel {since}*
 
-The Shiro Security component in Camel is a security focused component,
+The Shiro Security component in Camel is a security-focused component,
 based on the Apache Shiro security project.
 
 Apache Shiro is a powerful and flexible open-source security framework
 that cleanly handles authentication, authorization, enterprise session
 management and cryptography. The objective of the Apache Shiro project
 is to provide the most robust and comprehensive application security
-framework available while also being very easy to understand and
+framework available while also being straightforward to understand and
 extremely simple to use.
-
-This camel shiro-security component allows authentication and
-authorization support to be applied to different segments of a camel
-route.
-
-Shiro security is applied on a route using a Camel Policy. A Policy in
-Camel utilizes a strategy pattern for applying interceptors on Camel
-Processors. It offering the ability to apply cross-cutting concerns (for
-example. security, transactions etc) on sections/segments of a camel
-route.
 
 Maven users will need to add the following dependency to their `pom.xml`
 for this component:
@@ -43,21 +34,35 @@ for this component:
 </dependency>
 ------------------------------------------------------------
 
-[[ShiroSecurity-ShiroSecurityBasics]]
-== Shiro Security Basics
+== Usage
 
-To employ Shiro security on a camel route, a ShiroSecurityPolicy object
+The camel shiro-security component allows authentication and
+authorization support to be applied to different segments of a camel
+route.
+
+Shiro security is applied on a route using a Camel Policy.
+A Policy in
+Camel uses a strategy pattern for applying interceptors on Camel
+Processors.
+It is offering the ability to apply cross-cutting concerns (for
+example, security, transactions, etc.), on sections/segments of a Camel
+route.
+
+[[ShiroSecurity-ShiroSecurityBasics]]
+=== Shiro Security Basics
+
+To use Shiro security on a camel route, a ShiroSecurityPolicy object
 must be instantiated with security configuration details (including
-users, passwords, roles etc). This object must then be applied to a
+users, passwords, roles, etc). This object must then be applied to a
 camel route. This ShiroSecurityPolicy Object may also be registered in
 the Camel registry (JNDI or ApplicationContextRegistry) and then
-utilized on other routes in the Camel Context.
+used on other routes in the Camel Context.
 
 Configuration details are provided to the ShiroSecurityPolicy using an
 Ini file (properties file) or an Ini object. The Ini file is a standard
 Shiro configuration file containing user/role details as shown below
 
-[source,java]
+[source,properties]
 ------------------------------------------------------------------
 [users]
 # user 'ringo' with password 'starr' and the 'sec-level1' role
@@ -81,7 +86,7 @@ sec-level1 = zone1:readonly:*
 ------------------------------------------------------------------
 
 [[ShiroSecurity-InstantiatingaShiroSecurityPolicyObject]]
-== Instantiating a ShiroSecurityPolicy Object
+=== Instantiating a ShiroSecurityPolicy Object
 
 A ShiroSecurityPolicy object is instantiated as follows
 
@@ -102,7 +107,7 @@ A ShiroSecurityPolicy object is instantiated as follows
 ----------------------------------------------------------------------------------------
 
 [[ShiroSecurity-ShiroSecurityPolicyOptions]]
-== ShiroSecurityPolicy Options
+=== ShiroSecurityPolicy Options
 
 [width="100%",cols="10%,10%,10%,90%",options="header",]
 |=======================================================================
@@ -111,30 +116,30 @@ A ShiroSecurityPolicy object is instantiated as follows
 |`iniResourcePath or ini` |`none` |Resource String or Ini Object |A mandatory Resource String for the iniResourcePath or an instance of an
 Ini object must be passed to the security policy. Resources can be
 acquired from the file system, classpath, or URLs when prefixed with
-"file:, classpath:, or url:" respectively. For e.g "classpath:shiro.ini"
+"file:, classpath:, or url:" respectively. For e.g., `classpath:shiro.ini`
 
 |`passPhrase` |`An AES 128 based key` |byte[] |A passPhrase to decrypt ShiroSecurityToken(s) sent along with Message
 Exchanges
 
-|`alwaysReauthenticate` |`true` |boolean |Setting to ensure re-authentication on every individual request. If set
+|`alwaysReauthenticate` |`true` |boolean |Setting to ensure re-authentication on every request. If set
 to false, the user is authenticated and locked such than only requests
 from the same user going forward are authenticated.
 
 |`permissionsList` |`none` |List<Permission> |A List of permissions required in order for an authenticated user to be
-authorized to perform further action i.e continue further on the route.
+authorized to perform further action i.e., continue further on the route.
 If no Permissions list or Roles List (see below) is provided to the
 ShiroSecurityPolicy object, then authorization is deemed as not
 required. Note that the default is that authorization is granted if any
 of the Permission Objects in the list are applicable.
 
 |`rolesList` |`none` |List<String> |A List of roles required in order for an authenticated
-user to be authorized to perform further action i.e continue further on
+user to be authorized to perform further action i.e., continue further on
 the route. If no roles list or permissions list (see above) is provided
 to the ShiroSecurityPolicy object, then authorization is deemed as not
 required. Note that the default is that authorization is granted if any
 of the roles in the list are applicable.
 
-|`cipherService` |`AES` |org.apache.shiro.crypto.CipherService |Shiro ships with AES & Blowfish based CipherServices. You may use one
+|`cipherService` |`AES` |org.apache.shiro.crypto.CipherService |Shiro ships with AES & Blowfish-based CipherServices. You may use one of
 these or pass in your own Cipher implementation
 
 |`base64` |`false` |`boolean` |To use base64 encoding for the security token header,
@@ -143,18 +148,18 @@ option must also be set on `ShiroSecurityTokenInjector` as well.
 
 |`allPermissionsRequired` |`false` |`boolean` |The default is that authorization is granted if any of the
 Permission Objects in the permissionsList parameter are applicable. Set
-this to true to require all of the Permissions to be met.
+this to true to require all the Permissions to be met.
 
 |`allRolesRequired` |`false` |`boolean` |The default is that authorization is granted if any of the
 roles in the rolesList parameter are applicable. Set this to true to
-require all of the roles to be met.
+require all the roles to be met.
 |=======================================================================
 
 [[ShiroSecurity-ApplyingShiroAuthenticationonaCamelRoute]]
-== Applying Shiro Authentication on a Camel Route
+=== Applying Shiro Authentication on a Camel Route
 
 The ShiroSecurityPolicy, tests and permits incoming message exchanges
-containing a encrypted SecurityToken in the Message Header to proceed
+containing an encrypted SecurityToken in the Message Header to proceed
 further following proper authentication. The SecurityToken object
 contains a Username/Password details that are used to determine where
 the user is a valid user.
@@ -186,7 +191,7 @@ the user is a valid user.
 -----------------------------------------------------------------------
 
 [[ShiroSecurity-ApplyingShiroAuthorizationonaCamelRoute]]
-=== Applying Shiro Authorization on a Camel Route
+==== Applying Shiro Authorization on a Camel Route
 
 Authorization can be applied on a camel route by associating a
 Permissions List with the ShiroSecurityPolicy. The Permissions List
@@ -221,7 +226,7 @@ permission set, the request is not authorized to continue any further.
 -------------------------------------------------------------------------------------------
 
 [[ShiroSecurity-CreatingaShiroSecurityTokenandinjectingitintoaMessageExchange]]
-== Creating a ShiroSecurityToken and injecting it into a Message Exchange
+=== Creating a ShiroSecurityToken and injecting it into a Message Exchange
 
 A ShiroSecurityToken object may be created and injected into a Message
 Exchange using a Shiro Processor called ShiroSecurityTokenInjector. An
@@ -240,7 +245,7 @@ ShiroSecurityTokenInjector in the client is shown below
 -------------------------------------------------------------------------------------
 
 [[ShiroSecurity-SendingMessagestoroutessecuredbyaShiroSecurityPolicy]]
-== Sending Messages to routes secured by a ShiroSecurityPolicy
+=== Sending Messages to routes secured by a ShiroSecurityPolicy
 
 Messages and Message Exchanges sent along the camel route where the
 security policy is applied need to be accompanied by a SecurityToken in
@@ -274,7 +279,7 @@ ProducerTemplate in Camel along with a SecurityToken
 -------------------------------------------------------------------------------------------------
 
 [[ShiroSecurity-UsingShiroSecurityToken]]
-== Using ShiroSecurityToken
+=== Using ShiroSecurityToken
 
 You can send a message to a Camel route with a header of key
 `ShiroSecurityConstants.SHIRO_SECURITY_TOKEN` of the type

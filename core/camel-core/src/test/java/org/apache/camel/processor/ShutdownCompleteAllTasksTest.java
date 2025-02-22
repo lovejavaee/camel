@@ -33,15 +33,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ShutdownCompleteAllTasksTest extends ContextTestSupport {
 
-    private String url = fileUri("?initialDelay=0&delay=10&synchronous=true");
-    private AtomicInteger counter = new AtomicInteger();
-    private CountDownLatch latch = new CountDownLatch(2);
+    public static final String FILE_URI_QUERY = "?initialDelay=0&delay=10&synchronous=true";
+
+    private final AtomicInteger counter = new AtomicInteger();
+    private final CountDownLatch latch = new CountDownLatch(2);
 
     @Override
     @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
-
+        String url = fileUri(FILE_URI_QUERY);
         template.sendBodyAndHeader(url, "A", Exchange.FILE_NAME, "a.txt");
         template.sendBodyAndHeader(url, "B", Exchange.FILE_NAME, "b.txt");
         template.sendBodyAndHeader(url, "C", Exchange.FILE_NAME, "c.txt");
@@ -75,12 +76,12 @@ public class ShutdownCompleteAllTasksTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
             // START SNIPPET: e1
-            public void configure() throws Exception {
-                from(url).routeId("foo").noAutoStartup()
+            public void configure() {
+                from(fileUri(FILE_URI_QUERY)).routeId("foo").autoStartup(false)
                         // let it complete all tasks during shutdown
                         .shutdownRunningTask(ShutdownRunningTask.CompleteAllTasks).process(new MyProcessor()).to("mock:bar");
             }
@@ -91,7 +92,7 @@ public class ShutdownCompleteAllTasksTest extends ContextTestSupport {
     public class MyProcessor implements Processor {
 
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             counter.incrementAndGet();
             latch.countDown();
         }

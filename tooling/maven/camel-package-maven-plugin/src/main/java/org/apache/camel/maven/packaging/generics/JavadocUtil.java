@@ -67,6 +67,10 @@ public final class JavadocUtil {
                         descSb.append(" <strong>deprecated</strong>");
                     }
                     descSb.append("\n").append(option.getDescription());
+                    if (option.isSupportFileReference()) {
+                        descSb.append(
+                                "\nThis option can also be loaded from an existing file, by prefixing with file: or classpath: followed by the location of the file.");
+                    }
                     if (option.getDefaultValue() != null) {
                         descSb.append("\nDefault value: ").append(option.getDefaultValue());
                     }
@@ -89,15 +93,24 @@ public final class JavadocUtil {
     }
 
     public static String pathParameterJavaDoc(ComponentModel model) {
+        String doc = null;
         int pos = model.getSyntax().indexOf(':');
         if (pos != -1) {
-            return model.getSyntax().substring(pos + 1);
+            doc = model.getSyntax().substring(pos + 1);
         } else {
-            return model.getSyntax();
+            doc = model.getSyntax();
         }
+
+        // remove leading non alpha symbols
+        char ch = doc.charAt(0);
+        while (!Character.isAlphabetic(ch)) {
+            doc = doc.substring(1);
+            ch = doc.charAt(0);
+        }
+        return doc;
     }
 
-    public static String extractJavaDoc(String sourceCode, MethodSource ms) throws IOException {
+    public static String extractJavaDoc(String sourceCode, MethodSource<?> ms) throws IOException {
         // the javadoc is mangled by roaster (sadly it does not preserve newlines and original formatting)
         // so we need to load it from the original source file
         Object internal = ms.getJavaDoc().getInternal();
@@ -108,7 +121,7 @@ public final class JavadocUtil {
                 String doc = sourceCode.substring(pos, pos + len);
                 LineNumberReader ln = new LineNumberReader(new StringReader(doc));
                 String line;
-                StringBuilder sb = new StringBuilder();
+                StringBuilder sb = new StringBuilder(256);
                 while ((line = ln.readLine()) != null) {
                     line = line.trim();
                     if (line.startsWith("/**") || line.startsWith("*/")) {

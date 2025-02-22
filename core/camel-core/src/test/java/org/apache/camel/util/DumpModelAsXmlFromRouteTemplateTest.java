@@ -82,7 +82,7 @@ public class DumpModelAsXmlFromRouteTemplateTest extends ContextTestSupport {
         context.addRouteFromTemplate("bar2", "myTemplate", map);
 
         String xml = PluginHelper.getModelToXMLDumper(context).dumpModelAsXml(context, context.getRouteDefinition("bar"), true,
-                false);
+                true);
         assertNotNull(xml);
         log.info(xml);
 
@@ -104,8 +104,7 @@ public class DumpModelAsXmlFromRouteTemplateTest extends ContextTestSupport {
         node = (Element) nodes.item(0);
         assertEquals("bar", node.getAttribute("id"));
 
-        xml = PluginHelper.getModelToXMLDumper(context).dumpModelAsXml(context, context.getRouteDefinition("bar2"), true,
-                false);
+        xml = PluginHelper.getModelToXMLDumper(context).dumpModelAsXml(context, context.getRouteDefinition("bar2"), true, true);
         assertNotNull(xml);
         log.info(xml);
 
@@ -129,10 +128,10 @@ public class DumpModelAsXmlFromRouteTemplateTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 routeTemplate("myTemplate").templateParameter("bar").templateParameter("greeting").templateParameter("whereto")
                         .from("direct:{{bar}}").transform(simple("{{greeting}}")).to("mock:{{whereto}}");
             }

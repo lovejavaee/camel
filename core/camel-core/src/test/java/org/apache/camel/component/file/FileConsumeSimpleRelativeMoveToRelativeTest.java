@@ -24,8 +24,6 @@ import org.junit.jupiter.api.Test;
 
 public class FileConsumeSimpleRelativeMoveToRelativeTest extends ContextTestSupport {
 
-    private String fileUrl = fileUri();
-
     @Test
     public void testMoveToSubDir() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
@@ -33,7 +31,7 @@ public class FileConsumeSimpleRelativeMoveToRelativeTest extends ContextTestSupp
         mock.expectedFileExists(testFile(".done/bye.txt"));
         mock.expectedFileExists(testFile("sub/.done/hello.txt"));
         mock.expectedFileExists(testFile("sub/sub2/.done/goodday.txt"));
-
+        String fileUrl = fileUri();
         template.sendBodyAndHeader(fileUrl, "Bye World", Exchange.FILE_NAME, "bye.txt");
         template.sendBodyAndHeader(fileUrl, "Hello World", Exchange.FILE_NAME, "sub/hello.txt");
         template.sendBodyAndHeader(fileUrl, "Goodday World", Exchange.FILE_NAME, "sub/sub2/goodday.txt");
@@ -42,10 +40,10 @@ public class FileConsumeSimpleRelativeMoveToRelativeTest extends ContextTestSupp
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("?recursive=true&move=.done&initialDelay=0&delay=10")).convertBodyTo(String.class)
                         .to("mock:result");
             }

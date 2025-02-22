@@ -16,16 +16,18 @@
  */
 package org.apache.camel.component.jslt;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.Serializable;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -40,6 +42,7 @@ import com.schibsted.spt.data.jslt.Expression;
 import com.schibsted.spt.data.jslt.Function;
 import com.schibsted.spt.data.jslt.JsltException;
 import com.schibsted.spt.data.jslt.Parser;
+import com.schibsted.spt.data.jslt.filters.DefaultJsonFilter;
 import com.schibsted.spt.data.jslt.filters.JsonFilter;
 import org.apache.camel.Category;
 import org.apache.camel.Exchange;
@@ -56,13 +59,14 @@ import org.apache.camel.util.IOHelper;
 import org.apache.camel.util.ObjectHelper;
 
 /**
- * Query or transform JSON payloads using an JSLT.
+ * Query or transform JSON payloads using JSLT.
  */
 @UriEndpoint(firstVersion = "3.1.0", scheme = "jslt", title = "JSLT", syntax = "jslt:resourceUri", producerOnly = true,
-             category = { Category.TRANSFORMATION }, headersClass = JsltConstants.class)
+             remote = false, category = { Category.TRANSFORMATION }, headersClass = JsltConstants.class)
 public class JsltEndpoint extends ResourceEndpoint {
 
     private static final ObjectMapper OBJECT_MAPPER;
+    private static final JsonFilter DEFAULT_JSON_FILTER = new DefaultJsonFilter();
 
     static {
         OBJECT_MAPPER = new ObjectMapper();
@@ -89,6 +93,11 @@ public class JsltEndpoint extends ResourceEndpoint {
     }
 
     @Override
+    public boolean isRemote() {
+        return false;
+    }
+
+    @Override
     public ExchangePattern getExchangePattern() {
         return ExchangePattern.InOut;
     }
@@ -98,44 +107,68 @@ public class JsltEndpoint extends ResourceEndpoint {
         return "jslt:" + getResourceUri();
     }
 
-    private synchronized Expression getTransform(Message msg) throws Exception {
-        if (transform == null) {
-            if (log.isDebugEnabled()) {
-                String path = getResourceUri();
-                log.debug("Jslt content read from resource {} with resourceUri: {} for endpoint {}", getResourceUri(), path,
-                        getEndpointUri());
+    private Expression getTransform(Message msg) throws Exception {
+        getInternalLock().lock();
+        try {
+
+            final String jsltStringFromHeader
+                    = allowTemplateFromHeader ? msg.getHeader(JsltConstants.HEADER_JSLT_STRING, String.class) : null;
+
+            final boolean useTemplateFromUri = jsltStringFromHeader == null;
+
+            if (useTemplateFromUri && transform != null) {
+                return transform;
             }
 
-            String jsltStringFromHeader
-                    = allowTemplateFromHeader ? msg.getHeader(JsltConstants.HEADER_JSLT_STRING, String.class) : null;
-            Collection<Function> functions = ((JsltComponent) getComponent()).getFunctions();
-            JsonFilter objectFilter = ((JsltComponent) getComponent()).getObjectFilter();
+            final Collection<Function> functions = Objects.requireNonNullElse(
+                    ((JsltComponent) getComponent()).getFunctions(),
+                    Collections.emptyList());
 
-            Parser parser;
-            InputStream stream = null;
+            final JsonFilter objectFilter = Objects.requireNonNullElse(
+                    ((JsltComponent) getComponent()).getObjectFilter(),
+                    DEFAULT_JSON_FILTER);
+
+            final String transformSource;
+            final InputStream stream;
+
+            if (useTemplateFromUri) {
+                transformSource = getResourceUri();
+
+                if (log.isDebugEnabled()) {
+                    log.debug("Jslt content read from resource {} with resourceUri: {} for endpoint {}",
+                            transformSource,
+                            transformSource,
+                            getEndpointUri());
+                }
+
+                stream = ResourceHelper.resolveMandatoryResourceAsInputStream(getCamelContext(), transformSource);
+                if (stream == null) {
+                    throw new JsltException("Cannot load resource '" + transformSource + "': not found");
+                }
+            } else { // use template from header
+                stream = new ByteArrayInputStream(jsltStringFromHeader.getBytes(StandardCharsets.UTF_8));
+                transformSource = "<inline>";
+            }
+
+            final Expression transform;
             try {
-                if (jsltStringFromHeader != null) {
-                    parser = new Parser(new StringReader(jsltStringFromHeader)).withSource("<inline>");
-                } else {
-                    stream = ResourceHelper.resolveMandatoryResourceAsInputStream(getCamelContext(), getResourceUri());
-                    if (stream == null) {
-                        throw new JsltException("Cannot load resource '" + getResourceUri() + "': not found");
-                    }
-                    Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8);
-                    parser = new Parser(reader).withSource(getResourceUri());
-                }
-                if (functions != null) {
-                    parser = parser.withFunctions(functions);
-                }
-                if (objectFilter != null) {
-                    parser = parser.withObjectFilter(objectFilter);
-                }
-                this.transform = parser.compile();
+                transform = new Parser(new InputStreamReader(stream))
+                        .withFunctions(functions)
+                        .withObjectFilter(objectFilter)
+                        .withSource(transformSource)
+                        .compile();
             } finally {
+                // the stream is consumed only on .compile(), cannot be closed before
                 IOHelper.close(stream);
             }
+
+            if (useTemplateFromUri) {
+                this.transform = transform;
+            }
+            return transform;
+        } finally {
+            getInternalLock().unlock();
         }
-        return transform;
     }
 
     public JsltEndpoint findOrCreateEndpoint(String uri, String newResourceUri) {
@@ -208,6 +241,9 @@ public class JsltEndpoint extends ResourceEndpoint {
         Map<String, JsonNode> serializedVariableMap = new HashMap<>();
         if (variableMap.containsKey("headers")) {
             serializedVariableMap.put("headers", serializeMapToJsonNode((Map<String, Object>) variableMap.get("headers")));
+        }
+        if (variableMap.containsKey("variables")) {
+            serializedVariableMap.put("variables", serializeMapToJsonNode((Map<String, Object>) variableMap.get("variables")));
         }
         if (variableMap.containsKey("exchange")) {
             Exchange ex = (Exchange) variableMap.get("exchange");

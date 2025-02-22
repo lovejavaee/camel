@@ -1,4 +1,5 @@
 = Message Endpoint
+:tabs-sync-option:
 
 Camel supports the
 http://www.enterpriseintegrationpatterns.com/MessageEndpoint.html[Message
@@ -13,7 +14,7 @@ image::eip/MessageEndpointSolution.gif[image]
 
 Connect an application to a messaging channel using a Message Endpoint, a client of the messaging system that the application can then use to send or receive messages.
 
-When using the xref:manual::dsl.adoc[DSL] to create xref:manual::routes.adoc[Routes] you
+When using the xref:manual::dsl.adoc[DSL] to create xref:manual::routes.adoc[Routes], you
 typically refer to Message Endpoints by their xref:manual::uris.adoc[URIs]
 rather than directly using the
 https://www.javadoc.io/doc/org.apache.camel/camel-api/current/org/apache/camel/Endpoint.html[Endpoint]
@@ -27,14 +28,18 @@ available xref:ROOT:index.adoc[Components].
 The following example route demonstrates the use of a xref:ROOT:file-component.adoc[File] consumer endpoint and a xref:ROOT:jms-component.adoc[JMS] producer endpoint,
 by their xref:manual::uris.adoc[URIs]:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("file:messages/foo")
     .to("jms:queue:foo");
 ----
 
-And in XML:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -42,4 +47,4 @@ And in XML:
     <to uri="jms:queue:foo"/>
 </route>
 ----
-
+====

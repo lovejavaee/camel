@@ -27,7 +27,7 @@ import org.apache.camel.support.builder.ExpressionBuilder;
  */
 public class LiteralExpression extends BaseSimpleNode implements LiteralNode {
 
-    protected final StringBuilder text = new StringBuilder();
+    protected final StringBuilder text = new StringBuilder(256);
 
     public LiteralExpression(SimpleToken token) {
         super(token);
@@ -62,7 +62,7 @@ public class LiteralExpression extends BaseSimpleNode implements LiteralNode {
     }
 
     @Override
-    public String createCode(String expression) throws SimpleParserException {
+    public String createCode(CamelContext camelContext, String expression) throws SimpleParserException {
         return getText();
     }
 }

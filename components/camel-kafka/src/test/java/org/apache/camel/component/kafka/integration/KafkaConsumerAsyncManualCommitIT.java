@@ -47,15 +47,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class KafkaConsumerAsyncManualCommitIT extends BaseEmbeddedKafkaTestSupport {
+public class KafkaConsumerAsyncManualCommitIT extends BaseKafkaTestSupport {
     public static final String TOPIC = "testManualCommitTest";
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaConsumerAsyncManualCommitIT.class);
 
     @BindToRegistry("testFactory")
-    private KafkaManualCommitFactory manualCommitFactory = new DefaultKafkaManualAsyncCommitFactory();
+    private final KafkaManualCommitFactory manualCommitFactory = new DefaultKafkaManualAsyncCommitFactory();
 
-    private CamelContext context = contextExtension.getContext();
+    private final CamelContext context = contextExtension.getContext();
 
     private org.apache.kafka.clients.producer.KafkaProducer<String, String> producer;
 
@@ -127,7 +127,7 @@ public class KafkaConsumerAsyncManualCommitIT extends BaseEmbeddedKafkaTestSuppo
             producer.send(data);
         }
 
-        Awaitility.await().atMost(3, TimeUnit.SECONDS).untilAsserted(() -> to.assertIsSatisfied());
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> to.assertIsSatisfied()); // changed to 10 sec for CAMEL-20722
 
         List<Exchange> exchangeList = to.getExchanges();
         assertEquals(5, exchangeList.size());
@@ -159,7 +159,7 @@ public class KafkaConsumerAsyncManualCommitIT extends BaseEmbeddedKafkaTestSuppo
         MockEndpoint to = contextExtension.getMockEndpoint(KafkaTestUtil.MOCK_RESULT);
 
         // Fourth step: We start again our route, since we have been committing the offsets from the first step,
-        // we will expect to consume from the latest committed offset i.e. from offset 5
+        // we will expect to consume from the latest committed offset (i.e., from offset 5)
         context.getRouteController().startRoute("foo");
 
         to.expectedMessageCount(3);

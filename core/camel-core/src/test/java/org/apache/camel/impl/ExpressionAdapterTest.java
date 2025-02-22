@@ -22,8 +22,8 @@ import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.support.ExpressionAdapter;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ExpressionAdapterTest extends ContextTestSupport {
 
@@ -46,7 +46,7 @@ public class ExpressionAdapterTest extends ContextTestSupport {
     }
 
     @Test
-    public void testExpressionAdapter() throws Exception {
+    public void testExpressionAdapter() {
         MyExpression my = new MyExpression();
 
         Exchange e = new DefaultExchange(context);
@@ -56,16 +56,16 @@ public class ExpressionAdapterTest extends ContextTestSupport {
     }
 
     @Test
-    public void testExpressionAdapterFail() throws Exception {
+    public void testExpressionAdapterFail() {
         MyExpression my = new MyExpression();
 
         Exchange e = new DefaultExchange(context);
         e.getIn().setBody("Kaboom");
-        try {
-            my.assertMatches("damn", e);
-            fail("Should have thrown exception");
-        } catch (AssertionError ae) {
-            assertTrue(ae.getMessage().contains("foo"));
-        }
+
+        AssertionError ae = assertThrows(AssertionError.class,
+                () -> my.assertMatches("damn", e),
+                "Should have thrown exception");
+
+        assertTrue(ae.getMessage().contains("foo"));
     }
 }

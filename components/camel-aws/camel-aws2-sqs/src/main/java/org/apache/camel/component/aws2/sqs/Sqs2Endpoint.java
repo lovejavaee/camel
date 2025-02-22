@@ -20,19 +20,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.clock.Clock;
 import org.apache.camel.component.aws2.sqs.client.Sqs2ClientFactory;
-import org.apache.camel.spi.HeaderFilterStrategy;
-import org.apache.camel.spi.HeaderFilterStrategyAware;
-import org.apache.camel.spi.Metadata;
-import org.apache.camel.spi.UriEndpoint;
-import org.apache.camel.spi.UriParam;
-import org.apache.camel.spi.UriPath;
+import org.apache.camel.spi.*;
+import org.apache.camel.support.MonotonicClock;
 import org.apache.camel.support.ResourceHelper;
 import org.apache.camel.support.ScheduledPollEndpoint;
 import org.apache.camel.util.FileUtil;
@@ -54,18 +53,19 @@ import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
 /**
- * Send and receive messages to/from AWS SQS service using AWS SDK version 2.x.
+ * Send and receive messages to/from AWS SQS.
  */
 @UriEndpoint(firstVersion = "3.1.0", scheme = "aws2-sqs", title = "AWS Simple Queue Service (SQS)",
              syntax = "aws2-sqs:queueNameOrArn", category = { Category.CLOUD, Category.MESSAGING },
              headersClass = Sqs2Constants.class)
-public class Sqs2Endpoint extends ScheduledPollEndpoint implements HeaderFilterStrategyAware {
+public class Sqs2Endpoint extends ScheduledPollEndpoint implements HeaderFilterStrategyAware, EndpointServiceLocation {
 
     private static final Logger LOG = LoggerFactory.getLogger(Sqs2Endpoint.class);
 
     private SqsClient client;
     private String queueUrl;
     private boolean queueUrlInitialized;
+    private Clock clock = new MonotonicClock();
 
     @UriPath(description = "Queue name or ARN")
     @Metadata(required = true)
@@ -106,6 +106,11 @@ public class Sqs2Endpoint extends ScheduledPollEndpoint implements HeaderFilterS
         configureConsumer(consumer);
         consumer.setMaxMessagesPerPoll(maxMessagesPerPoll);
         return consumer;
+    }
+
+    @Override
+    public Sqs2Component getComponent() {
+        return (Sqs2Component) super.getComponent();
     }
 
     private boolean isDefaultAwsHost() {
@@ -400,4 +405,39 @@ public class Sqs2Endpoint extends ScheduledPollEndpoint implements HeaderFilterS
         this.maxMessagesPerPoll = maxMessagesPerPoll;
     }
 
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (ObjectHelper.isNotEmpty(configuration.getRegion())) {
+                return configuration.getRegion();
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        } else if (ObjectHelper.isNotEmpty(configuration.getQueueUrl())) {
+            return configuration.getQueueUrl();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "sqs";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        HashMap<String, String> metadata = new HashMap<>();
+        if (configuration.getQueueName() != null) {
+            metadata.put("queueName", configuration.getQueueName());
+        }
+        return metadata;
+    }
+
+    Clock getClock() {
+        return clock;
+    }
+
+    void setClock(Clock clock) {
+        this.clock = Objects.requireNonNull(clock);
+    }
 }

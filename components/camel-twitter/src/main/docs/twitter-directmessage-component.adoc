@@ -5,6 +5,7 @@
 :description: Send and receive Twitter direct messages.
 :since: 2.10
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: twitter
@@ -19,7 +20,7 @@ The Twitter Direct Message Component consumes/produces a user's direct messages.
 ====
 *Consumer interval of time*
 
-When using the Direct Message consumer, it will consider only the last 30 days direct messages
+When using the Direct Message consumer, it will consider only the last 30-day direct messages
 ====
 
 

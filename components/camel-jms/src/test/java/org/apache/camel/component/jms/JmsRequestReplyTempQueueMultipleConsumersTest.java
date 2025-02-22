@@ -25,12 +25,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ExchangePattern;
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.jms.support.CamelJmsTestHelper;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.infra.artemis.services.ArtemisService;
 import org.apache.camel.test.infra.artemis.services.ArtemisServiceFactory;
 import org.apache.camel.test.junit5.CamelTestSupport;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.messaginghub.pooled.jms.JmsPoolConnectionFactory;
@@ -42,20 +46,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Reliability tests for JMS TempQueue Reply Manager with multiple consumers.
  */
+@Isolated("Creates multiple threads")
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Multiple problems: requires too much resources and spam logs with Session is closed warnings")
 public class JmsRequestReplyTempQueueMultipleConsumersTest extends CamelTestSupport {
 
     @RegisterExtension
-    public ArtemisService service = ArtemisServiceFactory.createVMService();
+    public static ArtemisService service = ArtemisServiceFactory.createVMService();
 
     private final Map<String, AtomicInteger> msgsPerThread = new ConcurrentHashMap<>();
     private JmsPoolConnectionFactory connectionFactory;
     private ExecutorService executorService;
 
     @Test
-    public void testMultipleConsumingThreads() throws Exception {
+    public void testMultipleConsumingThreadsStrict() throws Exception {
+        /*
+         This test is meant to be run locally, on developer machines where
+         the system resources are plentiful.
+         */
         executorService = context.getExecutorServiceManager().newFixedThreadPool(this, "test", 5);
 
-        doSendMessages(1000);
+        doSendMessages(1000, 1000);
 
         assertTrue(msgsPerThread.keySet().size() > 1,
                 "Expected multiple consuming threads, but only found: " + msgsPerThread.keySet().size());
@@ -65,22 +76,26 @@ public class JmsRequestReplyTempQueueMultipleConsumersTest extends CamelTestSupp
 
     @ParameterizedTest
     @ValueSource(ints = { 500, 100, 100 })
-    public void testTempQueueRefreshed(int numFiles) throws Exception {
+    public void testTempQueueRefreshed(int numSend) throws Exception {
         executorService = context.getExecutorServiceManager().newFixedThreadPool(this, "test", 5);
 
-        doSendMessages(numFiles);
-        connectionFactory.clear();
+        doSendMessages(numSend, numSend);
 
         context.getExecutorServiceManager().shutdown(executorService);
     }
 
-    private void doSendMessages(int files) throws Exception {
+    @AfterEach
+    public void clearConnection() {
+        connectionFactory.clear();
+    }
+
+    private void doSendMessages(int numSend, int numExpect) throws Exception {
         MockEndpoint.resetMocks(context);
         MockEndpoint mockEndpoint = getMockEndpoint("mock:result");
-        mockEndpoint.expectedMessageCount(files);
+        mockEndpoint.expectedMessageCount(numExpect);
         mockEndpoint.expectsNoDuplicates(body());
 
-        for (int i = 0; i < files; i++) {
+        for (int i = 0; i < numSend; i++) {
             final int index = i;
             executorService.submit(() -> {
                 template.sendBody("direct:start", "Message " + index);

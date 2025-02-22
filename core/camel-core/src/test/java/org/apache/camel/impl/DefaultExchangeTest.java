@@ -39,8 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class DefaultExchangeTest extends ExchangeTestSupport {
 
@@ -63,24 +63,18 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
         assertNotNull(exchange.getIn().getBody());
 
         assertEquals("<hello id='m123'>world!</hello>", exchange.getIn().getBody());
-        try {
-            assertNull(exchange.getIn().getBody(Integer.class));
-            fail("Should have thrown a TypeConversionException");
-        } catch (TypeConversionException e) {
-            // expected
-        }
+
+        assertThrows(TypeConversionException.class, () -> assertNull(exchange.getIn().getBody(Integer.class)),
+                "Should have thrown a TypeConversionException");
 
         assertEquals("<hello id='m123'>world!</hello>", exchange.getIn().getMandatoryBody());
-        try {
-            exchange.getIn().getMandatoryBody(Integer.class);
-            fail("Should have thrown an InvalidPayloadException");
-        } catch (InvalidPayloadException e) {
-            // expected
-        }
+
+        assertThrows(InvalidPayloadException.class, () -> exchange.getIn().getMandatoryBody(Integer.class),
+                "Should have thrown an InvalidPayloadException");
     }
 
     @Test
-    public void testExceptionAsType() throws Exception {
+    public void testExceptionAsType() {
         exchange.setException(
                 RuntimeCamelException.wrapRuntimeCamelException(new ConnectException("Cannot connect to remote server")));
 
@@ -103,7 +97,7 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testHeader() throws Exception {
+    public void testHeader() {
         assertNotNull(exchange.getIn().getHeaders());
 
         assertEquals(123, exchange.getIn().getHeader("bar"));
@@ -125,7 +119,7 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testProperty() throws Exception {
+    public void testProperty() {
         exchange.removeProperty("foobar");
         assertFalse(exchange.hasProperties());
 
@@ -149,7 +143,48 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testRemoveProperties() throws Exception {
+    public void testVariable() {
+        exchange.removeVariable("cheese");
+        assertFalse(exchange.hasVariables());
+
+        exchange.setVariable("fruit", "apple");
+        assertTrue(exchange.hasVariables());
+
+        assertEquals("apple", exchange.getVariable("fruit"));
+        assertNull(exchange.getVariable("beer"));
+        assertNull(exchange.getVariable("beer", String.class));
+
+        // Current TypeConverter support to turn the null value to false of
+        // boolean,
+        // as assertEquals needs the Object as the parameter, we have to use
+        // Boolean.FALSE value in this case
+        assertEquals(Boolean.FALSE, exchange.getVariable("beer", boolean.class));
+        assertNull(exchange.getVariable("beer", Boolean.class));
+
+        assertEquals("apple", exchange.getVariable("fruit", String.class));
+        assertEquals("apple", exchange.getVariable("fruit", "banana", String.class));
+        assertEquals("banana", exchange.getVariable("beer", "banana", String.class));
+    }
+
+    @Test
+    public void testGlobalVariable() {
+        exchange.removeVariable("cheese");
+        assertFalse(exchange.hasVariables());
+
+        exchange.setVariable("fruit", "apple");
+        assertTrue(exchange.hasVariables());
+        assertEquals("apple", exchange.getVariable("fruit"));
+
+        exchange.setVariable("global:myGlob", "myGlobVar");
+        assertEquals("myGlobVar", exchange.getVariable("global:myGlob"));
+        assertNull(exchange.getVariable("myGlob"));
+
+        exchange.removeVariable("fruit");
+        assertFalse(exchange.hasVariables());
+    }
+
+    @Test
+    public void testRemoveProperties() {
         exchange.removeProperty("foobar");
         assertFalse(exchange.hasProperties());
 
@@ -171,7 +206,27 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testRemoveAllProperties() throws Exception {
+    public void testRemoveVariables() {
+        exchange.removeVariable("cheese");
+        assertFalse(exchange.hasVariables());
+
+        exchange.setVariable("fruit", "apple");
+        exchange.setVariable("fruit1", "banana");
+        exchange.setVariable("zone", "Africa");
+        assertTrue(exchange.hasVariables());
+
+        assertEquals("apple", exchange.getVariable("fruit"));
+        assertEquals("banana", exchange.getVariable("fruit1"));
+        assertEquals("Africa", exchange.getVariable("zone"));
+
+        exchange.setVariable("global:myGlob", "myGlobVar");
+        assertEquals("myGlobVar", exchange.getVariable("global:myGlob"));
+        exchange.removeVariable("global:myGlob");
+        assertNull(exchange.getVariable("global:myGlob"));
+    }
+
+    @Test
+    public void testRemoveAllProperties() {
         exchange.removeProperty("foobar");
         assertFalse(exchange.hasProperties());
 
@@ -186,7 +241,22 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testRemovePropertiesWithExclusion() throws Exception {
+    public void testRemoveAllVariables() {
+        exchange.removeVariable("cheese");
+        assertFalse(exchange.hasVariables());
+
+        exchange.setVariable("fruit", "apple");
+        exchange.setVariable("fruit1", "banana");
+        exchange.setVariable("zone", "Africa");
+        assertTrue(exchange.hasVariables());
+
+        exchange.removeVariable("*");
+        assertFalse(exchange.hasVariables());
+        assertEquals(0, exchange.getVariables().size());
+    }
+
+    @Test
+    public void testRemovePropertiesWithExclusion() {
         exchange.removeProperty("foobar");
         assertFalse(exchange.hasProperties());
 
@@ -211,7 +281,7 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testRemovePropertiesPatternWithAllExcluded() throws Exception {
+    public void testRemovePropertiesPatternWithAllExcluded() {
         exchange.removeProperty("foobar");
         assertFalse(exchange.hasProperties());
 
@@ -236,7 +306,7 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testRemoveInternalProperties() throws Exception {
+    public void testRemoveInternalProperties() {
         exchange.setProperty(ExchangePropertyKey.CHARSET_NAME, "iso-8859-1");
 
         assertEquals("iso-8859-1", exchange.getProperty(ExchangePropertyKey.CHARSET_NAME));
@@ -260,7 +330,7 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testAllProperties() throws Exception {
+    public void testAllProperties() {
         exchange.removeProperties("*");
         exchange.setProperty("foo", 123);
         exchange.setProperty(ExchangePropertyKey.TO_ENDPOINT, "seda:bar");
@@ -272,7 +342,32 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testInType() throws Exception {
+    public void testCopyExchangeWithVariables() {
+        exchange.setVariable("beer", "Carlsberg");
+        assertEquals(2, exchange.getVariables().size());
+
+        Exchange copy = exchange.copy();
+        assertTrue(copy.hasVariables());
+        assertEquals(2, copy.getVariables().size());
+        assertEquals("gauda", copy.getVariable("cheese"));
+        assertEquals("Carlsberg", copy.getVariable("beer"));
+
+        exchange.setVariable("beer", "Heineken");
+        assertEquals("Carlsberg", copy.getVariable("beer"));
+
+        exchange.removeVariable("beer");
+        assertEquals(1, exchange.getVariables().size());
+        assertEquals("Carlsberg", copy.getVariable("beer"));
+        assertEquals(2, copy.getVariables().size());
+
+        exchange.removeVariable("*");
+        assertFalse(exchange.hasVariables());
+        assertTrue(copy.hasVariables());
+        assertEquals(2, copy.getVariables().size());
+    }
+
+    @Test
+    public void testInType() {
         exchange.setIn(new MyMessage(context));
 
         MyMessage my = exchange.getIn(MyMessage.class);
@@ -280,7 +375,7 @@ public class DefaultExchangeTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testOutType() throws Exception {
+    public void testOutType() {
         exchange.setOut(new MyMessage(context));
 
         MyMessage my = exchange.getOut(MyMessage.class);

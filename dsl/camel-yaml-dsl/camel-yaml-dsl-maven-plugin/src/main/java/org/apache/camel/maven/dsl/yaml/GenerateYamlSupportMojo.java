@@ -34,6 +34,7 @@ import java.util.stream.Stream;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
 import org.apache.camel.maven.dsl.yaml.support.IndexerSupport;
+import org.apache.camel.tooling.util.Strings;
 import org.apache.camel.util.AntPathMatcher;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
@@ -83,6 +84,10 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
             = DotName.createSimple("jakarta.xml.bind.annotation.XmlElements");
     public static final DotName XML_TRANSIENT_CLASS
             = DotName.createSimple("jakarta.xml.bind.annotation.XmlTransient");
+    public static final DotName XML_ANY_ELEMENT_CLASS
+            = DotName.createSimple("jakarta.xml.bind.annotation.XmlAnyElement");
+    public static final DotName XML_JAVA_TYPE_ADAPTER_CLASS
+            = DotName.createSimple("jakarta.xml.bind.annotation.adapters.XmlJavaTypeAdapter");
 
     public static final DotName METADATA_ANNOTATION_CLASS
             = DotName.createSimple("org.apache.camel.spi.Metadata");
@@ -100,6 +105,8 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
             = DotName.createSimple("org.apache.camel.model.SendDefinition");
     public static final DotName TO_DYNAMIC_DEFINITION_CLASS
             = DotName.createSimple("org.apache.camel.model.ToDynamicDefinition");
+    public static final DotName POLL_DEFINITION_CLASS
+            = DotName.createSimple("org.apache.camel.model.PollDefinition");
     public static final DotName ERROR_HANDLER_BUILDER_CLASS
             = DotName.createSimple("org.apache.camel.builder.ErrorHandlerBuilder");
     public static final DotName VERB_DEFINITION_CLASS
@@ -136,6 +143,9 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
             = ClassName.get("org.apache.camel.spi.annotations", "YamlType");
     public static final ClassName CN_YAML_PROPERTY
             = ClassName.get("org.apache.camel.spi.annotations", "YamlProperty");
+
+    public static final ClassName CN_YAML_PROPERTY_GROUP
+            = ClassName.get("org.apache.camel.spi.annotations", "YamlPropertyGroup");
     public static final ClassName CN_YAML_IN
             = ClassName.get("org.apache.camel.spi.annotations", "YamlIn");
     public static final ClassName CN_EXPRESSION_DEFINITION
@@ -265,11 +275,15 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
         return answer.stream();
     }
 
-    protected static AnnotationSpec yamlProperty(String name, String type) {
-        return yamlProperty(name, type, false, false);
+    protected static AnnotationSpec yamlProperty(String name, String type, String oneOf) {
+        return yamlProperty(name, type, false, false, oneOf);
     }
 
-    protected static AnnotationSpec yamlProperty(String name, String type, boolean required, boolean deprecated) {
+    protected static AnnotationSpec yamlProperty(String name, String type) {
+        return yamlProperty(name, type, false, false, "");
+    }
+
+    protected static AnnotationSpec yamlProperty(String name, String type, boolean required, boolean deprecated, String oneOf) {
         AnnotationSpec.Builder builder = AnnotationSpec.builder(CN_YAML_PROPERTY);
         builder.addMember("name", "$S", name);
         builder.addMember("type", "$S", type);
@@ -279,6 +293,9 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
         if (deprecated) {
             builder.addMember("deprecated", "$L", deprecated);
         }
+        if (!Strings.isNullOrEmpty(oneOf)) {
+            builder.addMember("oneOf", "$S", oneOf);
+        }
 
         return builder.build();
     }
@@ -287,7 +304,8 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
         return yamlPropertyWithFormat(name, type, format, false, false);
     }
 
-    protected static AnnotationSpec yamlPropertyWithFormat(String name, String type, String format, boolean required, boolean deprecated) {
+    protected static AnnotationSpec yamlPropertyWithFormat(
+            String name, String type, String format, boolean required, boolean deprecated) {
         AnnotationSpec.Builder builder = AnnotationSpec.builder(CN_YAML_PROPERTY);
         builder.addMember("name", "$S", name);
         builder.addMember("type", "$S", type);
@@ -309,12 +327,13 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
     //
     // **************************
 
-    protected static AnnotationSpec yamlPropertyWithSubtype(String name, String type, String subType) {
-        return yamlPropertyWithSubtype(name, type, subType, false);
+    protected static AnnotationSpec yamlPropertyWithSubtype(String name, String type, String subType, String oneOf) {
+        return yamlPropertyWithSubtype(name, type, subType, false, oneOf);
     }
 
-    protected static AnnotationSpec yamlPropertyWithSubtype(String name, String type, String subType, boolean required) {
-        return yamlProperty(name, type + ":" + subType, required, false);
+    protected static AnnotationSpec yamlPropertyWithSubtype(
+            String name, String type, String subType, boolean required, String oneOf) {
+        return yamlProperty(name, type + ":" + subType, required, false, oneOf);
     }
 
     // **************************
@@ -584,11 +603,11 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
      */
     private Optional<String> getNameFromAnnotationOrRef(AnnotationInstance annotation, ClassInfo refClass, String emptyValue) {
         return annotationValue(annotation, "name")
-            .map(AnnotationValue::asString)
-            .filter(value -> !emptyValue.equals(value))
-            .or(() -> annotationValue(refClass, XML_ROOT_ELEMENT_ANNOTATION_CLASS, "name")
                 .map(AnnotationValue::asString)
-                .filter(v -> !XML_ANNOTATION_DEFAULT_VALUE.equals(v)));
+                .filter(value -> !emptyValue.equals(value))
+                .or(() -> annotationValue(refClass, XML_ROOT_ELEMENT_ANNOTATION_CLASS, "name")
+                        .map(AnnotationValue::asString)
+                        .filter(v -> !XML_ANNOTATION_DEFAULT_VALUE.equals(v)));
     }
 
     protected boolean isRequired(FieldInfo fi) {
@@ -599,17 +618,17 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
                         .map(AnnotationValue::asBoolean),
                 annotationValue(fi, XML_ATTRIBUTE_ANNOTATION_CLASS, "required")
                         .map(AnnotationValue::asBoolean))
-                                .orElse(false);
+                .orElse(false);
     }
 
     protected String getEnums(FieldInfo fi) {
         return annotationValue(fi, METADATA_ANNOTATION_CLASS, "enums")
-                        .map(AnnotationValue::asString).orElse("");
+                .map(AnnotationValue::asString).orElse("");
     }
 
     protected String getJavaType(FieldInfo fi) {
         return annotationValue(fi, METADATA_ANNOTATION_CLASS, "javaType")
-                        .map(AnnotationValue::asString).orElse("");
+                .map(AnnotationValue::asString).orElse("");
     }
 
     protected boolean isEnum(FieldInfo fi) {
@@ -622,9 +641,8 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
 
     protected boolean extendsType(Type type, DotName superType) {
         return extendsType(
-            view.getClassByName(type.name()),
-            superType
-        );
+                view.getClassByName(type.name()),
+                superType);
     }
 
     protected boolean extendsType(ClassInfo ci, DotName superType) {
@@ -647,9 +665,8 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
 
     protected boolean implementType(Type type, DotName interfaceType) {
         return implementType(
-            view.getClassByName(type.name()),
-            interfaceType
-        );
+                view.getClassByName(type.name()),
+                interfaceType);
     }
 
     protected boolean implementType(ClassInfo ci, DotName interfaceType) {
@@ -691,8 +708,8 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
 
     protected Stream<ClassInfo> implementsOrExtends(Type ci) {
         return Stream.concat(
-            view.getAllKnownSubclasses(ci.name()).stream(),
-            view.getAllKnownSubclasses(ci.name()).stream())
+                view.getAllKnownSubclasses(ci.name()).stream(),
+                view.getAllKnownSubclasses(ci.name()).stream())
                 .distinct()
                 .sorted(Comparator.comparing(ClassInfo::name));
     }
@@ -700,26 +717,25 @@ public abstract class GenerateYamlSupportMojo extends AbstractMojo {
     /**
      * As stated in the JAXB specification:
      * <ul>
-     *     <li>In case of {@code @XmlAttribute} and {@code @XmlElement}, the name is retrieved from the annotation if it
-     *     has been set, otherwise the field name is used</li>
-     *     <li>In case of {@code @XmlElementRef} and {@code @DslProperty} (the latter is specific to Camel), the name is
-     *     retrieved from the annotation if it has been set, otherwise it is retrieved from the annotation
-     *     {@code @XmlRootElement} on the type being referenced.
-     *     </li>
+     * <li>In case of {@code @XmlAttribute} and {@code @XmlElement}, the name is retrieved from the annotation if it has
+     * been set, otherwise the field name is used</li>
+     * <li>In case of {@code @XmlElementRef} and {@code @DslProperty} (the latter is specific to Camel), the name is
+     * retrieved from the annotation if it has been set, otherwise it is retrieved from the annotation
+     * {@code @XmlRootElement} on the type being referenced.</li>
      * </ul>
      */
     protected String fieldName(ClassInfo ci, FieldInfo fi) {
         return firstPresent(
-            annotation(fi, DSL_PROPERTY_ANNOTATION)
-                .flatMap(annotation -> getNameFromAnnotationOrRef(annotation, ci, "")),
-            annotationValue(fi, XML_ATTRIBUTE_ANNOTATION_CLASS, "name")
-                .map(AnnotationValue::asString)
-                .filter(value -> !XML_ANNOTATION_DEFAULT_VALUE.equals(value)),
-            annotationValue(fi, XML_ELEMENT_ANNOTATION_CLASS, "name")
-                .map(AnnotationValue::asString)
-                .filter(value -> !XML_ANNOTATION_DEFAULT_VALUE.equals(value)),
-            annotation(fi, XML_ELEMENT_REF_ANNOTATION_CLASS)
-                .flatMap(annotation -> getNameFromAnnotationOrRef(annotation, ci, XML_ANNOTATION_DEFAULT_VALUE))
-        ).orElseGet(fi::name);
+                annotation(fi, DSL_PROPERTY_ANNOTATION)
+                        .flatMap(annotation -> getNameFromAnnotationOrRef(annotation, ci, "")),
+                annotationValue(fi, XML_ATTRIBUTE_ANNOTATION_CLASS, "name")
+                        .map(AnnotationValue::asString)
+                        .filter(value -> !XML_ANNOTATION_DEFAULT_VALUE.equals(value)),
+                annotationValue(fi, XML_ELEMENT_ANNOTATION_CLASS, "name")
+                        .map(AnnotationValue::asString)
+                        .filter(value -> !XML_ANNOTATION_DEFAULT_VALUE.equals(value)),
+                annotation(fi, XML_ELEMENT_REF_ANNOTATION_CLASS)
+                        .flatMap(annotation -> getNameFromAnnotationOrRef(annotation, ci, XML_ANNOTATION_DEFAULT_VALUE)))
+                .orElseGet(fi::name);
     }
 }

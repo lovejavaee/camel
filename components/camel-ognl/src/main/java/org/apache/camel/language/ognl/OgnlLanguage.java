@@ -20,6 +20,7 @@ import java.util.Map;
 
 import ognl.ClassResolver;
 import ognl.Ognl;
+import ognl.OgnlContext;
 import org.apache.camel.Expression;
 import org.apache.camel.ExpressionIllegalSyntaxException;
 import org.apache.camel.Predicate;
@@ -50,8 +51,8 @@ public class OgnlLanguage extends TypedLanguageSupport implements ScriptingLangu
         try {
             Object compiled = Ognl.parseExpression(script);
             ClassResolver cr = new CamelClassResolver(getCamelContext().getClassResolver());
-            Map<?, ?> oglContext = Ognl.createDefaultContext(null, cr);
-            Object value = Ognl.getValue(compiled, oglContext, bindings);
+            OgnlContext oglContext = Ognl.createDefaultContext(null, cr);
+            Object value = OgnlHelper.getValue(compiled, oglContext, bindings);
             return getCamelContext().getTypeConverter().convertTo(resultType, value);
         } catch (Exception e) {
             throw new ExpressionIllegalSyntaxException(script, e);

@@ -16,43 +16,44 @@
  */
 package org.apache.camel.test.infra.artemis.services;
 
-import org.apache.activemq.artemis.api.core.SimpleString;
 import org.apache.activemq.artemis.core.config.Configuration;
-import org.apache.activemq.artemis.core.settings.impl.AddressSettings;
+import org.apache.camel.test.infra.artemis.common.ArtemisRunException;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class ArtemisVMService extends AbstractArtemisEmbeddedService {
+public class ArtemisVMService extends ArtemisVMInfraService implements ArtemisService {
+    public ArtemisVMService() {
+    }
 
-    private String brokerURL;
+    protected ArtemisVMService(int port) {
+        super(port);
+    }
 
-    @Override
-    protected Configuration getConfiguration(Configuration configuration, int port) {
-        final int brokerId = super.BROKER_COUNT.intValue();
-        brokerURL = "vm://" + brokerId;
+    /**
+     * This class should rarely be used. It is intended for some tests that check for reliability operations and require
+     * using the same broker ID between start/stop cycles.
+     */
+    public static class ReusableArtemisVMService extends ArtemisVMService {
 
-        configuration.setPersistenceEnabled(false);
-        try {
-            configuration.addAcceptorConfiguration("in-vm", "vm://" + brokerId);
-        } catch (Exception e) {
-            LOG.warn(e.getMessage(), e);
-            fail("vm acceptor cannot be configured");
+        public ReusableArtemisVMService(int port) {
+            super(port);
         }
-        configuration.addAddressSetting("#",
-                new AddressSettings()
-                        .setDeadLetterAddress(SimpleString.toSimpleString("DLQ"))
-                        .setExpiryAddress(SimpleString.toSimpleString("ExpiryQueue")));
 
-        return configuration;
+        @Override
+        protected int computeBrokerId() {
+            return 0;
+        }
     }
 
     @Override
-    public String serviceAddress() {
-        return brokerURL;
-    }
+    protected Configuration configure(Configuration configuration, int port, int brokerId) {
+        Configuration config = null;
+        try {
+            config = super.configure(configuration, port, brokerId);
+        } catch (ArtemisRunException e) {
+            fail(e.getMessage());
+        }
 
-    @Override
-    public int brokerPort() {
-        return 0;
+        return config;
     }
 }

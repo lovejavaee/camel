@@ -32,17 +32,17 @@ public class DumpModelAsXmlPlaceholdersTest extends ContextTestSupport {
         String xml = PluginHelper.getModelToXMLDumper(context).dumpModelAsXml(context, context.getRouteDefinition("Gouda"));
         assertNotNull(xml);
         log.info(xml);
-        assertTrue(xml.contains("<route xmlns=\"http://camel.apache.org/schema/spring\" customId=\"true\" id=\"Gouda\">"));
-        assertTrue(xml.contains("<from uri=\"direct:start-{{cheese.type}}\"/>"));
-        assertTrue(xml.contains("<to customId=\"true\" id=\"log\" uri=\"direct:end-{{cheese.type}}\"/>"));
+        assertTrue(xml.contains("<route xmlns=\"http://camel.apache.org/schema/spring\" id=\"Gouda\">"));
+        assertTrue(xml.contains("uri=\"direct:start-{{cheese.type}}\""));
+        assertTrue(xml.contains("uri=\"direct:end-{{cheese.type}}\""));
     }
 
     @Override
 
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start-{{cheese.type}}").routeId("{{cheese.type}}").to("direct:end-{{cheese.type}}").id("log");
             }
         };

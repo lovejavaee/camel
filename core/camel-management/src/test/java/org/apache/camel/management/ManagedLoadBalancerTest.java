@@ -45,11 +45,11 @@ public class ManagedLoadBalancerTest extends ManagementTestSupport {
         MBeanServer mbeanServer = getMBeanServer();
 
         ObjectName name = getCamelObjectName(TYPE_ENDPOINT, "mock://a");
-        Long queueSize = (Long) mbeanServer.invoke(name, "queueSize", null, null);
+        Integer queueSize = (Integer) mbeanServer.invoke(name, "queueSize", null, null);
         assertEquals(2, queueSize.intValue());
 
         name = getCamelObjectName(TYPE_ENDPOINT, "mock://b");
-        queueSize = (Long) mbeanServer.invoke(name, "queueSize", null, null);
+        queueSize = (Integer) mbeanServer.invoke(name, "queueSize", null, null);
         assertEquals(1, queueSize.intValue());
 
         name = getCamelObjectName(TYPE_PROCESSOR, "myBalancer");
@@ -60,10 +60,10 @@ public class ManagedLoadBalancerTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").routeId("foo")
                         .loadBalance().id("myBalancer").roundRobin()
                         .to("mock:a").to("mock:b");

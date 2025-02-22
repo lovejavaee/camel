@@ -38,16 +38,14 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.camel.support.jsse.KeyStoreParameters;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import static org.apache.camel.component.crypto.DigitalSignatureConstants.KEYSTORE_ALIAS;
 import static org.apache.camel.component.crypto.DigitalSignatureConstants.SIGNATURE_PRIVATE_KEY;
 import static org.apache.camel.component.crypto.DigitalSignatureConstants.SIGNATURE_PUBLIC_KEY_OR_CERT;
-import static org.apache.camel.test.junit5.TestSupport.isJavaVendor;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 public class SignatureTest extends CamelTestSupport {
 
@@ -241,9 +239,9 @@ public class SignatureTest extends CamelTestSupport {
         MockEndpoint.assertIsSatisfied(context);
     }
 
+    @DisabledIfSystemProperty(named = "java.vendor", matches = ".*ibm.*")
     @Test
     void testSetProviderInRouteDefinition() throws Exception {
-        assumeFalse(isJavaVendor("ibm"), "can only be run on SUN JDK");
         setupMock();
         sendBody("direct:provider", payload);
         MockEndpoint.assertIsSatisfied(context);
@@ -390,11 +388,8 @@ public class SignatureTest extends CamelTestSupport {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         setUpKeys();
-        disableJMX();
-        super.setUp();
     }
 
     public void setUpKeys() throws Exception {

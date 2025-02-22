@@ -21,8 +21,6 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.handler.DrinkValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -32,22 +30,18 @@ public class HttpSendDynamicAwareEmptyPathTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/", new DrinkValidationHandler(GET.name(), null, null, "drink")).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -55,10 +49,10 @@ public class HttpSendDynamicAwareEmptyPathTest extends BaseHttpTest {
     }
 
     @Override
-    protected RoutesBuilder createRouteBuilder() throws Exception {
+    protected RoutesBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:moes")
                         .toD("http://localhost:" + localServer.getLocalPort()
                              + "?throwExceptionOnFailure=false&drink=${header.drink}");
@@ -67,7 +61,7 @@ public class HttpSendDynamicAwareEmptyPathTest extends BaseHttpTest {
     }
 
     @Test
-    public void testEmptyPath() throws Exception {
+    public void testEmptyPath() {
         String out = fluentTemplate.to("direct:moes").withHeader("drink", "beer").request(String.class);
         assertEquals("Drinking beer", out);
     }

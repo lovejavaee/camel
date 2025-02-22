@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,6 +36,7 @@ import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -56,8 +58,8 @@ import static org.apache.camel.component.couchbase.CouchbaseConstants.DEFAULT_VI
  * Query Couchbase Views with a poll strategy and/or perform various operations against Couchbase databases.
  */
 @UriEndpoint(firstVersion = "2.19.0", scheme = "couchbase", title = "Couchbase", syntax = "couchbase:protocol://hostname:port",
-             category = { Category.DATABASE, Category.NOSQL }, headersClass = CouchbaseConstants.class)
-public class CouchbaseEndpoint extends ScheduledPollEndpoint {
+             category = { Category.DATABASE }, headersClass = CouchbaseConstants.class)
+public class CouchbaseEndpoint extends ScheduledPollEndpoint implements EndpointServiceLocation {
 
     @UriPath
     @Metadata(required = true)
@@ -166,6 +168,24 @@ public class CouchbaseEndpoint extends ScheduledPollEndpoint {
     }
 
     @Override
+    public String getServiceUrl() {
+        return protocol + ":" + hostname + ":" + port;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return protocol;
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (username != null) {
+            return Map.of("username", username);
+        }
+        return null;
+    }
+
+    @Override
     public Producer createProducer() throws Exception {
         return new CouchbaseProducer(this, createClient(), persistTo, replicateTo);
     }
@@ -173,6 +193,7 @@ public class CouchbaseEndpoint extends ScheduledPollEndpoint {
     @Override
     public Consumer createConsumer(Processor processor) throws Exception {
         CouchbaseConsumer consumer = new CouchbaseConsumer(this, createClient(), processor);
+        setPollStrategy(consumer.getPollStrategy());
         configureConsumer(consumer);
         return consumer;
     }

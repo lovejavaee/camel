@@ -20,6 +20,8 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -37,6 +39,7 @@ public abstract class LRUCacheFactory {
 
     private static final Logger LOG = LoggerFactory.getLogger(LRUCacheFactory.class);
 
+    private static final Lock LOCK = new ReentrantLock();
     private static volatile LRUCacheFactory instance;
 
     /**
@@ -61,10 +64,13 @@ public abstract class LRUCacheFactory {
      */
     public static LRUCacheFactory getInstance() {
         if (instance == null) {
-            synchronized (LRUCacheFactory.class) {
+            LOCK.lock();
+            try {
                 if (instance == null) {
                     instance = createLRUCacheFactory();
                 }
+            } finally {
+                LOCK.unlock();
             }
         }
         return instance;
@@ -91,7 +97,7 @@ public abstract class LRUCacheFactory {
                     return (LRUCacheFactory) factory;
                 }
             }
-        } catch (Throwable t) {
+        } catch (Exception t) {
             LOG.warn("Error creating LRUCacheFactory. Will use DefaultLRUCacheFactory.", t);
         }
         // use default
@@ -290,6 +296,7 @@ public abstract class LRUCacheFactory {
      * @param  maximumCacheSize         the max capacity.
      * @throws IllegalArgumentException if the initial capacity is negative
      */
+    @Deprecated(since = "4.2.0")
     public abstract <K, V> Map<K, V> createLRUWeakCache(int maximumCacheSize);
 
     /**
@@ -300,6 +307,7 @@ public abstract class LRUCacheFactory {
      * @param  maximumCacheSize         the max capacity.
      * @throws IllegalArgumentException if the initial capacity is negative
      */
+    @Deprecated(since = "4.2.0")
     public abstract <K, V> Map<K, V> createLRUWeakCache(int initialCapacity, int maximumCacheSize);
 
     /**
@@ -311,6 +319,7 @@ public abstract class LRUCacheFactory {
      * @param  stopOnEviction           whether to stop service on eviction.
      * @throws IllegalArgumentException if the initial capacity is negative
      */
+    @Deprecated(since = "4.2.0")
     public abstract <K, V> Map<K, V> createLRUWeakCache(int initialCapacity, int maximumCacheSize, boolean stopOnEviction);
 
 }

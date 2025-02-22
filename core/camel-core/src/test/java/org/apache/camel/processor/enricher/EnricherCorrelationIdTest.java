@@ -31,6 +31,7 @@ class EnricherCorrelationIdTest extends ContextTestSupport {
         String originalCorrelationId = "SOME_ID";
         Exchange exchange = template.request("direct:start", e -> e.setProperty(CORRELATION_ID, originalCorrelationId));
 
+        assertEquals("enrichment", exchange.getMessage().getBody(String.class));
         assertEquals(originalCorrelationId, exchange.getProperty(CORRELATION_ID));
     }
 
@@ -44,7 +45,7 @@ class EnricherCorrelationIdTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
             public void configure() {

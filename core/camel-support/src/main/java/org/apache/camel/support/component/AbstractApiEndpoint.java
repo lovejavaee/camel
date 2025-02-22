@@ -49,7 +49,7 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
         implements ApiEndpoint, PropertyNamesInterceptor, PropertiesInterceptor {
 
     // thread pool executor with Endpoint Class name as keys
-    private static Map<String, ExecutorService> executorServiceMap = new ConcurrentHashMap<>();
+    private static final Map<String, ExecutorService> EXECUTOR_SERVICE_MAP = new ConcurrentHashMap<>();
 
     // logger
     protected final Logger log = LoggerFactory.getLogger(getClass());
@@ -74,7 +74,7 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
     private List<ApiMethod> candidates;
 
     // cached Executor service
-    private ExecutorService executorService;
+    private volatile ExecutorService executorService;
 
     // cached property names and values
     private Set<String> endpointPropertyNames;
@@ -192,9 +192,9 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
     @Override
     protected void configureConsumer(Consumer consumer) throws Exception {
         super.configureConsumer(consumer);
-        if (getConfiguration() instanceof AbstractApiConfiguration && consumer instanceof AbstractApiConsumer) {
+        if (getConfiguration() instanceof AbstractApiConfiguration config && consumer instanceof AbstractApiConsumer) {
             ((AbstractApiConsumer<?, ?>) consumer)
-                    .setSplitResult(((AbstractApiConfiguration) getConfiguration()).isSplitResult());
+                    .setSplitResult(config.isSplitResult());
         }
     }
 
@@ -311,7 +311,7 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
 
         // lookup executorService for extending class name
         final String endpointClassName = endpointClass.getName();
-        ExecutorService executorService = executorServiceMap.get(endpointClassName);
+        ExecutorService executorService = EXECUTOR_SERVICE_MAP.get(endpointClassName);
 
         // CamelContext will shutdown thread pool when it shutdown so we can
         // lazy create it on demand
@@ -330,20 +330,24 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
             // create a new pool using the custom or default profile
             executorService = manager.newScheduledThreadPool(endpointClass, threadProfileName, poolProfile);
 
-            executorServiceMap.put(endpointClassName, executorService);
+            EXECUTOR_SERVICE_MAP.put(endpointClassName, executorService);
         }
 
         return executorService;
     }
 
     public final ExecutorService getExecutorService() {
-        if (this.executorService == null) {
-            // synchronize on class to avoid creating duplicate class level executors
-            synchronized (getClass()) {
-                this.executorService = getExecutorService(getClass(), getCamelContext(), getThreadProfileName());
+        if (executorService == null) {
+            lock.lock();
+            try {
+                if (executorService == null) {
+                    executorService = getExecutorService(getClass(), getCamelContext(), getThreadProfileName());
+                }
+            } finally {
+                lock.unlock();
             }
         }
-        return this.executorService;
+        return executorService;
     }
 
     /**

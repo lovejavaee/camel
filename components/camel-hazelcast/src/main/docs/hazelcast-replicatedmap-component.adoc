@@ -5,6 +5,7 @@
 :description: Perform operations on Hazelcast replicated map.
 :since: 2.16
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: Hazelcast
@@ -47,10 +48,13 @@ The replicatedmap producer provides 6 operations:
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-=== Sample for *put*:
+=== Example for *put*:
 
-Java DSL:
+[tabs]
+====
 
+Java DSL::
++
 [source,java]
 ------------------------------------------------------------------------------------
 from("direct:put")
@@ -58,8 +62,8 @@ from("direct:put")
 .to(String.format("hazelcast-%sbar", HazelcastConstants.REPLICATEDMAP_PREFIX));
 ------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -72,10 +76,15 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
-=== Sample for *get*:
+====
 
-Java DSL:
+=== Example for *get*:
 
+[tabs]
+====
+
+Java DSL::
++
 [source,java]
 ------------------------------------------------------------------------------------
 from("direct:get")
@@ -84,8 +93,8 @@ from("direct:get")
 .to("seda:out");
 ------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -99,10 +108,15 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
-=== Sample for *delete*:
+====
 
-Java DSL:
+=== Example for *delete*:
 
+[tabs]
+====
+
+Java DSL::
++
 [source,java]
 ---------------------------------------------------------------------------------------
 from("direct:delete")
@@ -110,8 +124,8 @@ from("direct:delete")
 .toF("hazelcast-%sbar", HazelcastConstants.REPLICATEDMAP_PREFIX);
 ---------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -123,8 +137,9 @@ Spring DSL:
     <to uri="hazelcast-replicatedmap:foo" />
 </route>
 -----------------------------------------------------------------------------------------------
+====
 
-you can call them in your test class with:
+You can call them in your test class with:
 
 [source,java]
 ------------------------------------------------------------------------------------------------------------
@@ -133,7 +148,7 @@ template.sendBodyAndHeader("direct:[put|get|delete|clear]", "my-foo", HazelcastC
 
 == replicatedmap cache consumer
 
-For the multimap cache this component provides the same listeners /
+For the multimap cache, this component provides the same listeners /
 variables as for the map cache consumer (except the update and enviction
 listener). The only difference is the *multimap* prefix inside the URI.
 Here is a sample:
@@ -170,9 +185,9 @@ Header Variables inside the response message:
 
 |`CamelHazelcastObjectId` |`String` | the oid of the object
 
-|`CamelHazelcastCacheName` |`String` |the name of the cache - e.g. "foo"
+|`CamelHazelcastCacheName` |`String` |the name of the cache (e.g., "foo")
 
-|`CamelHazelcastCacheType` |`String` |the type of the cache - here replicatedmap
+|`CamelHazelcastCacheType` |`String` |the type of the cache (e.g., replicatedmap)
 |=======================================================================
 
 

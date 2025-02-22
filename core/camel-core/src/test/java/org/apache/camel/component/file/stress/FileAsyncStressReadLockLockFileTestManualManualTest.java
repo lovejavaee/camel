@@ -27,15 +27,15 @@ import org.junit.jupiter.api.Disabled;
 public class FileAsyncStressReadLockLockFileTestManualManualTest extends FileAsyncStressManualTest {
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // leverage the fact that we can limit to max 50 files per poll
                 // this will result in polling again and potentially picking up
                 // files
                 // that already are in progress
-                from(fileUri("?maxMessagesPerPoll=50&readLock=fileLock")).routeId("foo").noAutoStartup()
+                from(fileUri("?maxMessagesPerPoll=50&readLock=fileLock")).routeId("foo").autoStartup(false)
                         .threads(10).process(new Processor() {
                             public void process(Exchange exchange) throws Exception {
                                 // simulate some work with random time to complete

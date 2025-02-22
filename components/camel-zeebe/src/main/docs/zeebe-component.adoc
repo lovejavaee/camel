@@ -2,9 +2,10 @@
 :doctitle: Zeebe
 :shortname: zeebe
 :artifactid: camel-zeebe
-:description: Zeebe component which does integrage with Camunda Zeebe to interact with the API.
+:description: Zeebe component which integrates with Camunda Zeebe to interact with the API.
 :since: 3.21
-:supportlevel: Experimental
+:supportlevel: Preview
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: zeebe
@@ -15,7 +16,7 @@
 
 The *Zeebe*: components provides the ability to interact with business processes in https://github.com/camunda/zeebe[Zeebe].
 
-In order to use the Zeebe component, Maven users will need to add the
+To use the Zeebe component, Maven users will need to add the
 following dependency to their `pom.xml`:
 
 [NOTE]
@@ -47,31 +48,33 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
-== Producer Endpoints:
+== Usage
+
+=== Producer Endpoints
 
 [width="100%",cols="10%,90%",options="header",]
 |=======================================================================
 |Endpoint |Description
 
-|startProcess |Creates and starts an instance of the specified process.
+|`startProcess` |Creates and starts an instance of the specified process.
 
-|cancelProcess |Cancels a running process instance.
+|`cancelProcess` |Cancels a running process instance.
 
-|publishMessage |Publishes a message.
+|`publishMessage` |Publishes a message.
 
-|completeJob |Completes a job for a service task.
+|`completeJob` |Completes a job for a service task.
 
-|failJob |Fails a job.
+|`failJob` |Fails a job.
 
-|updateJobRetries |Updates the number of retries for a job.
+|`updateJobRetries` |Updates the number of retries for a job.
 
-|throwError |Throw an error to indicate that a business error has occurred.
+|`throwError` |Throw an error to indicate that a business error has occurred.
 
-|deployResource |Deploy a process resource. Currently only supports process definitions.
+|`deployResource` |Deploy a process resource. Currently only supports process definitions.
 
 |=======================================================================
 
-The endpoints accept either Java request objects as shown in the examples below or JSON. In JSON camel case for property names is replaced with all lower case seperated by underscores, e.g. processId becomes process_id.
+The endpoints accept either Java request objects as shown in the examples below or JSON. In JSON camel case for property names is replaced with all lower case separated by underscores, e.g., processId becomes process_id.
 
 *Examples*
 
@@ -290,7 +293,7 @@ The endpoints accept either Java request objects as shown in the examples below 
         });
 ----------------------------------------------------------------------------------------------------------------------
 
-== Consumer Endpoints:
+=== Consumer Endpoints:
 
 [width="100%",cols="10%,90%",options="header",]
 |=======================================================================

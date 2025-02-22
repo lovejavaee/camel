@@ -17,7 +17,6 @@
 package org.apache.camel.component.http;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,8 +31,8 @@ import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.io.HttpRequestHandler;
 import org.apache.hc.core5.http.protocol.DefaultHttpProcessor;
 import org.apache.hc.core5.http.protocol.HttpProcessor;
+import org.apache.hc.core5.http.protocol.RequestValidateHost;
 import org.apache.hc.core5.http.protocol.ResponseContent;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,13 +47,10 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     private HttpServer localServer;
     private ComponentVerifierExtension verifier;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        super.setUp();
-
+    public void setupResources() throws Exception {
         localServer = ServerBootstrap.bootstrap()
-                .setHttpProcessor(getHttpProcessor())
+                .setHttpProcessor(getHttpProcessor()).setCanonicalHostName("localhost")
                 .register("/basic", new BasicValidationHandler(GET.name(), null, null, getExpectedContent()))
                 .register("/auth",
                         new AuthenticationValidationHandler(
@@ -64,15 +60,16 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
                 .create();
 
         localServer.start();
+    }
 
+    @BeforeEach
+    void setupVerifier() {
         HttpComponent component = context().getComponent("http", HttpComponent.class);
         verifier = component.getVerifier();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -86,7 +83,8 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
 
     private HttpProcessor getHttpProcessor() {
         return new DefaultHttpProcessor(
-                Collections.singletonList(
+                Arrays.asList(
+                        new RequestValidateHost(),
                         new RequestBasicAuth()),
                 Arrays.asList(
                         new ResponseContent(),
@@ -117,7 +115,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     // *************************************************
 
     @Test
-    public void testParameters() throws Exception {
+    public void testParameters() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/basic"));
 
@@ -127,7 +125,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testMissingMandatoryParameters() throws Exception {
+    public void testMissingMandatoryParameters() {
         Map<String, Object> parameters = new HashMap<>();
 
         ComponentVerifierExtension.Result result = verifier.verify(ComponentVerifierExtension.Scope.PARAMETERS, parameters);
@@ -146,7 +144,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     // *************************************************
 
     @Test
-    public void testConnectivity() throws Exception {
+    public void testConnectivity() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/basic"));
 
@@ -156,7 +154,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivityWithWrongUri() throws Exception {
+    public void testConnectivityWithWrongUri() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", "http://www.not-existing-uri.unknown");
 
@@ -172,7 +170,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivityWithAuthentication() throws Exception {
+    public void testConnectivityWithAuthentication() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/auth"));
         parameters.put("authUsername", AUTH_USERNAME);
@@ -184,7 +182,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivityWithWrongAuthenticationData() throws Exception {
+    public void testConnectivityWithWrongAuthenticationData() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/auth"));
         parameters.put("authUsername", "unknown");
@@ -204,7 +202,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivityWithRedirect() throws Exception {
+    public void testConnectivityWithRedirect() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/redirect"));
 
@@ -214,7 +212,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivityWithRedirectDisabled() throws Exception {
+    public void testConnectivityWithRedirectDisabled() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/redirect"));
         parameters.put("httpClient.redirectsEnabled", "false");
@@ -233,7 +231,7 @@ public class CamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivityWithFollowRedirectEnabled() throws Exception {
+    public void testConnectivityWithFollowRedirectEnabled() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("httpUri", getLocalServerUri("/redirect"));
         parameters.put("httpMethod", "POST");

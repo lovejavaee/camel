@@ -41,7 +41,7 @@ public class ManagedRecipientList extends ManagedProcessor implements ManagedRec
     private String uri;
     private boolean sanitize;
 
-    public ManagedRecipientList(CamelContext context, RecipientList processor, RecipientListDefinition definition) {
+    public ManagedRecipientList(CamelContext context, RecipientList processor, RecipientListDefinition<?> definition) {
         super(context, processor, definition);
         this.processor = processor;
     }
@@ -49,7 +49,7 @@ public class ManagedRecipientList extends ManagedProcessor implements ManagedRec
     @Override
     public void init(ManagementStrategy strategy) {
         super.init(strategy);
-        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : false;
+        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : true;
         uri = getDefinition().getExpression().getExpression();
         if (sanitize) {
             uri = URISupport.sanitizeUri(uri);
@@ -70,8 +70,8 @@ public class ManagedRecipientList extends ManagedProcessor implements ManagedRec
     }
 
     @Override
-    public RecipientListDefinition getDefinition() {
-        return (RecipientListDefinition) super.getDefinition();
+    public RecipientListDefinition<?> getDefinition() {
+        return (RecipientListDefinition<?>) super.getDefinition();
     }
 
     @Override

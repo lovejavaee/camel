@@ -21,14 +21,19 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 /**
  * Unit test for the filter file option
  */
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class FileConsumerFilterFileTest extends ContextTestSupport {
 
-    private String fileUrl = fileUri("?initialDelay=0&delay=10&filterFile=${bodyAs(String)} contains 'World'");
-    private String fileUrl2 = fileUri("?initialDelay=0&delay=10&filterFile=${file:modified} < ${date:now-2s}");
+    public static final String FILE_URL_1 = "?initialDelay=0&delay=10&"
+                                            + "filterFile=${bodyAs(String)} contains 'World'";
+    public static final String FILE_URL_2 = "?initialDelay=0&delay=10&"
+                                            + "filterFile=${file:modified} < ${date:now-2s}";
 
     @Test
     public void testFilterFiles() throws Exception {
@@ -64,11 +69,11 @@ public class FileConsumerFilterFileTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
-                from(fileUrl).convertBodyTo(String.class).to("mock:result");
-                from(fileUrl2).convertBodyTo(String.class).to("mock:result2");
+            public void configure() {
+                from(fileUri(FILE_URL_1)).convertBodyTo(String.class).to("mock:result");
+                from(fileUri(FILE_URL_2)).convertBodyTo(String.class).to("mock:result2");
             }
         };
     }

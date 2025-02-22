@@ -49,13 +49,14 @@ public class RouteSedaSuspendResumeTest extends ContextTestSupport {
 
         assertEquals("Suspended", context.getRouteController().getRouteStatus("foo").name());
         Route route = context.getRoute("foo");
-        if (route instanceof StatefulService) {
-            assertEquals("Suspended", ((StatefulService) route).getStatus().name());
+        if (route instanceof StatefulService statefulService) {
+            assertEquals("Suspended", statefulService.getStatus().name());
         }
 
+        Thread.sleep(1000L);
         // need to give seda consumer thread time to idle
         await().atMost(1, TimeUnit.SECONDS)
-                .until(() -> context.getEndpoint("seda:foo", SedaEndpoint.class).getQueue().size() == 0);
+                .until(() -> context.getEndpoint("seda:foo", SedaEndpoint.class).getQueue().isEmpty());
 
         template.sendBody("seda:foo", "B");
 
@@ -71,16 +72,16 @@ public class RouteSedaSuspendResumeTest extends ContextTestSupport {
 
         assertEquals("Started", context.getRouteController().getRouteStatus("foo").name());
         route = context.getRoute("foo");
-        if (route instanceof StatefulService) {
-            assertEquals("Started", ((StatefulService) route).getStatus().name());
+        if (route instanceof StatefulService statefulService) {
+            assertEquals("Started", statefulService.getStatus().name());
         }
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("seda:foo").routeId("foo").to("log:foo").to("mock:result");
             }
         };

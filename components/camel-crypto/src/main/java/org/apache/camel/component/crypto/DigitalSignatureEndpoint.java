@@ -36,7 +36,7 @@ import org.apache.camel.support.DefaultEndpoint;
  * Sign and verify exchanges using the Signature Service of the Java Cryptographic Extension (JCE).
  */
 @UriEndpoint(firstVersion = "2.3.0", scheme = "crypto", title = "Crypto (JCE)", syntax = "crypto:cryptoOperation:name",
-             producerOnly = true, category = { Category.SECURITY, Category.TRANSFORMATION },
+             remote = false, producerOnly = true, category = { Category.SECURITY, Category.TRANSFORMATION },
              headersClass = DigitalSignatureConstants.class)
 public class DigitalSignatureEndpoint extends DefaultEndpoint {
     @UriParam
@@ -46,6 +46,11 @@ public class DigitalSignatureEndpoint extends DefaultEndpoint {
                                     DigitalSignatureConfiguration configuration) {
         super(uri, component);
         this.configuration = configuration;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

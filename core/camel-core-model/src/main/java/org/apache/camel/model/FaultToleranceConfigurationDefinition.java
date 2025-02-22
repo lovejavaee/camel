@@ -27,7 +27,7 @@ import org.apache.camel.spi.Metadata;
 /**
  * MicroProfile Fault Tolerance Circuit Breaker EIP configuration
  */
-@Metadata(label = "configuration,eip")
+@Metadata(label = "configuration,eip,error")
 @XmlRootElement(name = "faultToleranceConfiguration")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Configurer(extended = true)
@@ -39,8 +39,17 @@ public class FaultToleranceConfigurationDefinition extends FaultToleranceConfigu
     public FaultToleranceConfigurationDefinition() {
     }
 
+    protected FaultToleranceConfigurationDefinition(FaultToleranceConfigurationDefinition source) {
+        super(source);
+        this.parent = source.parent;
+    }
+
     public FaultToleranceConfigurationDefinition(CircuitBreakerDefinition parent) {
         this.parent = parent;
+    }
+
+    public FaultToleranceConfigurationDefinition copyDefinition() {
+        return new FaultToleranceConfigurationDefinition(this);
     }
 
     // Fluent API

@@ -44,9 +44,9 @@ public class GoogleSheetsVerifierExtension extends DefaultComponentVerifierExten
     @Override
     protected Result verifyParameters(Map<String, Object> parameters) {
         ResultBuilder builder = ResultBuilder.withStatusAndScope(Result.Status.OK, Scope.PARAMETERS)
-                .error(ResultErrorHelper.requiresOption("applicationName", parameters))
-                .error(ResultErrorHelper.requiresOption("clientId", parameters))
-                .error(ResultErrorHelper.requiresOption("clientSecret", parameters));
+                .error(ResultErrorHelper.requiresOption(parameters, "applicationName"))
+                .error(ResultErrorHelper.requiresOption(parameters, "clientId"))
+                .error(ResultErrorHelper.requiresOption(parameters, "clientSecret"));
 
         return builder.build();
     }
@@ -64,7 +64,7 @@ public class GoogleSheetsVerifierExtension extends DefaultComponentVerifierExten
             GoogleSheetsConfiguration configuration = setProperties(new GoogleSheetsConfiguration(), parameters);
             GoogleSheetsClientFactory clientFactory = new BatchGoogleSheetsClientFactory();
             Sheets client = clientFactory.makeClient(configuration.getClientId(), configuration.getClientSecret(),
-                    configuration.getScopes(), configuration.getApplicationName(),
+                    configuration.getScopesAsList(), configuration.getApplicationName(),
                     configuration.getRefreshToken(), configuration.getAccessToken());
             client.spreadsheets().get(Optional.ofNullable(parameters.get("spreadsheetId"))
                     .map(Object::toString)

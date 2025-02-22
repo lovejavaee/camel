@@ -32,9 +32,8 @@ import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.protocol.DefaultHttpProcessor;
 import org.apache.hc.core5.http.protocol.HttpProcessor;
+import org.apache.hc.core5.http.protocol.RequestValidateHost;
 import org.apache.hc.core5.http.protocol.ResponseContent;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -44,28 +43,24 @@ public class HttpProxyServerTest extends BaseHttpTest {
 
     private HttpServer proxy;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
+    public void setupResources() throws Exception {
         Map<String, String> expectedHeaders = new HashMap<>();
         // Don't test anymore the Proxy-Connection header as it is highly discouraged, so its support has been removed
         // https://issues.apache.org/jira/browse/HTTPCLIENT-1957
         //        expectedHeaders.put("Proxy-Connection", "Keep-Alive");
-        proxy = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+        proxy = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("127.0.0.1").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("*",
                         new HeaderValidationHandler(GET.name(), null, null, getExpectedContent(), expectedHeaders))
                 .create();
         proxy.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (proxy != null) {
             proxy.stop();
@@ -75,6 +70,7 @@ public class HttpProxyServerTest extends BaseHttpTest {
     @Override
     protected HttpProcessor getBasicHttpProcessor() {
         List<HttpRequestInterceptor> requestInterceptors = new ArrayList<>();
+        requestInterceptors.add(new RequestValidateHost());
         requestInterceptors.add(new RequestProxyBasicAuth());
         List<HttpResponseInterceptor> responseInterceptors = new ArrayList<>();
         responseInterceptors.add(new ResponseContent());
@@ -100,7 +96,7 @@ public class HttpProxyServerTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpGetWithProxyAndWithoutUser() throws Exception {
+    public void httpGetWithProxyAndWithoutUser() {
 
         Exchange exchange = template.request("http://" + getHost() + ":" + getProxyPort() + "?proxyAuthHost="
                                              + getProxyHost() + "&proxyAuthPort=" + getProxyPort(),
@@ -111,7 +107,7 @@ public class HttpProxyServerTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpGetWithProxyAndWithoutUserTwo() throws Exception {
+    public void httpGetWithProxyAndWithoutUserTwo() {
 
         Exchange exchange = template.request("http://" + getHost() + ":" + getProxyPort() + "?proxyHost=" + getProxyHost()
                                              + "&proxyPort=" + getProxyPort(),
@@ -122,7 +118,7 @@ public class HttpProxyServerTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpGetWithProxyOnComponent() throws Exception {
+    public void httpGetWithProxyOnComponent() {
         HttpComponent http = context.getComponent("http", HttpComponent.class);
         http.setProxyAuthHost(getProxyHost());
         http.setProxyAuthPort(Integer.parseInt(getProxyPort()));
@@ -145,7 +141,7 @@ public class HttpProxyServerTest extends BaseHttpTest {
     }
 
     private String getProxyPort() {
-        return "" + proxy.getLocalPort();
+        return Integer.toString(proxy.getLocalPort());
     }
 
 }

@@ -17,7 +17,6 @@
 package org.apache.camel.impl.cloud;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
@@ -29,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import static java.util.Optional.ofNullable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CombinedServiceFilterTest extends ContextTestSupport {
@@ -40,15 +40,15 @@ public class CombinedServiceFilterTest extends ContextTestSupport {
 
         CombinedServiceFilter filter = (CombinedServiceFilter) conf.newInstance(context);
         assertEquals(2, filter.getDelegates().size());
-        assertTrue(filter.getDelegates().get(0) instanceof HealthyServiceFilter);
-        assertTrue(filter.getDelegates().get(1) instanceof PassThroughServiceFilter);
+        assertInstanceOf(HealthyServiceFilter.class, filter.getDelegates().get(0));
+        assertInstanceOf(PassThroughServiceFilter.class, filter.getDelegates().get(1));
     }
 
     @Test
     public void testMultiServiceFilter() throws Exception {
         CombinedServiceCallServiceFilterConfiguration conf = new CombinedServiceCallServiceFilterConfiguration()
                 .healthy()
-                .custom((exchange, services) -> services.stream().filter(s -> s.getPort() < 2000).collect(Collectors.toList()));
+                .custom((exchange, services) -> services.stream().filter(s -> s.getPort() < 2000).toList());
 
         Exchange exchange = new DefaultExchange(context);
         List<ServiceDefinition> services = conf.newInstance(context).apply(exchange, Arrays.asList(
@@ -74,7 +74,7 @@ public class CombinedServiceFilterTest extends ContextTestSupport {
                                 .get("supports"))
                                 .orElse("")
                                 .contains(exchange.getProperty("needs", String.class)))
-                        .collect(Collectors.toList()));
+                        .toList());
 
         Map<String, String> metadata = Collections.singletonMap("supports", "foo,bar");
 

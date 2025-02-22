@@ -37,7 +37,8 @@ import org.stringtemplate.v4.STGroup;
  */
 @UriEndpoint(firstVersion = "1.2.0", scheme = "string-template", title = "String Template",
              syntax = "string-template:resourceUri", producerOnly = true,
-             category = { Category.TRANSFORMATION, Category.SCRIPT }, headersClass = StringTemplateConstants.class)
+             remote = false, category = { Category.TRANSFORMATION, Category.SCRIPT },
+             headersClass = StringTemplateConstants.class)
 public class StringTemplateEndpoint extends ResourceEndpoint {
 
     @UriParam(defaultValue = "false")
@@ -52,6 +53,11 @@ public class StringTemplateEndpoint extends ResourceEndpoint {
 
     public StringTemplateEndpoint(String endpointUri, Component component, String resourceUri) {
         super(endpointUri, component, resourceUri);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

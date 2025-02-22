@@ -18,24 +18,58 @@ package org.apache.camel.dsl.jbang.core.commands;
 
 import java.io.File;
 
+import org.apache.camel.dsl.jbang.core.common.Printer;
 import org.apache.camel.util.FileUtil;
 
 public final class CommandHelper {
 
+    private static final ThreadLocal<Printer> printerAssociation = new ThreadLocal<>();
+
     private CommandHelper() {
     }
 
+    public static Printer getPrinter() {
+        return printerAssociation.get();
+    }
+
+    public static void setPrinter(Printer out) {
+        printerAssociation.set(out);
+    }
+
     public static void cleanExportDir(String dir) {
+        CommandHelper.cleanExportDir(dir, true);
+    }
+
+    public static void cleanExportDir(String dir, boolean keepHidden) {
         File target = new File(dir);
         File[] files = target.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (!f.isHidden() && f.isDirectory()) {
+                if (f.isDirectory() && (!keepHidden || !f.isHidden())) {
                     FileUtil.removeDir(f);
-                } else if (!f.isHidden() && f.isFile()) {
+                } else if (f.isFile() && (!keepHidden || !f.isHidden())) {
                     FileUtil.deleteFile(f);
                 }
             }
+        }
+    }
+
+    /**
+     * A background task that reads from console, and can be used to signal when user has entered or pressed ctrl + c /
+     * ctrl + d
+     */
+    public static class ReadConsoleTask implements Runnable {
+
+        private final Runnable listener;
+
+        public ReadConsoleTask(Runnable listener) {
+            this.listener = listener;
+        }
+
+        @Override
+        public void run() {
+            System.console().readLine();
+            listener.run();
         }
     }
 }

@@ -19,12 +19,14 @@ package org.apache.camel.component.timer;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.camel.Endpoint;
+import org.apache.camel.api.management.ManagedAttribute;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.support.DefaultComponent;
 
 /**
@@ -36,10 +38,25 @@ import org.apache.camel.support.DefaultComponent;
  */
 @org.apache.camel.spi.annotations.Component("timer")
 public class TimerComponent extends DefaultComponent {
-    private final Map<String, Timer> timers = new HashMap<>();
-    private final Map<String, AtomicInteger> refCounts = new HashMap<>();
+    private final Map<String, TimerHolder> timers = new ConcurrentHashMap<>();
+
+    @Metadata
+    private boolean includeMetadata;
 
     public TimerComponent() {
+    }
+
+    @ManagedAttribute(description = "Include metadata")
+    public boolean isIncludeMetadata() {
+        return includeMetadata;
+    }
+
+    /**
+     * Whether to include metadata in the exchange such as fired time, timer name, timer count etc.
+     */
+    @ManagedAttribute(description = "Include metadata")
+    public void setIncludeMetadata(boolean includeMetadata) {
+        this.includeMetadata = includeMetadata;
     }
 
     public Timer getTimer(TimerConsumer consumer) {
@@ -48,26 +65,16 @@ public class TimerComponent extends DefaultComponent {
             key = "nonDaemon:" + key;
         }
 
-        Timer answer;
-        synchronized (timers) {
-            answer = timers.get(key);
-            if (answer == null) {
+        return timers.compute(key, (k, v) -> {
+            if (v == null) {
                 // the timer name is also the thread name, so lets resolve a name to be used
                 String name = consumer.getEndpoint().getCamelContext().getExecutorServiceManager()
                         .resolveThreadName("timer://" + consumer.getEndpoint().getTimerName());
-                answer = new Timer(name, consumer.getEndpoint().isDaemon());
-                timers.put(key, answer);
-                // store new reference counter
-                refCounts.put(key, new AtomicInteger(1));
-            } else {
-                // increase reference counter
-                AtomicInteger counter = refCounts.get(key);
-                if (counter != null) {
-                    counter.incrementAndGet();
-                }
+                return new TimerHolder(new Timer(name, consumer.getEndpoint().isDaemon()));
             }
-        }
-        return answer;
+            v.refCount.incrementAndGet();
+            return v;
+        }).timer;
     }
 
     public void removeTimer(TimerConsumer consumer) {
@@ -75,24 +82,19 @@ public class TimerComponent extends DefaultComponent {
         if (!consumer.getEndpoint().isDaemon()) {
             key = "nonDaemon:" + key;
         }
-
-        synchronized (timers) {
-            // decrease reference counter
-            AtomicInteger counter = refCounts.get(key);
-            if (counter != null && counter.decrementAndGet() <= 0) {
-                refCounts.remove(key);
-                // remove timer as its no longer in use
-                Timer timer = timers.remove(key);
-                if (timer != null) {
-                    timer.cancel();
-                }
+        timers.computeIfPresent(key, (k, v) -> {
+            if (v.refCount.decrementAndGet() == 0) {
+                v.timer.cancel();
+                return null;
             }
-        }
+            return v;
+        });
     }
 
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
         TimerEndpoint answer = new TimerEndpoint(uri, this, remaining);
+        answer.setIncludeMetadata(includeMetadata);
 
         // convert time from String to a java.util.Date using the supported patterns
         String time = getAndRemoveOrResolveReferenceParameter(parameters, "time", String.class);
@@ -117,11 +119,20 @@ public class TimerComponent extends DefaultComponent {
 
     @Override
     protected void doStop() throws Exception {
-        Collection<Timer> collection = timers.values();
-        for (Timer timer : collection) {
-            timer.cancel();
+        Collection<TimerHolder> collection = timers.values();
+        for (TimerHolder holder : collection) {
+            holder.timer.cancel();
         }
         timers.clear();
-        refCounts.clear();
+    }
+
+    private static class TimerHolder {
+        private final Timer timer;
+        private final AtomicInteger refCount;
+
+        private TimerHolder(Timer timer) {
+            this.timer = timer;
+            this.refCount = new AtomicInteger(1);
+        }
     }
 }

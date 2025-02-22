@@ -16,6 +16,8 @@
  */
 package org.apache.camel.component.http;
 
+import java.util.Collections;
+
 import org.apache.camel.BindToRegistry;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.support.jsse.SSLContextParameters;
@@ -23,8 +25,9 @@ import org.apache.camel.test.AvailablePortFinder;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.hc.core5.http.impl.routing.RequestRouter;
+import org.apache.hc.core5.http.protocol.UriPatternType;
+import org.apache.hc.core5.net.URIAuthority;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -49,22 +52,23 @@ public class HttpsTwoComponentsSslContextParametersGetTest extends BaseHttpsTest
     @BindToRegistry("https-bar")
     private HttpComponent httpComponent1 = new HttpComponent();
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setHttpProcessor(getBasicHttpProcessor())
+                .setRequestRouter(RequestRouter.create(
+                        new URIAuthority("localhost"),
+                        UriPatternType.URI_PATTERN,
+                        Collections.EMPTY_LIST,
+                        RequestRouter.LOCAL_AUTHORITY_RESOLVER,
+                        null))
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext()).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void cleanupResources() {
         if (localServer != null) {
             localServer.stop();
         }
@@ -83,7 +87,7 @@ public class HttpsTwoComponentsSslContextParametersGetTest extends BaseHttpsTest
     private void runTest() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 port2 = AvailablePortFinder.getNextAvailable();
 
                 from("direct:foo")

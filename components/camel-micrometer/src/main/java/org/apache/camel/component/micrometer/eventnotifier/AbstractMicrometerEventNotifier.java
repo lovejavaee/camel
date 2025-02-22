@@ -28,8 +28,9 @@ import org.apache.camel.spi.CamelEvent;
 import org.apache.camel.support.EventNotifierSupport;
 import org.apache.camel.support.service.ServiceHelper;
 
+import static org.apache.camel.component.micrometer.MicrometerConstants.KIND;
+import static org.apache.camel.component.micrometer.MicrometerConstants.KIND_EXCHANGE;
 import static org.apache.camel.component.micrometer.MicrometerConstants.METRICS_REGISTRY_NAME;
-import static org.apache.camel.component.micrometer.MicrometerConstants.SERVICE_NAME;
 
 public abstract class AbstractMicrometerEventNotifier<T extends CamelEvent> extends EventNotifierSupport
         implements CamelContextAware {
@@ -41,7 +42,7 @@ public abstract class AbstractMicrometerEventNotifier<T extends CamelEvent> exte
     private boolean prettyPrint;
     private TimeUnit durationUnit = TimeUnit.MILLISECONDS;
 
-    public AbstractMicrometerEventNotifier(Class<T> eventType) {
+    protected AbstractMicrometerEventNotifier(Class<T> eventType) {
         this.eventType = eventType;
     }
 
@@ -99,7 +100,7 @@ public abstract class AbstractMicrometerEventNotifier<T extends CamelEvent> exte
                 registryService.setMeterRegistry(getMeterRegistry());
                 registryService.setPrettyPrint(isPrettyPrint());
                 registryService.setDurationUnit(getDurationUnit());
-                registryService.setMatchingTags(Tags.of(SERVICE_NAME, registryService.getClass().getSimpleName()));
+                registryService.setMatchingTags(Tags.of(KIND, KIND_EXCHANGE));
                 camelContext.addService(registryService);
                 // ensure registry service is started
                 ServiceHelper.startService(registryService);

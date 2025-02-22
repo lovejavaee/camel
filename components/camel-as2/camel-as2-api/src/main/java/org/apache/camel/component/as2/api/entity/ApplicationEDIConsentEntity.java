@@ -16,14 +16,21 @@
  */
 package org.apache.camel.component.as2.api.entity;
 
+import java.io.IOException;
+
 import org.apache.camel.component.as2.api.AS2MediaType;
-import org.apache.http.entity.ContentType;
+import org.apache.hc.core5.http.ContentType;
 
-public class ApplicationEDIConsentEntity extends ApplicationEDIEntity {
+public class ApplicationEDIConsentEntity extends ApplicationEntity {
 
-    public ApplicationEDIConsentEntity(String content, String charset, String contentTransferEncoding,
+    public ApplicationEDIConsentEntity(byte[] content, String charset, String contentTransferEncoding,
                                        boolean isMainBody, String fileName) {
         super(content, ContentType.create(AS2MediaType.APPLICATION_EDI_CONSENT, charset), contentTransferEncoding, isMainBody,
               fileName);
+    }
+
+    @Override
+    public void close() throws IOException {
+        // do nothing
     }
 }

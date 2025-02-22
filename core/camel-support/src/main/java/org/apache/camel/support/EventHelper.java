@@ -266,6 +266,85 @@ public final class EventHelper {
         return answer;
     }
 
+    public static boolean notifyRouteRestarting(CamelContext context, Route route, long attempt) {
+        ManagementStrategy management = context.getManagementStrategy();
+        if (management == null) {
+            return false;
+        }
+
+        EventFactory factory = management.getEventFactory();
+        if (factory == null) {
+            return false;
+        }
+
+        List<EventNotifier> notifiers = management.getStartedEventNotifiers();
+        if (notifiers == null || notifiers.isEmpty()) {
+            return false;
+        }
+
+        boolean answer = false;
+        CamelEvent event = null;
+        for (EventNotifier notifier : notifiers) {
+            if (notifier.isDisabled()) {
+                continue;
+            }
+            if (notifier.isIgnoreRouteEvents()) {
+                continue;
+            }
+
+            if (event == null) {
+                // only create event once
+                event = factory.createRouteRestarting(route, attempt);
+                if (event == null) {
+                    // factory could not create event so exit
+                    return false;
+                }
+            }
+            answer |= doNotifyEvent(notifier, event);
+        }
+        return answer;
+    }
+
+    public static boolean notifyRouteRestartingFailure(
+            CamelContext context, Route route, long attempt, Throwable cause, boolean exhausted) {
+        ManagementStrategy management = context.getManagementStrategy();
+        if (management == null) {
+            return false;
+        }
+
+        EventFactory factory = management.getEventFactory();
+        if (factory == null) {
+            return false;
+        }
+
+        List<EventNotifier> notifiers = management.getStartedEventNotifiers();
+        if (notifiers == null || notifiers.isEmpty()) {
+            return false;
+        }
+
+        boolean answer = false;
+        CamelEvent event = null;
+        for (EventNotifier notifier : notifiers) {
+            if (notifier.isDisabled()) {
+                continue;
+            }
+            if (notifier.isIgnoreRouteEvents()) {
+                continue;
+            }
+
+            if (event == null) {
+                // only create event once
+                event = factory.createRouteRestartingFailure(route, attempt, cause, exhausted);
+                if (event == null) {
+                    // factory could not create event so exit
+                    return false;
+                }
+            }
+            answer |= doNotifyEvent(notifier, event);
+        }
+        return answer;
+    }
+
     public static boolean notifyRouteStarted(CamelContext context, Route route) {
         ManagementStrategy management = context.getManagementStrategy();
         if (management == null) {
@@ -689,10 +768,7 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeCompletedEvent()) {
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeCompletedEvent()) {
                 continue;
             }
 
@@ -735,10 +811,8 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeFailedEvents()) {
+
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeFailedEvents()) {
                 continue;
             }
 
@@ -783,10 +857,8 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeFailedEvents()) {
+
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeFailedEvents()) {
                 continue;
             }
 
@@ -831,10 +903,7 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeFailedEvents()) {
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeFailedEvents()) {
                 continue;
             }
 
@@ -877,10 +946,8 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeFailedEvents()) {
+
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeFailedEvents()) {
                 continue;
             }
 
@@ -923,10 +990,7 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeSendingEvents()) {
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeSendingEvents()) {
                 continue;
             }
 
@@ -969,10 +1033,7 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeSentEvents()) {
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeSentEvents()) {
                 continue;
             }
 
@@ -1483,10 +1544,7 @@ public final class EventHelper {
         // optimise for loop using index access to avoid creating iterator object
         for (int i = 0; i < notifiers.size(); i++) {
             EventNotifier notifier = notifiers.get(i);
-            if (notifier.isDisabled()) {
-                continue;
-            }
-            if (notifier.isIgnoreExchangeEvents() || notifier.isIgnoreExchangeAsyncProcessingStartedEvents()) {
+            if (isDisabledOrIgnored(notifier) || notifier.isIgnoreExchangeAsyncProcessingStartedEvents()) {
                 continue;
             }
 
@@ -1503,16 +1561,19 @@ public final class EventHelper {
         return answer;
     }
 
+    private static boolean isDisabledOrIgnored(EventNotifier notifier) {
+        return notifier.isDisabled() || notifier.isIgnoreExchangeEvents();
+    }
+
     private static boolean doNotifyEvent(EventNotifier notifier, CamelEvent event) {
         if (!notifier.isEnabled(event)) {
-            LOG.trace("Notifier: {} is not enabled for the event: {}", notifier, event);
             return false;
         }
 
         try {
             notifier.notify(event);
         } catch (Throwable e) {
-            LOG.warn("Error notifying event " + event + ". This exception will be ignored.", e);
+            LOG.warn("Error notifying event {}. This exception will be ignored.", event, e);
         }
 
         return true;

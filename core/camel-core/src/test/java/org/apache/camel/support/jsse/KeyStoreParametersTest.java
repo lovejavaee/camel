@@ -28,10 +28,12 @@ import java.security.NoSuchProviderException;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Isolated("This test is regularly flaky")
 public class KeyStoreParametersTest extends AbstractJsseParametersTest {
 
     protected KeyStoreParameters createMinimalKeyStoreParameters() {
@@ -54,7 +56,7 @@ public class KeyStoreParametersTest extends AbstractJsseParametersTest {
         ksp.setType("{{keyStoreParameters.type}}");
         ksp.setProvider("{{keyStoreParameters.provider}}");
         ksp.setResource("{{keyStoreParameters.resource}}");
-        ksp.setPassword("{{keyStoreParamerers.password}}");
+        ksp.setPassword("{{keyStoreParameters.password}}");
 
         KeyStore ks = ksp.createKeyStore();
         assertNotNull(ks.getCertificate("localhost"));
@@ -122,21 +124,6 @@ public class KeyStoreParametersTest extends AbstractJsseParametersTest {
             ksp.createKeyStore();
             fail();
         } catch (KeyStoreException e) {
-            // expected
-        }
-
-        if (getJavaMajorVersion() >= 9) {
-            // checkout http://openjdk.java.net/jeps/229
-            return;
-        }
-
-        ksp = this.createMinimalKeyStoreParameters();
-        ksp.setType("JCEKS");
-
-        try {
-            ksp.createKeyStore();
-            fail();
-        } catch (IOException e) {
             // expected
         }
     }

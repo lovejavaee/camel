@@ -87,18 +87,28 @@ public class KubernetesConfigMapsProducer extends DefaultProducer {
     }
 
     protected void doList(Exchange exchange) {
-        ConfigMapList configMapsList = getEndpoint().getKubernetesClient().configMaps().inAnyNamespace().list();
+        String namespace = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_NAMESPACE_NAME, String.class);
+        ConfigMapList configMapsList;
+
+        if (ObjectHelper.isEmpty(namespace)) {
+            configMapsList = getEndpoint().getKubernetesClient().configMaps().inAnyNamespace().list();
+        } else {
+            configMapsList = getEndpoint().getKubernetesClient().configMaps().inNamespace(namespace).list();
+        }
 
         prepareOutboundMessage(exchange, configMapsList.getItems());
     }
 
     protected void doListConfigMapsByLabels(Exchange exchange) {
+        String namespace = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_NAMESPACE_NAME, String.class);
         Map<String, String> labels = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_CONFIGMAPS_LABELS, Map.class);
-        ConfigMapList configMapsList = getEndpoint().getKubernetesClient()
-                .configMaps()
-                .inAnyNamespace()
-                .withLabels(labels)
-                .list();
+        ConfigMapList configMapsList;
+
+        if (ObjectHelper.isEmpty(namespace)) {
+            configMapsList = getEndpoint().getKubernetesClient().configMaps().inAnyNamespace().withLabels(labels).list();
+        } else {
+            configMapsList = getEndpoint().getKubernetesClient().configMaps().inNamespace(namespace).withLabels(labels).list();
+        }
 
         prepareOutboundMessage(exchange, configMapsList.getItems());
     }
@@ -134,6 +144,8 @@ public class KubernetesConfigMapsProducer extends DefaultProducer {
         String namespaceName = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_NAMESPACE_NAME, String.class);
         HashMap<String, String> configMapData
                 = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_CONFIGMAP_DATA, HashMap.class);
+        HashMap<String, String> configMapAnnotations
+                = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_CONFIGMAPS_ANNOTATIONS, HashMap.class);
         if (ObjectHelper.isEmpty(cfMapName)) {
             LOG.error("{} a specific configMap require specify a configMap name", operationName);
             throw new IllegalArgumentException(
@@ -150,11 +162,17 @@ public class KubernetesConfigMapsProducer extends DefaultProducer {
                     String.format("%s a specific configMap require specify a data map", operationName));
         }
         Map<String, String> labels = exchange.getIn().getHeader(KubernetesConstants.KUBERNETES_CONFIGMAPS_LABELS, Map.class);
-        ConfigMap cfMapCreating = new ConfigMapBuilder().withNewMetadata().withName(cfMapName).withLabels(labels).endMetadata()
-                .withData(configMapData).build();
+        ConfigMapBuilder cfMapCreating = new ConfigMapBuilder();
+        if (ObjectHelper.isEmpty(configMapAnnotations)) {
+            cfMapCreating.withNewMetadata().withName(cfMapName).withLabels(labels).endMetadata().withData(configMapData);
+        } else {
+            cfMapCreating.withNewMetadata().withName(cfMapName).withLabels(labels).withAnnotations(configMapAnnotations)
+                    .endMetadata().withData(configMapData);
+        }
         ConfigMap configMap
                 = operation.apply(
-                        getEndpoint().getKubernetesClient().configMaps().inNamespace(namespaceName).resource(cfMapCreating));
+                        getEndpoint().getKubernetesClient().configMaps().inNamespace(namespaceName)
+                                .resource(cfMapCreating.build()));
 
         prepareOutboundMessage(exchange, configMap);
     }

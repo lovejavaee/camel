@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 
 import javax.xml.transform.sax.SAXSource;
 import javax.xml.transform.stream.StreamSource;
@@ -40,10 +41,10 @@ import org.junit.jupiter.api.Test;
 public class MultiCastParallelAndStreamCachingTest extends ContextTestSupport {
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.setStreamCaching(true);
                 context.getStreamCachingStrategy().setEnabled(true);
                 context.getStreamCachingStrategy().setSpoolDirectory(testDirectory().toFile());
@@ -81,32 +82,22 @@ public class MultiCastParallelAndStreamCachingTest extends ContextTestSupport {
                 Thread.sleep(50);
             }
             Object body = exchange.getIn().getBody();
-            if (body instanceof InputStream) {
+            if (body instanceof InputStream inputStream) {
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
-                IOHelper.copy((InputStream) body, output);
+                IOHelper.copy(inputStream, output);
                 exchange.getMessage().setBody(output.toByteArray());
-            } else if (body instanceof Reader) {
-                Reader reader = (Reader) body;
-                StringBuilder sb = new StringBuilder();
-                for (int i = reader.read(); i > -1; i = reader.read()) {
-                    sb.append((char) i);
-                }
-                reader.close();
-                exchange.getMessage().setBody(sb.toString());
-            } else if (body instanceof StreamSource) {
-                StreamSource ss = (StreamSource) body;
+            } else if (body instanceof Reader reader) {
+                final String string = IOHelper.toString(reader);
+                exchange.getMessage().setBody(string);
+            } else if (body instanceof StreamSource ss) {
                 if (ss.getInputStream() != null) {
                     ByteArrayOutputStream output = new ByteArrayOutputStream();
                     IOHelper.copy(ss.getInputStream(), output);
                     exchange.getMessage().setBody(output.toByteArray());
                 } else if (ss.getReader() != null) {
                     Reader reader = ss.getReader();
-                    StringBuilder sb = new StringBuilder();
-                    for (int i = reader.read(); i > -1; i = reader.read()) {
-                        sb.append((char) i);
-                    }
-                    reader.close();
-                    exchange.getMessage().setBody(sb.toString());
+                    final String string = IOHelper.toString(reader);
+                    exchange.getMessage().setBody(string);
                 } else {
                     throw new RuntimeException("StreamSource without InputStream and without Reader not supported");
                 }
@@ -130,7 +121,7 @@ public class MultiCastParallelAndStreamCachingTest extends ContextTestSupport {
         mock = getMockEndpoint("mock:resultb");
         mock.expectedBodiesReceived("<start></start>");
 
-        template.sendBody("direct:start", new ByteArrayInputStream("<start></start>".getBytes("UTF-8")));
+        template.sendBody("direct:start", new ByteArrayInputStream("<start></start>".getBytes(StandardCharsets.UTF_8)));
 
         assertMockEndpointsSatisfied();
     }
@@ -194,7 +185,9 @@ public class MultiCastParallelAndStreamCachingTest extends ContextTestSupport {
         mock.expectedBodiesReceived(abcScharpS);
 
         InputStreamReader isr
-                = new InputStreamReader(new ByteArrayInputStream(abcScharpS.getBytes("ISO-8859-1")), "ISO-8859-1");
+                = new InputStreamReader(
+                        new ByteArrayInputStream(abcScharpS.getBytes(StandardCharsets.ISO_8859_1)),
+                        StandardCharsets.ISO_8859_1);
         template.sendBody("direct:start", isr);
 
         assertMockEndpointsSatisfied();
@@ -209,7 +202,7 @@ public class MultiCastParallelAndStreamCachingTest extends ContextTestSupport {
         mock = getMockEndpoint("mock:resultb");
         mock.expectedBodiesReceived(input);
 
-        StreamSource ss = new StreamSource(new ByteArrayInputStream(input.getBytes("UTF-8")));
+        StreamSource ss = new StreamSource(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
         template.sendBody("direct:start", ss);
 
         assertMockEndpointsSatisfied();
@@ -224,7 +217,9 @@ public class MultiCastParallelAndStreamCachingTest extends ContextTestSupport {
         mock = getMockEndpoint("mock:resultb");
         mock.expectedBodiesReceived(input);
 
-        InputStreamReader isr = new InputStreamReader(new ByteArrayInputStream(input.getBytes("ISO-8859-1")), "ISO-8859-1");
+        InputStreamReader isr = new InputStreamReader(
+                new ByteArrayInputStream(input.getBytes(StandardCharsets.ISO_8859_1)),
+                StandardCharsets.ISO_8859_1);
         StreamSource ss = new StreamSource(isr);
         template.sendBody("direct:start", ss);
 

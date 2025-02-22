@@ -16,10 +16,11 @@
  */
 package org.apache.camel.language.xquery;
 
+import java.util.Map;
+
 import net.sf.saxon.Configuration;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Expression;
-import org.apache.camel.Predicate;
 import org.apache.camel.component.xquery.XQueryBuilder;
 import org.apache.camel.spi.PropertyConfigurer;
 import org.apache.camel.spi.annotations.Language;
@@ -35,46 +36,32 @@ public class XQueryLanguage extends SingleInputTypedLanguageSupport implements P
         return configuration;
     }
 
+    /**
+     * To use an existing Saxon configuration, instead of default settings.
+     */
     public void setConfiguration(Configuration configuration) {
         this.configuration = configuration;
     }
 
     @Override
-    public Predicate createPredicate(String expression) {
-        return (Predicate) createExpression(expression, null);
-    }
-
-    @Override
-    public Expression createExpression(String expression) {
-        return createExpression(expression, null);
-    }
-
-    @Override
-    public Predicate createPredicate(String expression, Object[] properties) {
-        return (Predicate) createExpression(expression, properties);
-    }
-
-    @Override
-    public Expression createExpression(String expression, Object[] properties) {
+    public Expression createExpression(Expression source, String expression, Object[] properties) {
         expression = loadResource(expression);
 
         XQueryBuilder builder = XQueryBuilder.xquery(expression);
-        configureBuilder(builder, properties);
+        configureBuilder(builder, properties, source);
         return builder;
     }
 
-    protected void configureBuilder(XQueryBuilder builder, Object[] properties) {
-        Class<?> clazz = property(Class.class, properties, 0, getResultType());
+    protected void configureBuilder(XQueryBuilder builder, Object[] properties, Expression source) {
+        builder.setSource(source);
+
+        Class<?> clazz = property(Class.class, properties, 0, null);
         if (clazz != null) {
             builder.setResultType(clazz);
         }
-        String str = property(String.class, properties, 1, getHeaderName());
-        if (str != null) {
-            builder.setHeaderName(str);
-        }
-        str = property(String.class, properties, 2, getPropertyName());
-        if (str != null) {
-            builder.setPropertyName(str);
+        Map<String, String> ns = property(Map.class, properties, 2, null);
+        if (ns != null && !ns.isEmpty()) {
+            builder.setNamespaces(ns);
         }
         if (configuration != null) {
             builder.setConfiguration(configuration);
@@ -87,18 +74,6 @@ public class XQueryLanguage extends SingleInputTypedLanguageSupport implements P
             throw new IllegalStateException("Can only configure our own instance !");
         }
         switch (ignoreCase ? name.toLowerCase() : name) {
-            case "resulttype":
-            case "resultType":
-                setResultType(PropertyConfigurerSupport.property(camelContext, Class.class, value));
-                return true;
-            case "headername":
-            case "headerName":
-                setHeaderName(PropertyConfigurerSupport.property(camelContext, String.class, value));
-                return true;
-            case "propertyname":
-            case "propertyName":
-                setPropertyName(PropertyConfigurerSupport.property(camelContext, String.class, value));
-                return true;
             case "configuration":
             case "Configuration":
                 setConfiguration(PropertyConfigurerSupport.property(camelContext, Configuration.class, value));

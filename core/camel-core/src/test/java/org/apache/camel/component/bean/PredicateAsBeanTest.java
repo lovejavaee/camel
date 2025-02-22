@@ -20,7 +20,6 @@ import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.Predicate;
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.processor.BeanRouteTest;
 import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -29,11 +28,11 @@ import org.slf4j.LoggerFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PredicateAsBeanTest extends ContextTestSupport {
-    private static final Logger LOG = LoggerFactory.getLogger(BeanRouteTest.class);
-    protected MyPredicate myPredicate = new MyPredicate();
+    private static final Logger LOG = LoggerFactory.getLogger(PredicateAsBeanTest.class);
+    protected final MyPredicate myPredicate = new MyPredicate();
 
     @Test
-    public void testSendMessage() throws Exception {
+    public void testSendMessage() {
         String expectedBody = "Wobble";
 
         template.sendBodyAndHeader("direct:in", expectedBody, "foo", "bar");
@@ -42,8 +41,8 @@ public class PredicateAsBeanTest extends ContextTestSupport {
     }
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry answer = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry answer = super.createCamelRegistry();
         answer.bind("myPredicate", myPredicate);
         return answer;
     }

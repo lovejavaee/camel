@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.Iterator;
 
 import org.apache.camel.RoutesBuilder;
@@ -29,6 +30,7 @@ import org.apache.camel.builder.NotifyBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,18 +39,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class ZipFileSplitAndDeleteTest extends CamelTestSupport {
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void deleteTestDirs() {
         deleteDirectory("target/testDeleteZipFileWhenUnmarshalWithDataFormat");
         deleteDirectory("target/testDeleteZipFileWhenUnmarshalWithSplitter");
-        super.setUp();
     }
 
     @Test
     public void testDeleteZipFileWhenUnmarshalWithDataFormat() throws Exception {
-        NotifyBuilder notify = new NotifyBuilder(context)
-                .from("file://target/" + "testDeleteZipFileWhenUnmarshalWithDataFormat").whenDone(1).create();
+        NotifyBuilder notify = new NotifyBuilder(context).whenDone(1).create();
         getMockEndpoint("mock:end").expectedMessageCount(2);
         String zipFile = createZipFile("testDeleteZipFileWhenUnmarshalWithDataFormat");
 
@@ -57,12 +56,13 @@ public class ZipFileSplitAndDeleteTest extends CamelTestSupport {
         notify.matchesWaitTime();
 
         // the original file should have been deleted
-        assertFalse(new File(zipFile).exists(), "File should been deleted");
+        Awaitility.await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertFalse(new File(zipFile).exists(), "File should been deleted"));
     }
 
     @Test
     public void testDeleteZipFileWhenUnmarshalWithSplitter() throws Exception {
-        NotifyBuilder notify = new NotifyBuilder(context).from("file://target/" + "testDeleteZipFileWhenUnmarshalWithSplitter")
+        NotifyBuilder notify = new NotifyBuilder(context)
                 .whenDone(1).create();
         getMockEndpoint("mock:end").expectedMessageCount(2);
         String zipFile = createZipFile("testDeleteZipFileWhenUnmarshalWithSplitter");
@@ -71,8 +71,9 @@ public class ZipFileSplitAndDeleteTest extends CamelTestSupport {
 
         notify.matchesWaitTime();
 
-        // the original file should have been deleted,
-        assertFalse(new File(zipFile).exists(), "File should been deleted");
+        // the original file should have been deleted
+        Awaitility.await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertFalse(new File(zipFile).exists(), "File should been deleted"));
     }
 
     @Override

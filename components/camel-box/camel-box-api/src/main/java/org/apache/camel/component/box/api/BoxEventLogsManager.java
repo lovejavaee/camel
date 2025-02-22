@@ -24,10 +24,13 @@ import java.util.List;
 import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxEvent;
+import com.box.sdk.EnterpriseEventsRequest;
 import com.box.sdk.EventLog;
 import org.apache.camel.RuntimeCamelException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.camel.component.box.api.BoxHelper.buildBoxApiErrorMessage;
 
 /**
  * Provides operations to read Box enterprise (admin) event logs.
@@ -62,25 +65,23 @@ public class BoxEventLogsManager {
      *
      * @return          A list of all the events that met the given criteria.
      */
-    public List<BoxEvent> getEnterpriseEvents(String position, Date after, Date before, BoxEvent.Type... types) {
+    public List<BoxEvent> getEnterpriseEvents(String position, Date after, Date before, BoxEvent.EventType... types) {
         try {
             LOG.debug("Getting all enterprise events occurring between {} and {} {}",
                     after == null ? "unspecified date" : DateFormat.getDateTimeInstance().format(after),
                     before == null ? "unspecified date" : DateFormat.getDateTimeInstance().format(before),
                     position == null ? "" : (" starting at " + position));
 
-            if (after == null) {
-                throw new IllegalArgumentException("Parameter 'after' can not be null");
-            }
-            if (before == null) {
-                throw new IllegalArgumentException("Parameter 'before' can not be null");
-            }
+            BoxHelper.notNull(after, "after");
+            BoxHelper.notNull(before, "before");
 
             if (types == null) {
-                types = new BoxEvent.Type[0];
+                types = new BoxEvent.EventType[0];
             }
 
-            EventLog eventLog = EventLog.getEnterpriseEvents(boxConnection, position, after, before, types);
+            EnterpriseEventsRequest request = new EnterpriseEventsRequest();
+            request.position(position).after(after).before(before).types(types);
+            EventLog eventLog = EventLog.getEnterpriseEvents(boxConnection, request);
 
             List<BoxEvent> results = new ArrayList<>();
             for (BoxEvent event : eventLog) {
@@ -90,8 +91,7 @@ public class BoxEventLogsManager {
             return results;
         } catch (BoxAPIException e) {
             throw new RuntimeCamelException(
-                    String.format("Box API returned the error code %d%n%n%s", e.getResponseCode(), e.getResponse()), e);
+                    buildBoxApiErrorMessage(e), e);
         }
     }
-
 }

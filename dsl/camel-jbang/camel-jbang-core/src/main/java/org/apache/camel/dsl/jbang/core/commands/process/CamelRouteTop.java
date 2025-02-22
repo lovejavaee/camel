@@ -26,7 +26,8 @@ import com.github.freva.asciitable.OverflowBehaviour;
 import org.apache.camel.dsl.jbang.core.commands.CamelJBangMain;
 import picocli.CommandLine.Command;
 
-@Command(name = "route", description = "Top performing routes")
+@Command(name = "route", description = "Top performing routes",
+         sortOptions = false, showDefaultValues = true)
 public class CamelRouteTop extends CamelRouteStatus {
 
     public CamelRouteTop(CamelJBangMain main) {
@@ -34,8 +35,8 @@ public class CamelRouteTop extends CamelRouteStatus {
     }
 
     @Override
-    protected void printTable(List<Row> rows) {
-        System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+    protected void printTable(List<Row> rows, boolean remoteVisible) {
+        printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                 new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                 new Column().header("NAME").dataAlign(HorizontalAlign.LEFT).maxWidth(30, OverflowBehaviour.ELLIPSIS_RIGHT)
                         .with(r -> r.name),
@@ -43,6 +44,9 @@ public class CamelRouteTop extends CamelRouteStatus {
                         .with(this::getId),
                 new Column().header("FROM").dataAlign(HorizontalAlign.LEFT).maxWidth(40, OverflowBehaviour.ELLIPSIS_RIGHT)
                         .with(this::getFrom),
+                new Column().header("REMOTE").visible(remoteVisible).headerAlign(HorizontalAlign.CENTER)
+                        .dataAlign(HorizontalAlign.CENTER)
+                        .with(this::getRemote),
                 new Column().header("STATUS").headerAlign(HorizontalAlign.CENTER)
                         .with(r -> r.state),
                 new Column().header("AGE").headerAlign(HorizontalAlign.CENTER).with(r -> r.age),
@@ -78,16 +82,23 @@ public class CamelRouteTop extends CamelRouteStatus {
 
     @Override
     protected int sortRow(Row o1, Row o2) {
-        // sort for highest mean value as we want the slowest in the top
-        long m1 = o1.mean != null ? Long.parseLong(o1.mean) : 0;
-        long m2 = o2.mean != null ? Long.parseLong(o2.mean) : 0;
-        if (m1 < m2) {
-            return 1;
-        } else if (m1 > m2) {
-            return -1;
-        } else {
-            return 0;
+        // use super to group by first
+        int answer = super.sortRow(o1, o2);
+        if (answer == 0) {
+            int negate = 1;
+            if (sort.startsWith("-")) {
+                negate = -1;
+            }
+            // sort for highest mean value as we want the slowest in the top
+            long m1 = o1.mean != null ? Long.parseLong(o1.mean) : 0;
+            long m2 = o2.mean != null ? Long.parseLong(o2.mean) : 0;
+            if (m1 < m2) {
+                answer = negate;
+            } else if (m1 > m2) {
+                answer = -1 * negate;
+            }
         }
+        return answer;
     }
 
 }

@@ -24,8 +24,6 @@ import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.io.entity.StringEntity;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,12 +34,10 @@ public class HttpProducerRestartTest extends BaseHttpTest {
 
     private String endpointUrl;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        super.setUp();
-
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/hello", (request, response, context) -> {
@@ -56,10 +52,8 @@ public class HttpProducerRestartTest extends BaseHttpTest {
         endpointUrl = "http://localhost:" + localServer.getLocalPort();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -74,7 +68,7 @@ public class HttpProducerRestartTest extends BaseHttpTest {
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").routeId("foo")
                         .to(endpointUrl + "/hello?clientBuilder=#myClientBuilder");
             }

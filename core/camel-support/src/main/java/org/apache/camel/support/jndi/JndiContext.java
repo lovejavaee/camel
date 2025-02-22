@@ -16,6 +16,7 @@
  */
 package org.apache.camel.support.jndi;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -45,12 +46,8 @@ import org.apache.camel.util.CastUtils;
  */
 public class JndiContext implements Context, Serializable {
     public static final String SEPARATOR = "/";
-    protected static final NameParser NAME_PARSER = new NameParser() {
-        public Name parse(String name) throws NamingException {
-            return new CompositeName(name);
-        }
-    };
-    private static final long serialVersionUID = -5754338187296859149L;
+    protected static final NameParser NAME_PARSER = CompositeName::new;
+    private static final @Serial long serialVersionUID = -5754338187296859149L;
 
     private final Hashtable<String, Object> environment; // environment for this context
     private final Map<String, Object> bindings; // bindings at my level
@@ -59,7 +56,7 @@ public class JndiContext implements Context, Serializable {
     private String nameInNamespace = "";
 
     public JndiContext() throws Exception {
-        this(new Hashtable<String, Object>());
+        this(new Hashtable<>());
     }
 
     public JndiContext(Hashtable<String, Object> env) throws Exception {
@@ -112,7 +109,7 @@ public class JndiContext implements Context, Serializable {
      * (the names are suitably extended by the segment originally lopped off).
      */
     protected Map<String, Object> internalBind(String name, Object value) throws NamingException {
-        org.apache.camel.util.ObjectHelper.isNotEmpty(name);
+        org.apache.camel.util.ObjectHelper.notNullOrEmpty(name, "name");
         org.apache.camel.util.ObjectHelper.notNull(frozen, "frozen");
 
         Map<String, Object> newBindings = new HashMap<>();
@@ -125,7 +122,7 @@ public class JndiContext implements Context, Serializable {
             newBindings.put(name, value);
         } else {
             String segment = name.substring(0, pos);
-            org.apache.camel.util.ObjectHelper.isNotEmpty(segment);
+            org.apache.camel.util.ObjectHelper.notNullOrEmpty(segment, "segment");
             Object o = treeBindings.get(segment);
             if (o == null) {
                 o = newContext();
@@ -173,7 +170,7 @@ public class JndiContext implements Context, Serializable {
 
     @Override
     public Object lookup(String name) throws NamingException {
-        if (name.length() == 0) {
+        if (name.isEmpty()) {
             return this;
         }
         Object result = treeBindings.get(name);
@@ -194,7 +191,7 @@ public class JndiContext implements Context, Serializable {
                 // and look for it in the bindings map.
                 CompositeName path = new CompositeName(name);
 
-                if (path.size() == 0) {
+                if (path.isEmpty()) {
                     return this;
                 } else {
                     String first = path.get(0);
@@ -209,8 +206,7 @@ public class JndiContext implements Context, Serializable {
                 }
             }
         }
-        if (result instanceof LinkRef) {
-            LinkRef ref = (LinkRef) result;
+        if (result instanceof LinkRef ref) {
             result = lookup(ref.getLinkName());
         }
         if (result instanceof Reference) {
@@ -222,12 +218,12 @@ public class JndiContext implements Context, Serializable {
                 throw (NamingException) new NamingException("could not look up : " + name).initCause(e);
             }
         }
-        if (result instanceof JndiContext) {
+        if (result instanceof JndiContext jndiContext) {
             String prefix = getNameInNamespace();
-            if (prefix.length() > 0) {
+            if (!prefix.isEmpty()) {
                 prefix = prefix + SEPARATOR;
             }
-            result = new JndiContext((JndiContext) result, environment, prefix + name);
+            result = new JndiContext(jndiContext, environment, prefix + name);
         }
         return result;
     }
@@ -261,8 +257,8 @@ public class JndiContext implements Context, Serializable {
         Object o = lookup(name);
         if (o == this) {
             return CastUtils.cast(new ListEnumeration());
-        } else if (o instanceof Context) {
-            return ((Context) o).list("");
+        } else if (o instanceof Context context) {
+            return context.list("");
         } else {
             throw new NotContextException();
         }
@@ -273,8 +269,8 @@ public class JndiContext implements Context, Serializable {
         Object o = lookup(name);
         if (o == this) {
             return CastUtils.cast(new ListBindingEnumeration());
-        } else if (o instanceof Context) {
-            return ((Context) o).listBindings("");
+        } else if (o instanceof Context context) {
+            return context.listBindings("");
         } else {
             throw new NotContextException();
         }
@@ -381,7 +377,7 @@ public class JndiContext implements Context, Serializable {
     }
 
     private abstract class LocalNamingEnumeration implements NamingEnumeration<Object> {
-        private Iterator<Map.Entry<String, Object>> i = bindings.entrySet().iterator();
+        private final Iterator<Map.Entry<String, Object>> i = bindings.entrySet().iterator();
 
         @Override
         public boolean hasMore() throws NamingException {

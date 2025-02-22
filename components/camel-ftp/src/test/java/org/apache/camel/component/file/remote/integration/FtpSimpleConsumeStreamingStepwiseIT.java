@@ -16,6 +16,7 @@
  */
 package org.apache.camel.component.file.remote.integration;
 
+import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Path;
 
@@ -24,9 +25,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Producer;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.converter.IOConverter;
 import org.apache.camel.test.junit5.TestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,9 +47,7 @@ public class FtpSimpleConsumeStreamingStepwiseIT extends FtpServerTestSupport {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() throws Exception {
         prepareFtpServer();
     }
 
@@ -69,7 +66,7 @@ public class FtpSimpleConsumeStreamingStepwiseIT extends FtpServerTestSupport {
         // prepares the FTP Server by putting a file on the server
         Endpoint endpoint = context.getEndpoint(getFtpUrl());
         Exchange exchange = endpoint.createExchange();
-        exchange.getIn().setBody(IOConverter.toFile("src/test/data/ftpbinarytest/logo3.jpeg"));
+        exchange.getIn().setBody(new File("src/test/data/ftpbinarytest/logo3.jpeg"));
         exchange.getIn().setHeader(Exchange.FILE_NAME, "logo3.jpeg");
         Producer producer = endpoint.createProducer();
         producer.start();

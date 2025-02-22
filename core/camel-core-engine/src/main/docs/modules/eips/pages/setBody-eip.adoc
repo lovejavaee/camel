@@ -4,6 +4,7 @@
 :description: Sets the contents of the message body
 :since: 
 :supportlevel: Stable
+:tabs-sync-option:
 
 Camel supports the
 http://www.enterpriseintegrationpatterns.com/MessageTranslator.html[Message
@@ -29,16 +30,24 @@ This page is documenting the first approach by using Set Body EIP.
 include::partial$eip-options.adoc[]
 // eip options: END
 
-== Examples
+== Exchange properties
 
-=== Using Set Body EIP
+// eip exchangeProperties: START
+include::partial$eip-exchangeProperties.adoc[]
+// eip exchangeProperties: END
+
+== Examples
 
 You can use a xref:setBody-eip.adoc[Set Body] which uses an
 xref:manual::expression.adoc[Expression] to do the transformation:
 
-In the example below we prepend Hello to the message body using the
+In the example below, we prepend Hello to the message body using the
 xref:components:languages:simple-language.adoc[Simple] language:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("direct:cheese")
@@ -46,8 +55,8 @@ from("direct:cheese")
     .to("log:hello");
 ----
 
-And in XML DSL:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -58,8 +67,9 @@ And in XML DSL:
     <to uri="log:hello"/>
 </route>
 ----
+====
 
-=== What is the difference between Transform and Set Body
+== What is the difference between Transform and Set Body?
 
 The Transform EIP always sets the result on the OUT message body.
 

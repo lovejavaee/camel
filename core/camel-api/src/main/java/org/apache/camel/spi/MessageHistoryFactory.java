@@ -30,13 +30,12 @@ public interface MessageHistoryFactory extends StaticService, CamelContextAware 
     /**
      * Creates a new {@link MessageHistory}
      *
-     * @param  routeId   the route id
-     * @param  node      the node in the route
-     * @param  timestamp the time the message processed at this node.
-     * @param  exchange  the current exchange
-     * @return           a new {@link MessageHistory}
+     * @param  routeId  the route id
+     * @param  node     the node in the route
+     * @param  exchange the current exchange
+     * @return          a new {@link MessageHistory}
      */
-    MessageHistory newMessageHistory(String routeId, NamedNode node, long timestamp, Exchange exchange);
+    MessageHistory newMessageHistory(String routeId, NamedNode node, Exchange exchange);
 
     /**
      * Whether to make a copy of the message in the {@link MessageHistory}. By default this is turned off. Beware that

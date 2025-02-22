@@ -31,9 +31,10 @@ import org.apache.camel.util.StopWatch;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Isolated
+/**
+ * Creates multiple threads
+ */
+@Tags({ @Tag("not-parallel"), @Tag("spring") })
 public class JmsRequestReplyExclusiveReplyToConcurrentTest extends AbstractJMSTest {
 
     @Order(2)
@@ -81,7 +85,7 @@ public class JmsRequestReplyExclusiveReplyToConcurrentTest extends AbstractJMSTe
         for (int i = 0; i < size; i++) {
             final Integer num = i;
             executor.submit(() -> {
-                String reply = template.requestBody("direct:start", "" + num, String.class);
+                String reply = template.requestBody("direct:start", Integer.toString(num), String.class);
                 LOG.info("Sent {} expecting reply 'Hello {}' got --> {}", num, num, reply);
                 assertNotNull(reply);
                 assertEquals("Hello " + num, reply);

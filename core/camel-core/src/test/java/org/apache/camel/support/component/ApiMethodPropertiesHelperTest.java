@@ -44,19 +44,19 @@ public class ApiMethodPropertiesHelperTest {
     private static final String VALUE_4 = "true";
     private static final String VALUE_5 = "CamelCaseValue";
 
-    private static ApiMethodPropertiesHelper<TestComponentConfiguration> propertiesHelper
+    private static final ApiMethodPropertiesHelper<TestComponentConfiguration> propertiesHelper
             = new ApiMethodPropertiesHelper<TestComponentConfiguration>(
                     new DefaultCamelContext(), TestComponentConfiguration.class,
                     TEST_PREFIX) {
             };
 
     @Test
-    public void testGetExchangeProperties() throws Exception {
+    public void testGetExchangeProperties() {
         final CamelContext camelContext = new DefaultCamelContext();
         MockEndpoint mock = new MockEndpoint(null, new MockComponent(camelContext));
 
         final HashMap<String, Object> properties = new HashMap<>();
-        final DefaultExchange exchange = new DefaultExchange(mock);
+        final DefaultExchange exchange = DefaultExchange.newFromEndpoint(mock);
         exchange.getIn().setHeader(PROPERTY_1, VALUE_1);
         exchange.getIn().setHeader(PROPERTY_2, VALUE_2);
         exchange.getIn().setHeader(PROPERTY_3, VALUE_3);
@@ -67,7 +67,7 @@ public class ApiMethodPropertiesHelperTest {
     }
 
     @Test
-    public void testGetEndpointProperties() throws Exception {
+    public void testGetEndpointProperties() {
         final HashMap<String, Object> properties = new HashMap<>();
         final TestEndpointConfiguration endpointConfiguration = new TestEndpointConfiguration();
         endpointConfiguration.setProperty1(VALUE_1);
@@ -79,7 +79,7 @@ public class ApiMethodPropertiesHelperTest {
     }
 
     @Test
-    public void testGetEndpointPropertyNames() throws Exception {
+    public void testGetEndpointPropertyNames() {
         final TestEndpointConfiguration endpointConfiguration = new TestEndpointConfiguration();
         endpointConfiguration.setProperty1(VALUE_1);
         endpointConfiguration.setProperty4(Boolean.valueOf(VALUE_4));
@@ -87,7 +87,7 @@ public class ApiMethodPropertiesHelperTest {
     }
 
     @Test
-    public void testGetValidEndpointProperties() throws Exception {
+    public void testGetValidEndpointProperties() {
         assertEquals(2,
                 propertiesHelper.getValidEndpointProperties(new DefaultCamelContext(), new TestEndpointConfiguration()).size());
     }

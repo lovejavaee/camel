@@ -24,10 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class TypeConvertersTest extends ContextTestSupport {
 
-    private MyConverters converters = new MyConverters();
+    private final MyConverters converters = new MyConverters();
 
     @Test
-    public void testAdd() throws Exception {
+    public void testAdd() {
         int before = context.getTypeConverterRegistry().size();
 
         context.getTypeConverterRegistry().addTypeConverters(converters);
@@ -45,4 +45,16 @@ public class TypeConvertersTest extends ContextTestSupport {
         assertEquals("en", iso);
     }
 
+    @Test
+    public void testStringToPrimitiveTypes() throws Exception {
+        assertEquals(Short.parseShort("1"), context.getTypeConverter().mandatoryConvertTo(short.class, "1"));
+        assertEquals(Integer.parseInt("1"), context.getTypeConverter().mandatoryConvertTo(int.class, "1"));
+        assertEquals(Long.parseLong("1"), context.getTypeConverter().mandatoryConvertTo(long.class, "1"));
+
+        assertEquals(Float.parseFloat("1.1"), context.getTypeConverter().mandatoryConvertTo(float.class, "1.1"));
+        assertEquals(Double.parseDouble("1.1"), context.getTypeConverter().mandatoryConvertTo(double.class, "1.1"));
+
+        assertEquals('a', context.getTypeConverter().mandatoryConvertTo(char.class, "a"));
+        assertEquals(Boolean.parseBoolean("true"), context.getTypeConverter().mandatoryConvertTo(boolean.class, "true"));
+    }
 }

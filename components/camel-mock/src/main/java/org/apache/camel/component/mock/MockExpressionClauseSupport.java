@@ -29,7 +29,7 @@ import org.apache.camel.support.builder.ExpressionBuilder;
  */
 public class MockExpressionClauseSupport<T> {
 
-    private T result;
+    private final T result;
     private Expression expressionValue;
     private ExpressionFactory expressionType;
     private volatile boolean initDone;
@@ -46,8 +46,8 @@ public class MockExpressionClauseSupport<T> {
      */
     public T expression(Expression expression) {
         setExpressionValue(expression);
-        if (expression instanceof ExpressionFactory) {
-            setExpressionType((ExpressionFactory) expression);
+        if (expression instanceof ExpressionFactory expressionFactory) {
+            setExpressionType(expressionFactory);
         }
         return result;
     }
@@ -99,7 +99,7 @@ public class MockExpressionClauseSupport<T> {
     }
 
     /**
-     * An expression of an inbound message header of the given name
+     * An expression of an inbound message header with the given name
      */
     public T header(String name) {
         return expression(ExpressionBuilder.headerExpression(name));
@@ -120,7 +120,7 @@ public class MockExpressionClauseSupport<T> {
     }
 
     /**
-     * An expression of an exchange property of the given name
+     * An expression of an exchange property with the given name
      */
     public T exchangeProperty(String name) {
         return expression(ExpressionBuilder.exchangePropertyExpression(name));
@@ -273,6 +273,20 @@ public class MockExpressionClauseSupport<T> {
      */
     public T language(String language, String expression) {
         return expression(ExpressionBuilder.languageExpression(language, expression));
+    }
+
+    /**
+     * An expression of a variable with the given name
+     */
+    public T variable(String name) {
+        return expression(ExpressionBuilder.variableExpression(name));
+    }
+
+    /**
+     * An expression of the exchange scoped variables
+     */
+    public T variables() {
+        return expression(ExpressionBuilder.variablesExpression());
     }
 
     // Properties

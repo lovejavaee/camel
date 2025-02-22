@@ -60,7 +60,7 @@ import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
  * Schedule sending of messages using the Quartz 2.x scheduler.
  */
 @UriEndpoint(firstVersion = "2.12.0", scheme = "quartz", title = "Quartz", syntax = "quartz:groupName/triggerName",
-             consumerOnly = true, category = { Category.SCHEDULING })
+             remote = false, consumerOnly = true, category = { Category.SCHEDULING })
 public class QuartzEndpoint extends DefaultEndpoint {
 
     private static final Logger LOG = LoggerFactory.getLogger(QuartzEndpoint.class);
@@ -110,6 +110,11 @@ public class QuartzEndpoint extends DefaultEndpoint {
 
     public QuartzEndpoint(String uri, QuartzComponent quartzComponent) {
         super(uri, quartzComponent);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     public String getGroupName() {
@@ -382,14 +387,7 @@ public class QuartzEndpoint extends DefaultEndpoint {
             }
         } else {
             try {
-                // calculate whether the trigger can be triggered in the future
-                Calendar cal = null;
-                if (trigger.getCalendarName() != null) {
-                    cal = scheduler.getCalendar(trigger.getCalendarName());
-                }
-                OperableTrigger ot = (OperableTrigger) trigger;
-                Date ft = ot.computeFirstFireTime(cal);
-                if (ft == null && ignoreExpiredNextFireTime) {
+                if (hasTriggerExpired(scheduler, trigger)) {
                     scheduled = false;
                     LOG.warn(
                             "Job {} (cron={}, triggerType={}, jobClass={}) not scheduled, because it will never fire in the future",
@@ -433,6 +431,22 @@ public class QuartzEndpoint extends DefaultEndpoint {
         jobAdded.set(true);
     }
 
+    private boolean hasTriggerExpired(Scheduler scheduler, Trigger trigger) throws SchedulerException {
+        Calendar cal = null;
+        if (trigger.getCalendarName() != null) {
+            cal = scheduler.getCalendar(trigger.getCalendarName());
+        }
+        OperableTrigger ot = (OperableTrigger) trigger;
+
+        // check if current time is past the Trigger EndDate
+        if (ot.getEndTime() != null && new Date().after(ot.getEndTime())) {
+            return true;
+        }
+        // calculate whether the trigger can be triggered in the future
+        Date ft = ot.computeFirstFireTime(cal);
+        return (ft == null && ignoreExpiredNextFireTime);
+    }
+
     private boolean hasTriggerChanged(Trigger oldTrigger, Trigger newTrigger) {
         if (newTrigger instanceof CronTrigger && oldTrigger instanceof CronTrigger) {
             CronTrigger newCron = (CronTrigger) newTrigger;
@@ -471,6 +485,20 @@ public class QuartzEndpoint extends DefaultEndpoint {
         }
         if (cron != null) {
             LOG.debug("Creating CronTrigger: {}", cron);
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssz");
+            final String startAt = (String) copy.get("startAt");
+            if (startAt != null) {
+                triggerBuilder.startAt(dateFormat.parse(startAt));
+            }
+            final String endAt = (String) copy.get("endAt");
+            if (endAt != null) {
+                Date endDate = dateFormat.parse(endAt);
+                if (endDate.before(new Date()) && startAt == null && isIgnoreExpiredNextFireTime()) {
+                    // Trigger Builder sets startAt to current time. Hence if startAt is null, necessary to add a valid value to honor ignoreExpiredNextFireTime
+                    triggerBuilder.startAt(Date.from(endDate.toInstant().minusSeconds(1)));
+                }
+                triggerBuilder.endAt(endDate);
+            }
             final String timeZone = (String) copy.get("timeZone");
             if (timeZone != null) {
                 if (ObjectHelper.isNotEmpty(customCalendar)) {

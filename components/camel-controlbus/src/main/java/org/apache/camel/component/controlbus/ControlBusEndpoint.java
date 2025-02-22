@@ -38,13 +38,13 @@ import org.apache.camel.support.DefaultEndpoint;
  * statistics.
  */
 @UriEndpoint(firstVersion = "2.11.0", scheme = "controlbus", title = "Control Bus", syntax = "controlbus:command:language",
-             producerOnly = true, category = { Category.CORE, Category.MONITORING })
+             remote = false, producerOnly = true, category = { Category.CORE, Category.MONITORING })
 public class ControlBusEndpoint extends DefaultEndpoint {
 
     @UriPath(description = "Command can be either route or language", enums = "route,language")
     @Metadata(required = true)
     private String command;
-    @UriPath(enums = "bean,constant,csimple,datasonnet,exchangeProperty,file,groovy,header,hl7terser,joor,jq,jsonpath,mvel,ognl,python,ref,simple,spel,tokenize,xpath,xquery,xtokenize")
+    @UriPath(enums = "bean,constant,csimple,datasonnet,exchangeProperty,file,groovy,header,hl7terser,java,joor,jq,jsonpath,mvel,ognl,python,ref,simple,spel,tokenize,xpath,xquery,xtokenize")
     private Language language;
     @UriParam
     private String routeId;
@@ -61,6 +61,11 @@ public class ControlBusEndpoint extends DefaultEndpoint {
 
     public ControlBusEndpoint(String endpointUri, Component component) {
         super(endpointUri, component);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

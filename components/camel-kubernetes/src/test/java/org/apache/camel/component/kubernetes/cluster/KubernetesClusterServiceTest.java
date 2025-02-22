@@ -96,6 +96,13 @@ public class KubernetesClusterServiceTest extends CamelTestSupport {
     public void testSimpleLeaderElection(LeaseResourceType type) {
         LeaderRecorder mypod1 = addMember("mypod1", type);
         LeaderRecorder mypod2 = addMember("mypod2", type);
+
+        // Add some unhealthy members to verify they are not considered for leadership
+        addMember("badpod1", type);
+        addMember("badpod2", type);
+        addMember("notreadypod1", type);
+        addMember("notreadypod2", type);
+
         context.start();
 
         mypod1.waitForAnyLeader(5, TimeUnit.SECONDS);
@@ -112,7 +119,7 @@ public class KubernetesClusterServiceTest extends CamelTestSupport {
     public void testMultipleMembersLeaderElection(LeaseResourceType type) {
         int number = 5;
         List<LeaderRecorder> members
-                = IntStream.range(0, number).mapToObj(i -> addMember("mypod" + i, type)).collect(Collectors.toList());
+                = IntStream.range(0, number).mapToObj(i -> addMember("mypod" + i, type)).toList();
         context.start();
 
         for (LeaderRecorder member : members) {
@@ -371,7 +378,7 @@ public class KubernetesClusterServiceTest extends CamelTestSupport {
     private void checkLeadershipChangeDistance(long minimum, TimeUnit unit, LeaderRecorder... recorders) {
         List<LeaderRecorder.LeadershipInfo> infos = Arrays.stream(recorders).flatMap(lr -> lr.getLeadershipInfo().stream())
                 .sorted(Comparator.comparingLong(LeaderRecorder.LeadershipInfo::getChangeTimestamp))
-                .collect(Collectors.toList());
+                .toList();
 
         LeaderRecorder.LeadershipInfo currentLeaderLastSeen = null;
         for (LeaderRecorder.LeadershipInfo info : infos) {

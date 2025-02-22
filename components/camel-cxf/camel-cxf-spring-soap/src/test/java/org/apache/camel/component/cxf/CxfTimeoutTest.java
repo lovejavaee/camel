@@ -16,7 +16,7 @@
  */
 package org.apache.camel.component.cxf;
 
-import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,7 +36,6 @@ import org.apache.cxf.transports.http.configuration.HTTPClientPolicy;
 import org.apache.hello_world_soap_http.Greeter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.context.support.AbstractXmlApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
@@ -45,7 +44,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfTimeoutTest extends CamelSpringTestSupport {
 
     protected static final String GREET_ME_OPERATION = "greetMe";
@@ -96,7 +94,7 @@ public class CxfTimeoutTest extends CamelSpringTestSupport {
         Exchange reply = sendJaxWsMessage(endpointUri);
         Exception e = reply.getException();
         assertNotNull(e, "We should get the exception cause here");
-        assertTrue(e instanceof SocketTimeoutException, "We should get the socket time out exception here");
+        assertTrue(e instanceof HttpTimeoutException, "We should get a http time out exception here");
     }
 
     protected Exchange sendJaxWsMessage(String endpointUri) throws InterruptedException {

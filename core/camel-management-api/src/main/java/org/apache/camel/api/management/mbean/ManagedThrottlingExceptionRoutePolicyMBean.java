@@ -21,6 +21,9 @@ import org.apache.camel.api.management.ManagedOperation;
 
 public interface ManagedThrottlingExceptionRoutePolicyMBean extends ManagedServiceMBean {
 
+    @ManagedAttribute(description = "The class of the exception to throttle")
+    String[] getExceptionTypes();
+
     @ManagedAttribute(description = "How long to wait before moving open circuit to half open")
     Long getHalfOpenAfter();
 
@@ -39,6 +42,18 @@ public interface ManagedThrottlingExceptionRoutePolicyMBean extends ManagedServi
     @ManagedAttribute(description = "Number of failures before opening circuit")
     void setFailureThreshold(Integer numberOfFailures);
 
+    @ManagedAttribute(description = "Whether to keep the circuit breaker open (never closes)")
+    boolean getKeepOpen();
+
+    @ManagedAttribute(description = "Whether to keep the circuit breaker open (never closes)")
+    void setKeepOpen(boolean keepOpen);
+
+    @ManagedAttribute(description = "Logging level to use for logging state changes")
+    String getStateLoggingLevel();
+
+    @ManagedAttribute(description = "Logging level to use for logging state changes")
+    void setStateLoggingLevel(String stateLoggingLevel);
+
     @ManagedOperation(description = "The current state of the circuit")
     String currentState();
 
@@ -53,4 +68,5 @@ public interface ManagedThrottlingExceptionRoutePolicyMBean extends ManagedServi
 
     @ManagedAttribute(description = "Number ms since the circuit was opened")
     Long getOpenAt();
+
 }

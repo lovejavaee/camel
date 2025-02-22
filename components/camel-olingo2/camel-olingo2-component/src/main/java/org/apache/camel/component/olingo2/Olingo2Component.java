@@ -53,11 +53,11 @@ public class Olingo2Component extends AbstractApiComponent<Olingo2ApiName, Oling
     private Olingo2AppWrapper apiProxy;
 
     public Olingo2Component() {
-        super(Olingo2Endpoint.class, Olingo2ApiName.class, Olingo2ApiCollection.getCollection());
+        super(Olingo2ApiName.class, Olingo2ApiCollection.getCollection());
     }
 
     public Olingo2Component(CamelContext context) {
-        super(context, Olingo2Endpoint.class, Olingo2ApiName.class, Olingo2ApiCollection.getCollection());
+        super(context, Olingo2ApiName.class, Olingo2ApiCollection.getCollection());
     }
 
     @Override
@@ -68,6 +68,9 @@ public class Olingo2Component extends AbstractApiComponent<Olingo2ApiName, Oling
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
         // parse remaining to extract resourcePath and queryParams
+        if (remaining.startsWith("DEFAULT/")) {
+            remaining = remaining.substring(8);
+        }
         final String[] pathSegments = remaining.split("/", -1);
         final String methodName = pathSegments[0];
 
@@ -119,10 +122,13 @@ public class Olingo2Component extends AbstractApiComponent<Olingo2ApiName, Oling
     public Olingo2AppWrapper createApiProxy(Olingo2Configuration endpointConfiguration) {
         final Olingo2AppWrapper result;
         if (endpointConfiguration.equals(getConfiguration())) {
-            synchronized (this) {
+            lock.lock();
+            try {
                 if (apiProxy == null) {
                     apiProxy = createOlingo2App(getConfiguration());
                 }
+            } finally {
+                lock.unlock();
             }
             result = apiProxy;
         } else {

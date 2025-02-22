@@ -39,7 +39,7 @@ import static org.apache.camel.component.twitter.data.TimelineType.USER;
  */
 @UriEndpoint(firstVersion = "2.10.0", scheme = SCHEME_TIMELINE, title = "Twitter Timeline",
              syntax = "twitter-timeline:timelineType",
-             category = { Category.API, Category.CLOUD, Category.SOCIAL }, headersClass = TwitterConstants.class)
+             category = { Category.SAAS, Category.SOCIAL }, headersClass = TwitterConstants.class)
 public class TwitterTimelineEndpoint extends AbstractTwitterEndpoint {
 
     @UriPath(description = "The timeline type to produce/consume.")
@@ -98,14 +98,11 @@ public class TwitterTimelineEndpoint extends AbstractTwitterEndpoint {
             case MENTIONS:
                 handler = new MentionsConsumerHandler(this);
                 break;
-            case RETWEETSOFME:
-                handler = new RetweetsConsumerHandler(this);
-                break;
             case LIST:
                 handler = new UserListConsumerHandler(this, user, list);
                 break;
             case USER:
-                if (user == null || user.trim().isEmpty()) {
+                if (user == null || user.isBlank()) {
                     throw new IllegalArgumentException("Fetch type set to USER TIMELINE but no user was set.");
                 } else {
                     handler = new UserConsumerHandler(this, user);

@@ -34,6 +34,7 @@ import org.apache.curator.x.discovery.ServiceInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Deprecated
 public class ZooKeeperServiceRegistry extends AbstractServiceRegistry {
     private static final Logger LOGGER = LoggerFactory.getLogger(ZooKeeperServiceRegistry.class);
 
@@ -337,7 +338,7 @@ public class ZooKeeperServiceRegistry extends AbstractServiceRegistry {
             // add the serviceId to the list of known server
             serviceList.add(definition.getId());
         } catch (Exception e) {
-            LOGGER.warn("", e);
+            LOGGER.warn("{}", e.getMessage(), e);
         }
     }
 
@@ -360,7 +361,7 @@ public class ZooKeeperServiceRegistry extends AbstractServiceRegistry {
                 }
             }
         } catch (Exception e) {
-            LOGGER.warn("", e);
+            LOGGER.warn("{}", e.getMessage(), e);
         }
     }
 

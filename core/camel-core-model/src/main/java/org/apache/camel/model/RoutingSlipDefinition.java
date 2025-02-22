@@ -57,6 +57,13 @@ public class RoutingSlipDefinition<Type extends ProcessorDefinition<Type>> exten
         }
     }
 
+    private RoutingSlipDefinition(RoutingSlipDefinition source) {
+        super(source);
+        this.uriDelimiter = source.uriDelimiter;
+        this.ignoreInvalidEndpoints = source.ignoreInvalidEndpoints;
+        this.cacheSize = source.cacheSize;
+    }
+
     public RoutingSlipDefinition(String headerName) {
         this(headerName, DEFAULT_DELIMITER);
     }
@@ -73,6 +80,11 @@ public class RoutingSlipDefinition<Type extends ProcessorDefinition<Type>> exten
 
     public RoutingSlipDefinition(Expression expression) {
         this(expression, DEFAULT_DELIMITER);
+    }
+
+    @Override
+    public RoutingSlipDefinition copyDefinition() {
+        return new RoutingSlipDefinition<>(this);
     }
 
     @Override
@@ -184,7 +196,7 @@ public class RoutingSlipDefinition<Type extends ProcessorDefinition<Type>> exten
      * producers when using this routing slip, when uris are reused.
      *
      * Beware that when using dynamic endpoints then it affects how well the cache can be utilized. If each dynamic
-     * endpoint is unique then its best to turn of caching by setting this to -1, which allows Camel to not cache both
+     * endpoint is unique then its best to turn off caching by setting this to -1, which allows Camel to not cache both
      * the producers and endpoints; they are regarded as prototype scoped and will be stopped and discarded after use.
      * This reduces memory usage as otherwise producers/endpoints are stored in memory in the caches.
      *
@@ -207,7 +219,7 @@ public class RoutingSlipDefinition<Type extends ProcessorDefinition<Type>> exten
      * producers when using this routing slip, when uris are reused.
      *
      * Beware that when using dynamic endpoints then it affects how well the cache can be utilized. If each dynamic
-     * endpoint is unique then its best to turn of caching by setting this to -1, which allows Camel to not cache both
+     * endpoint is unique then its best to turn off caching by setting this to -1, which allows Camel to not cache both
      * the producers and endpoints; they are regarded as prototype scoped and will be stopped and discarded after use.
      * This reduces memory usage as otherwise producers/endpoints are stored in memory in the caches.
      *

@@ -19,39 +19,42 @@ package org.apache.camel.impl;
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.FailedToCreateRouteException;
 import org.apache.camel.builder.RouteBuilder;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RouteNoOutputTest extends ContextTestSupport {
+    private Exception exception;
 
     @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void setUp() {
         try {
             super.setUp();
-            fail("Should have thrown exception");
         } catch (Exception e) {
-            FailedToCreateRouteException failed = assertIsInstanceOf(FailedToCreateRouteException.class, e);
-            assertTrue(failed.getRouteId().matches("route[0-9]+"));
-            assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertTrue(e.getCause().getMessage().matches(
-                    "Route route[0-9]+\\Q has no output processors. You need to add outputs to the route such as to(\"log:foo\").\\E"));
+            exception = e;
         }
+
     }
 
     @Test
     public void testDummy() {
-        // noop
+        Assertions.assertNotNull(exception, "Should have thrown exception");
+
+        FailedToCreateRouteException failed = assertIsInstanceOf(FailedToCreateRouteException.class, exception);
+        assertTrue(failed.getRouteId().matches("route[0-9]+"));
+        assertIsInstanceOf(IllegalArgumentException.class, exception.getCause());
+        assertTrue(exception.getCause().getMessage().matches(
+                "Route route[0-9]+\\Q has no output processors. You need to add outputs to the route such as to(\"log:foo\").\\E"));
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start");
             }
         };

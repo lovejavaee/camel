@@ -23,11 +23,11 @@ import org.apache.camel.util.StringHelper;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "set",
-                     description = "Set user configuration value")
+                     description = "Set user configuration value", sortOptions = false, showDefaultValues = true)
 public class ConfigSet extends CamelCommand {
 
     @CommandLine.Parameters(description = "Configuration parameter (ex. key=value)", arity = "1")
-    private String configuration;
+    String configuration;
 
     public ConfigSet(CamelJBangMain main) {
         super(main);
@@ -38,7 +38,7 @@ public class ConfigSet extends CamelCommand {
         CommandLineHelper.createPropertyFile();
 
         if (configuration.split("=").length == 1) {
-            System.out.println("Configuration parameter not in key=value format");
+            printer().println("Configuration parameter not in key=value format");
             return 1;
         }
 
@@ -46,7 +46,7 @@ public class ConfigSet extends CamelCommand {
             String key = StringHelper.before(configuration, "=").trim();
             String value = StringHelper.after(configuration, "=").trim();
             properties.put(key, value);
-            CommandLineHelper.storeProperties(properties);
+            CommandLineHelper.storeProperties(properties, printer());
         });
 
         return 0;

@@ -30,12 +30,16 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
+import javax.inject.Inject;
+
 import org.apache.camel.util.CastUtils;
 import org.apache.camel.util.IOHelper;
+import org.apache.camel.util.StopWatch;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.artifact.resolver.ArtifactResolutionRequest;
 import org.apache.maven.artifact.resolver.ArtifactResolutionResult;
 import org.apache.maven.artifact.resolver.ArtifactResolver;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
@@ -49,7 +53,6 @@ import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.descriptor.PluginDescriptor;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -70,29 +73,22 @@ import org.codehaus.mojo.exec.Property;
       requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class RunMojo extends AbstractExecMojo {
 
-    private static final String LOG4J_TEMPLATE = ""
-                                                 + "appender.stdout.type = Console\n"
-                                                 + "appender.stdout.name = out\n"
-                                                 + "appender.stdout.layout.type = PatternLayout\n"
-                                                 + "appender.stdout.layout.pattern = %style{%d{yyyy-MM-dd HH:mm:ss.SSS}}{Dim} %highlight{%5p} %style{%pid}{Magenta} %style{---}{Dim} %style{[%15.15t]}{Dim} %style{%-40.40c}{Cyan} : %m%n\n"
-                                                 + "rootLogger.level = @@@LOGGING_LEVEL@@@\n"
-                                                 + "rootLogger.appenderRef.out.ref = out\n";
+    //language=properties
+    private static final String LOG4J_TEMPLATE
+            = """
+                    appender.stdout.type = Console
+                    appender.stdout.name = out
+                    appender.stdout.layout.type = PatternLayout
+                    appender.stdout.layout.pattern = %style{%d{yyyy-MM-dd HH:mm:ss.SSS}}{Dim} %highlight{%5p} %style{%pid}{Magenta} %style{---}{Dim} %style{[%15.15t]}{Dim} %style{%-40.40c}{Cyan} : %m%n
+                    rootLogger.level = @@@LOGGING_LEVEL@@@
+                    rootLogger.appenderRef.out.ref = out
+                    """;
 
     // this code is based on a copy-and-paste of maven-exec-plugin
     //
     // If we could avoid the mega-cut-n-paste it would really really help!
     // ideally all I wanna do is auto-default 2 values!
     // namely the main and the command line arguments..
-
-    /**
-     * The maven project.
-     *
-     * @parameter property="project"
-     * @required
-     * @readonly
-     */
-    @Parameter(property = "project", required = true, readonly = true)
-    protected MavenProject project;
 
     /**
      * Sets the time duration (seconds) that the application will run for before terminating. A value <= 0 will run
@@ -137,25 +133,27 @@ public class RunMojo extends AbstractExecMojo {
     @Parameter(property = "camel.useKamelet")
     protected Boolean useKamelet;
 
+    /**
+     * To run with a specific Camel Main profile (dev,test,prod)
+     */
+    @Parameter(property = "camel.profile")
+    protected String profile;
+
     protected String extendedPluginDependencyArtifactId;
 
-    @Component
-    protected ArtifactResolver artifactResolver;
+    protected final ArtifactResolver artifactResolver;
 
-    @Component
-    private ArtifactFactory artifactFactory;
+    private final ArtifactFactory artifactFactory;
 
-    @Component
-    private ArtifactMetadataSource metadataSource;
+    private final ArtifactMetadataSource metadataSource;
 
     @Parameter(property = "localRepository")
     private ArtifactRepository localRepository;
 
     @Parameter(property = "project.remoteArtifactRepositories")
-    private List remoteRepositories;
+    private List<ArtifactRepository> remoteRepositories;
 
-    @Component
-    private MavenProjectBuilder projectBuilder;
+    private final MavenProjectBuilder projectBuilder;
 
     @Parameter(property = "plugin.artifacts")
     private List<Artifact> pluginDependencies;
@@ -173,13 +171,13 @@ public class RunMojo extends AbstractExecMojo {
     private String mainClass;
 
     /**
-     * The classpath based application context uri that spring want to gets.
+     * The classpath based application context uri that spring want to get.
      */
     @Parameter(property = "camel.applicationContextUri")
     private String applicationContextUri;
 
     /**
-     * The filesystem based application context uri that spring want to gets.
+     * The filesystem-based application context uri that spring want to get.
      */
     @Parameter(property = "camel.fileApplicationContextUri")
     private String fileApplicationContextUri;
@@ -210,8 +208,8 @@ public class RunMojo extends AbstractExecMojo {
     private Property[] systemProperties;
 
     /**
-     * Deprecated; this is not needed anymore. Indicates if mojo should be kept running after the mainclass terminates.
-     * Usefull for serverlike apps with deamonthreads.
+     * Deprecated; this is not needed anymore. Indicates if mojo should be kept running after the mainclass has
+     * terminated. Useful for serverlike apps with deamonthreads.
      */
     @Parameter(property = "camel.keepAlive")
     private boolean keepAlive;
@@ -226,18 +224,19 @@ public class RunMojo extends AbstractExecMojo {
      * Indicates if this plugin's dependencies should be used when executing the main class.
      * <p/>
      * This is useful when project dependencies are not appropriate. Using only the plugin dependencies can be
-     * particularly useful when the project is not a java project. For example a mvn project using the csharp plugins
+     * particularly useful when the project is not a java project. For example, a mvn project using the csharp plugins
      * only expects to see dotnet libraries as dependencies.
      */
     @Parameter(property = "camel.includePluginDependencies", defaultValue = "false")
     private boolean includePluginDependencies;
 
     /**
-     * If provided the ExecutableDependency identifies which of the plugin dependencies contains the executable class.
-     * This will have the affect of only including plugin dependencies required by the identified ExecutableDependency.
+     * If provided, the {@link ExecutableDependency} identifies which of the plugin dependencies contains the executable
+     * class. This will have the effect of only including plugin dependencies required by the identified
+     * ExecutableDependency.
      * <p/>
-     * If includeProjectDependencies is set to <code>true</code>, all of the project dependencies will be included on
-     * the executable's classpath. Whether a particular project dependency is a dependency of the identified
+     * If includeProjectDependencies is set to <code>true</code>, all the project dependencies will be included on the
+     * executable's classpath. Whether a particular project dependency is a dependency of the identified
      * ExecutableDependency will be irrelevant to its inclusion in the classpath.
      */
     @Parameter(property = "camel.executableDependency")
@@ -259,7 +258,7 @@ public class RunMojo extends AbstractExecMojo {
     /**
      * This defines the number of milliseconds to wait for daemon threads to quit following their interruption.<br/>
      * This is only taken into account if {@link #cleanupDaemonThreads} is <code>true</code>. A value &lt;=0 means to
-     * not timeout (i.e. wait indefinitely for threads to finish). Following a timeout, a warning will be logged.
+     * not timeout (i.e., wait indefinitely for threads to finish). Following a timeout, a warning will be logged.
      * <p>
      * Note: properly coded threads <i>should</i> terminate upon interruption but some threads may prove problematic: as
      * the VM does interrupt daemon threads, some code may not have been written to handle interruption properly. For
@@ -288,6 +287,18 @@ public class RunMojo extends AbstractExecMojo {
 
     private String extraPluginDependencyArtifactId;
 
+    @Inject
+    public RunMojo(
+                   ArtifactResolver artifactResolver,
+                   ArtifactFactory artifactFactory,
+                   ArtifactMetadataSource metadataSource,
+                   MavenProjectBuilder projectBuilder) {
+        this.artifactResolver = artifactResolver;
+        this.artifactFactory = artifactFactory;
+        this.metadataSource = metadataSource;
+        this.projectBuilder = projectBuilder;
+    }
+
     /**
      * Execute goal.
      *
@@ -299,7 +310,7 @@ public class RunMojo extends AbstractExecMojo {
 
         String skip = System.getProperties().getProperty("maven.test.skip");
         if (skip == null || "false".equals(skip)) {
-            // lets log a INFO about how to skip tests if you want to so you can run faster
+            // lets log a INFO about how to skip tests if you want to, so you can run faster
             getLog().info("You can skip tests from the command line using: mvn " + goal() + " -Dmaven.test.skip=true");
         }
 
@@ -341,6 +352,10 @@ public class RunMojo extends AbstractExecMojo {
         if (arguments != null) {
             args.addAll(Arrays.asList(arguments));
         }
+        if (profile != null) {
+            args.add("-profile");
+            args.add(profile);
+        }
 
         if (mainClass == null && usingKameletMain) {
             mainClass = "org.apache.camel.main.KameletMain";
@@ -380,25 +395,23 @@ public class RunMojo extends AbstractExecMojo {
                     "Cannot run Kamelet Main because camel-kamelet-main JAR is not available on classpath");
         }
 
-        final Thread bootstrapThread = new Thread(threadGroup, new Runnable() {
-            public void run() {
-                try {
-                    beforeBootstrapCamel();
+        final Thread bootstrapThread = new Thread(threadGroup, () -> {
+            try {
+                beforeBootstrapCamel();
 
-                    getLog().info("Starting Camel ...");
-                    Method main = Thread.currentThread().getContextClassLoader()
-                            .loadClass(mainClass).getMethod("main", String[].class);
-                    main.invoke(null, new Object[] { arguments });
+                getLog().info("Starting Camel ...");
+                Method main = Thread.currentThread().getContextClassLoader()
+                        .loadClass(mainClass).getMethod("main", String[].class);
+                main.invoke(null, new Object[] { arguments });
 
-                    afterBootstrapCamel();
-                } catch (Exception e) { // just pass it on
-                    // let it be printed so end users can see the exception on the console
-                    getLog().error("*************************************");
-                    getLog().error("Error occurred while running main from: " + mainClass);
-                    getLog().error(e);
-                    getLog().error("*************************************");
-                    Thread.currentThread().getThreadGroup().uncaughtException(Thread.currentThread(), e);
-                }
+                afterBootstrapCamel();
+            } catch (Exception e) { // just pass it on
+                // let it be printed so end users can see the exception on the console
+                getLog().error("*************************************");
+                getLog().error("Error occurred while running main from: " + mainClass);
+                getLog().error(e);
+                getLog().error("*************************************");
+                Thread.currentThread().getThreadGroup().uncaughtException(Thread.currentThread(), e);
             }
         }, mainClass + ".main()");
 
@@ -417,14 +430,7 @@ public class RunMojo extends AbstractExecMojo {
         }
 
         if (cleanupDaemonThreads) {
-
             terminateThreads(threadGroup);
-
-            try {
-                threadGroup.destroy();
-            } catch (IllegalThreadStateException e) {
-                getLog().warn("Couldn't destroy threadgroup " + threadGroup, e);
-            }
         }
 
         if (originalSystemProperties != null) {
@@ -519,7 +525,7 @@ public class RunMojo extends AbstractExecMojo {
     }
 
     private void terminateThreads(ThreadGroup threadGroup) {
-        long startTime = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Set<Thread> uncooperativeThreads = new HashSet<>(); // these were not responsive
         // to interruption
         for (Collection<Thread> threads = getActiveThreads(threadGroup);
@@ -544,7 +550,7 @@ public class RunMojo extends AbstractExecMojo {
                     joinThread(thread, 0); // waits until not alive; no timeout
                     continue;
                 }
-                long timeout = daemonThreadJoinTimeout - (System.currentTimeMillis() - startTime);
+                long timeout = daemonThreadJoinTimeout - watch.taken();
                 if (timeout > 0) {
                     joinThread(thread, timeout);
                 }
@@ -590,7 +596,7 @@ public class RunMojo extends AbstractExecMojo {
         for (int i = 0; i < threads.length && threads[i] != null; i++) {
             result.add(threads[i]);
         }
-        // note: result should be modifiable
+        // note: the result should be modifiable
         return result;
     }
 
@@ -607,7 +613,6 @@ public class RunMojo extends AbstractExecMojo {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private boolean detectKameletOnClassPath() {
         List<Dependency> deps = project.getCompileDependencies();
         for (Dependency dep : deps) {
@@ -878,7 +883,8 @@ public class RunMojo extends AbstractExecMojo {
      *                                dependencies.)
      * @throws MojoExecutionException
      */
-    private Set<Artifact> determineRelevantPluginDependencies() throws MojoExecutionException {
+    @Override
+    protected Set<Artifact> determineRelevantPluginDependencies() throws MojoExecutionException {
         Set<Artifact> relevantDependencies;
         if (this.includePluginDependencies) {
             if (this.executableDependency == null) {
@@ -966,7 +972,7 @@ public class RunMojo extends AbstractExecMojo {
                     this.remoteRepositories,
                     this.localRepository);
 
-            // get all of the dependencies for the executable project
+            // get all the dependencies for the executable project
             List<Dependency> dependencies = executableProject.getDependencies();
 
             // make Artifacts of all the dependencies
@@ -978,13 +984,16 @@ public class RunMojo extends AbstractExecMojo {
             dependencyArtifacts.add(executableProject.getArtifact());
 
             // resolve runtime dependencies transitively to obtain a comprehensive list of assemblies
-            ArtifactResolutionResult result = artifactResolver.resolveTransitively(dependencyArtifacts,
-                    executablePomArtifact,
-                    Collections.emptyMap(),
-                    this.localRepository,
-                    this.remoteRepositories,
-                    metadataSource, new ScopeArtifactFilter(Artifact.SCOPE_RUNTIME),
-                    Collections.emptyList());
+            ArtifactResolutionRequest request = new ArtifactResolutionRequest()
+                    .setArtifact(executablePomArtifact)
+                    .setResolveRoot(false)
+                    .setArtifactDependencies(dependencyArtifacts)
+                    .setManagedVersionMap(Collections.emptyMap())
+                    .setLocalRepository(localRepository)
+                    .setRemoteRepositories(remoteRepositories)
+                    .setCollectionFilter(new ScopeArtifactFilter(Artifact.SCOPE_RUNTIME))
+                    .setListeners(Collections.emptyList());
+            ArtifactResolutionResult result = artifactResolver.resolve(request);
             executableDependencies = CastUtils.cast(result.getArtifacts());
 
         } catch (Exception ex) {

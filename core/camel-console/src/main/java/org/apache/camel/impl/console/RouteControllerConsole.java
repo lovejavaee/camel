@@ -16,8 +16,6 @@
  */
 package org.apache.camel.impl.console;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -30,6 +28,7 @@ import org.apache.camel.Route;
 import org.apache.camel.spi.RouteController;
 import org.apache.camel.spi.SupervisingRouteController;
 import org.apache.camel.spi.annotations.DevConsole;
+import org.apache.camel.support.ExceptionHelper;
 import org.apache.camel.support.console.AbstractDevConsole;
 import org.apache.camel.util.TimeUtils;
 import org.apache.camel.util.URISupport;
@@ -38,14 +37,14 @@ import org.apache.camel.util.json.JsonArray;
 import org.apache.camel.util.json.JsonObject;
 import org.apache.camel.util.json.Jsoner;
 
-@DevConsole("route-controller")
+@DevConsole(name = "route-controller", description = "Route controller information")
 public class RouteControllerConsole extends AbstractDevConsole {
 
     public static final String STACKTRACE = "stacktrace";
     public static final String ERROR = "error";
 
     public RouteControllerConsole() {
-        super("camel", "route-controller", "Route Controller", "Route startup information");
+        super("camel", "route-controller", "Route Controller", "Route controller information");
     }
 
     @Override
@@ -56,9 +55,7 @@ public class RouteControllerConsole extends AbstractDevConsole {
         StringBuilder sb = new StringBuilder();
 
         RouteController rc = getCamelContext().getRouteController();
-        if (rc instanceof SupervisingRouteController) {
-            SupervisingRouteController src = (SupervisingRouteController) rc;
-
+        if (rc instanceof SupervisingRouteController src) {
             Set<Route> routes = new TreeSet<>(Comparator.comparing(Route::getId));
             routes.addAll(rc.getControlledRoutes());
             routes.addAll(src.getExhaustedRoutes());
@@ -66,6 +63,8 @@ public class RouteControllerConsole extends AbstractDevConsole {
             long started = routes.stream().filter(r -> src.getRouteStatus(r.getRouteId()).isStarted())
                     .count();
 
+            sb.append(String.format("\nInitial Starting Routes: %b", src.isStartingRoutes()));
+            sb.append(String.format("\nUnhealthy Routes: %b", src.hasUnhealthyRoutes()));
             sb.append(String.format("Total Routes: %d", routes.size()));
             sb.append(String.format("\nStarted Routes: %d", started));
             sb.append(String.format("\nRestarting Routes: %d", src.getRestartingRoutes().size()));
@@ -76,6 +75,7 @@ public class RouteControllerConsole extends AbstractDevConsole {
             sb.append(String.format("\nBackoff Max Elapsed Time: %d", src.getBackOffMaxElapsedTime()));
             sb.append(String.format("\nBackoff Max Attempts: %d", src.getBackOffMaxAttempts()));
             sb.append(String.format("\nThread Pool Size: %d", src.getThreadPoolSize()));
+            sb.append(String.format("\nUnhealthy On Restarting: %b", src.isUnhealthyOnRestarting()));
             sb.append(String.format("\nUnhealthy On Exhaust: %b", src.isUnhealthyOnExhausted()));
             sb.append("\n\nRoutes:\n");
 
@@ -111,10 +111,7 @@ public class RouteControllerConsole extends AbstractDevConsole {
                 if (includeError && cause != null) {
                     error = cause.getMessage();
                     if (includeStacktrace) {
-                        StringWriter writer = new StringWriter();
-                        cause.printStackTrace(new PrintWriter(writer));
-                        writer.flush();
-                        stacktrace = writer.toString();
+                        stacktrace = ExceptionHelper.stackTraceToString(cause);
                     }
                 }
 
@@ -166,9 +163,7 @@ public class RouteControllerConsole extends AbstractDevConsole {
         final List<JsonObject> list = new ArrayList<>();
 
         RouteController rc = getCamelContext().getRouteController();
-        if (rc instanceof SupervisingRouteController) {
-            SupervisingRouteController src = (SupervisingRouteController) rc;
-
+        if (rc instanceof SupervisingRouteController src) {
             Set<Route> routes = new TreeSet<>(Comparator.comparing(Route::getId));
             routes.addAll(rc.getControlledRoutes());
             routes.addAll(src.getExhaustedRoutes());
@@ -177,6 +172,8 @@ public class RouteControllerConsole extends AbstractDevConsole {
                     .count();
 
             root.put("controller", "SupervisingRouteController");
+            root.put("startingRoutes", src.isStartingRoutes());
+            root.put("unhealthyRoutes", src.hasUnhealthyRoutes());
             root.put("totalRoutes", routes.size());
             root.put("startedRoutes", started);
             root.put("restartingRoutes", src.getRestartingRoutes().size());
@@ -187,6 +184,7 @@ public class RouteControllerConsole extends AbstractDevConsole {
             root.put("backoffMaxElapsedTime", src.getBackOffMaxElapsedTime());
             root.put("backoffMaxAttempts", src.getBackOffMaxAttempts());
             root.put("threadPoolSize", src.getThreadPoolSize());
+            root.put("unhealthyOnRestarting", src.isUnhealthyOnRestarting());
             root.put("unhealthyOnExhausted", src.isUnhealthyOnExhausted());
             root.put("routes", list);
 
@@ -199,30 +197,21 @@ public class RouteControllerConsole extends AbstractDevConsole {
                 BackOffTimer.Task state = src.getRestartingRouteState(routeId);
                 String supervising = state != null ? state.getStatus().name() : null;
                 long attempts = state != null ? state.getCurrentAttempts() : 0;
-                String elapsed = "";
-                String last = "";
-                String next = "";
+                long elapsed;
+                long last;
+                long next;
                 // we can only track elapsed/time for active supervised routes
-                long time = state != null && BackOffTimer.Task.Status.Active == state.getStatus()
+                elapsed = state != null && BackOffTimer.Task.Status.Active == state.getStatus()
                         ? state.getCurrentElapsedTime() : 0;
-                if (time > 0) {
-                    elapsed = TimeUtils.printDuration(time);
-                }
-                time = state != null && BackOffTimer.Task.Status.Active == state.getStatus() ? state.getLastAttemptTime() : 0;
-                if (time > 0) {
-                    last = TimeUtils.printSince(time);
-                }
-                time = state != null && BackOffTimer.Task.Status.Active == state.getStatus() ? state.getNextAttemptTime() : 0;
-                if (time > 0) {
-                    next = TimeUtils.printSince(time);
-                }
+                last = state != null && BackOffTimer.Task.Status.Active == state.getStatus() ? state.getLastAttemptTime() : 0;
+                next = state != null && BackOffTimer.Task.Status.Active == state.getStatus() ? state.getNextAttemptTime() : 0;
                 JsonObject jo = new JsonObject();
                 list.add(jo);
                 jo.put("routeId", routeId);
                 jo.put("status", status);
                 jo.put("uri", uri);
                 jo.put("attempts", attempts);
-                jo.put("lastAttemptAgo", last);
+                jo.put("lastAttempt", last);
                 jo.put("nextAttempt", next);
                 jo.put("elapsed", elapsed);
                 if (supervising != null) {
@@ -233,10 +222,7 @@ public class RouteControllerConsole extends AbstractDevConsole {
                         jo.put("error", Jsoner.escape(error));
                         if (includeStacktrace) {
                             JsonArray arr2 = new JsonArray();
-                            StringWriter writer = new StringWriter();
-                            cause.printStackTrace(new PrintWriter(writer));
-                            writer.flush();
-                            String trace = writer.toString();
+                            final String trace = ExceptionHelper.stackTraceToString(cause);
                             jo.put("stackTrace", arr2);
                             Collections.addAll(arr2, trace.split("\n"));
                         }

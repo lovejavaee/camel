@@ -22,8 +22,8 @@ import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.component.aws.secretsmanager.client.SecretsManagerClientFactory;
-import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.impl.health.ComponentsHealthCheckRepository;
+import org.apache.camel.spi.EndpointServiceLocation;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.ScheduledPollEndpoint;
@@ -31,17 +31,17 @@ import org.apache.camel.util.ObjectHelper;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 
 /**
- * Manage AWS Secrets Manager services using AWS SDK version 2.x.
+ * Manage secrets using AWS Secrets Manager.
  */
 @UriEndpoint(firstVersion = "3.9.0", scheme = "aws-secrets-manager", title = "AWS Secrets Manager",
              syntax = "aws-secrets-manager:label", producerOnly = true, category = { Category.CLOUD, Category.MANAGEMENT },
              headersClass = SecretsManagerConstants.class)
-public class SecretsManagerEndpoint extends ScheduledPollEndpoint {
+@Metadata(annotations = {
+        "vault=aws-secrets-manager",
+})
+public class SecretsManagerEndpoint extends ScheduledPollEndpoint implements EndpointServiceLocation {
 
     private SecretsManagerClient secretsManagerClient;
-
-    private ComponentsHealthCheckRepository healthCheckRepository;
-    private SecretsManagerClientHealthCheck clientHealthCheck;
 
     @UriParam
     private SecretsManagerConfiguration configuration;
@@ -62,29 +62,21 @@ public class SecretsManagerEndpoint extends ScheduledPollEndpoint {
     }
 
     @Override
+    public SecretsManagerComponent getComponent() {
+        return (SecretsManagerComponent) super.getComponent();
+    }
+
+    @Override
     public void doStart() throws Exception {
         super.doStart();
 
         secretsManagerClient = configuration.getSecretsManagerClient() != null
                 ? configuration.getSecretsManagerClient()
                 : SecretsManagerClientFactory.getSecretsManagerClient(configuration).getSecretsManagerClient();
-
-        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(getCamelContext(),
-                ComponentsHealthCheckRepository.REPOSITORY_ID, ComponentsHealthCheckRepository.class);
-
-        if (healthCheckRepository != null) {
-            clientHealthCheck = new SecretsManagerClientHealthCheck(this, getId());
-            healthCheckRepository.addHealthCheck(clientHealthCheck);
-        }
     }
 
     @Override
     public void doStop() throws Exception {
-        if (healthCheckRepository != null && clientHealthCheck != null) {
-            healthCheckRepository.removeHealthCheck(clientHealthCheck);
-            clientHealthCheck = null;
-        }
-
         if (ObjectHelper.isEmpty(configuration.getSecretsManagerClient())) {
             if (secretsManagerClient != null) {
                 secretsManagerClient.close();
@@ -99,5 +91,22 @@ public class SecretsManagerEndpoint extends ScheduledPollEndpoint {
 
     public SecretsManagerClient getSecretsManagerClient() {
         return secretsManagerClient;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (ObjectHelper.isNotEmpty(configuration.getRegion())) {
+                return configuration.getRegion();
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "secrets-manager";
     }
 }

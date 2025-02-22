@@ -55,7 +55,7 @@ public class BacklogTracerIdOnAllNodesTest extends ManagementTestSupport {
         assertEquals(Boolean.FALSE, enabled, "Should not be enabled");
 
         Integer size = (Integer) mbeanServer.getAttribute(on, "BacklogSize");
-        assertEquals(1000, size.intValue(), "Should be 1000");
+        assertEquals(100, size.intValue(), "Should be 100");
 
         // enable it
         mbeanServer.setAttribute(on, new Attribute("Enabled", Boolean.TRUE));
@@ -78,7 +78,7 @@ public class BacklogTracerIdOnAllNodesTest extends ManagementTestSupport {
         ChoiceDefinition choice = (ChoiceDefinition) route.getOutputs().get(0);
         assertNotNull(choice.getId());
 
-        WhenDefinition when = (WhenDefinition) choice.getOutputs().get(0);
+        WhenDefinition when = choice.getWhenClauses().get(0);
         assertNotNull(when.getId());
 
         LogDefinition log1 = (LogDefinition) when.getOutputs().get(0);
@@ -87,7 +87,7 @@ public class BacklogTracerIdOnAllNodesTest extends ManagementTestSupport {
         ToDefinition to1 = (ToDefinition) when.getOutputs().get(1);
         assertEquals("camel", to1.getId());
 
-        OtherwiseDefinition other = (OtherwiseDefinition) choice.getOutputs().get(1);
+        OtherwiseDefinition other = choice.getOtherwise();
         assertNotNull(other.getId());
 
         LogDefinition log2 = (LogDefinition) other.getOutputs().get(0);
@@ -114,6 +114,9 @@ public class BacklogTracerIdOnAllNodesTest extends ManagementTestSupport {
         assertEquals(to2.getId(), event1.getToNode());
         assertEquals("    <message exchangeId=\"" + fooExchanges.get(0).getExchangeId()
                      + "\" exchangePattern=\"InOnly\" exchangeType=\"org.apache.camel.support.DefaultExchange\" messageType=\"org.apache.camel.support.DefaultMessage\">\n"
+                     + "      <exchangeProperties>\n"
+                     + "        <exchangeProperty key=\"CamelToEndpoint\" type=\"java.lang.String\">direct://start</exchangeProperty>\n"
+                     + "      </exchangeProperties>\n"
                      + "      <body type=\"java.lang.String\">Hello World</body>\n"
                      + "    </message>",
                 event1.getMessageAsXml());
@@ -128,16 +131,19 @@ public class BacklogTracerIdOnAllNodesTest extends ManagementTestSupport {
         assertEquals("camel", event1.getToNode());
         assertEquals("    <message exchangeId=\"" + camelExchanges.get(0).getExchangeId()
                      + "\" exchangePattern=\"InOnly\" exchangeType=\"org.apache.camel.support.DefaultExchange\" messageType=\"org.apache.camel.support.DefaultMessage\">\n"
+                     + "      <exchangeProperties>\n"
+                     + "        <exchangeProperty key=\"CamelToEndpoint\" type=\"java.lang.String\">direct://start</exchangeProperty>\n"
+                     + "      </exchangeProperties>\n"
                      + "      <body type=\"java.lang.String\">Hello Camel</body>\n"
                      + "    </message>",
                 event1.getMessageAsXml());
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.setUseBreadcrumb(false);
                 context.setBacklogTracingStandby(true);
 

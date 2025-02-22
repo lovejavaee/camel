@@ -5,6 +5,7 @@
 :description: Type Conversion using Mapstruct
 :since: 3.19
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: mapstruct
@@ -39,12 +40,14 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Setting up MapStruct
+== Usage
 
-The camel-mapstruct component must be configured with one or more package names, for classpath scanning MapStruct _Mapper_ classes.
-This is needed because the _Mapper_ classes are to be used for converting POJOs with MapStruct.
+=== Setting up MapStruct
 
-For example to set up two packages you can do as following:
+The camel-mapstruct component must be configured with one or more package names for classpath scanning MapStruct _Mapper_ classes.
+This is necessary because the _Mapper_ classes are to be used for converting POJOs with MapStruct.
+
+For example, to set up two packages, you can do the following:
 
 [source,java]
 ----
@@ -72,5 +75,9 @@ from("direct:foo")
 
 Where `MyFooDto` is a POJO that MapStruct is able to convert to/from.
 
+NOTE: Camel does not support mapper methods defined with a `void` return type such as those used with `@MappingTarget`.
+
+WARNING: If you define multiple mapping methods for the same from / to types, then the implementation chosen by
+Camel to do its type conversion is potentially non-deterministic.
 
 include::spring-boot:partial$starter.adoc[]

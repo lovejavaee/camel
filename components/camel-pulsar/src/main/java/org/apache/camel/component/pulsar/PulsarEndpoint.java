@@ -21,6 +21,7 @@ import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.component.pulsar.utils.message.PulsarMessageHeaders;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -36,10 +37,9 @@ import org.apache.pulsar.client.api.PulsarClient;
 @UriEndpoint(scheme = "pulsar", firstVersion = "2.24.0", title = "Pulsar",
              syntax = "pulsar:persistence://tenant/namespace/topic", category = { Category.MESSAGING },
              headersClass = PulsarMessageHeaders.class)
-public class PulsarEndpoint extends DefaultEndpoint {
+public class PulsarEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     private PulsarClient pulsarClient;
-    private String uri; // TODO this field is reported unread
 
     @UriPath(enums = "persistent,non-persistent")
     @Metadata(required = true)
@@ -59,6 +59,16 @@ public class PulsarEndpoint extends DefaultEndpoint {
 
     public PulsarEndpoint(String uri, PulsarComponent component) {
         super(uri, component);
+    }
+
+    @Override
+    public String getServiceUrl() {
+        return pulsarConfiguration.getServiceUrl();
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "pulsar";
     }
 
     @Override
@@ -148,8 +158,6 @@ public class PulsarEndpoint extends DefaultEndpoint {
         ObjectHelper.notNull(tenant, "tenant", this);
         ObjectHelper.notNull(namespace, "namespace", this);
         ObjectHelper.notNull(topic, "topic", this);
-
-        uri = persistence + "://" + tenant + "/" + namespace + "/" + topic;
     }
 
     @Override

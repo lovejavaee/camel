@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-mail</artifactId>
@@ -32,18 +32,8 @@
     <description>Camel Mail support</description>
 
     <properties>
+        <camel.surefire.fork.additional-vmargs>-Dfile.encoding=UTF-8</camel.surefire.fork.additional-vmargs>
     </properties>
-
-            <repositories>
-                <repository>
-                    <id>central</id>
-                    <url>https://repo1.maven.org/maven2/</url>
-                </repository>
-                <repository>
-                    <id>jenkinsci-releases</id>
-                    <url>https://repo.jenkins-ci.org/releases/</url>
-                </repository>
-            </repositories>
 
     <dependencies>
         <dependency>
@@ -58,13 +48,6 @@
             <groupId>org.eclipse.angus</groupId>
             <artifactId>angus-mail</artifactId>
             <version>${angus-mail-version}</version>
-            <exclusions>
-                <!-- javax activation is part of the JDK now -->
-                <exclusion>
-                    <groupId>com.sun.activation</groupId>
-                    <artifactId>jakarta.activation</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- testing -->
@@ -79,15 +62,9 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.jvnet.mock-javamail</groupId>
-            <artifactId>mock-javamail</artifactId>
-            <version>${mock-javamail-version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>javax.mail</groupId>
-                    <artifactId>mail</artifactId>
-                </exclusion>
-            </exclusions>
+            <groupId>com.icegreen</groupId>
+            <artifactId>greenmail</artifactId>
+            <version>${greenmail-version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -115,13 +92,6 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj-version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -131,7 +101,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.1.1</version>
                 <executions>
                     <execution>
                         <id>unpack</id>
@@ -156,14 +125,6 @@
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <!-- required to make MailMimeDecodeHeadersTest work on operating systems with a different default encoding -->
-                    <argLine>-Dfile.encoding=UTF-8</argLine>
-                </configuration>
             </plugin>
         </plugins>
     </build>

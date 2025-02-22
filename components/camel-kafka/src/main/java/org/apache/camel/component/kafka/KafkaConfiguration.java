@@ -18,6 +18,7 @@ package org.apache.camel.component.kafka;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
@@ -37,6 +38,7 @@ import org.apache.camel.spi.StateRepository;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 import org.apache.camel.spi.UriPath;
+import org.apache.camel.support.ResourceHelper;
 import org.apache.camel.support.jsse.CipherSuitesParameters;
 import org.apache.camel.support.jsse.KeyManagersParameters;
 import org.apache.camel.support.jsse.KeyStoreParameters;
@@ -44,6 +46,7 @@ import org.apache.camel.support.jsse.SSLContextParameters;
 import org.apache.camel.support.jsse.SecureSocketProtocolsParameters;
 import org.apache.camel.support.jsse.TrustManagersParameters;
 import org.apache.camel.util.ObjectHelper;
+import org.apache.camel.util.StringHelper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -67,7 +70,13 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     @UriParam(label = "common",
               description = "To use a custom HeaderFilterStrategy to filter header to and from Camel message.")
     private HeaderFilterStrategy headerFilterStrategy = new KafkaHeaderFilterStrategy();
+    @UriParam(label = "common", defaultValue = "100")
+    private Integer retryBackoffMs = 100;
+    @UriParam(label = "common", defaultValue = "1000")
+    private Integer retryBackoffMaxMs = 1000;
 
+    @UriParam(label = "consumer", defaultValue = "true")
+    private boolean preValidateHostAndPort = true;
     @UriParam(label = "consumer")
     private boolean topicIsPattern;
     @UriParam(label = "consumer")
@@ -103,14 +112,14 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     @UriParam(label = "consumer", defaultValue = "1048576")
     private Integer maxPartitionFetchBytes = 1048576;
     // session.timeout.ms
-    @UriParam(label = "consumer", defaultValue = "10000")
-    private Integer sessionTimeoutMs = 10000;
+    @UriParam(label = "consumer", defaultValue = "45000")
+    private Integer sessionTimeoutMs = 45000;
     @UriParam(label = "consumer", defaultValue = "500")
     private Integer maxPollRecords;
     @UriParam(label = "consumer", defaultValue = "5000", javaType = "java.time.Duration")
     private Long pollTimeoutMs = 5000L;
     @UriParam(label = "consumer", javaType = "java.time.Duration")
-    private Long maxPollIntervalMs;
+    private Integer maxPollIntervalMs;
     // auto.offset.reset1
     @UriParam(label = "consumer", defaultValue = "latest", enums = "latest,earliest,none")
     private String autoOffsetReset = "latest";
@@ -118,8 +127,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     @UriParam(label = "consumer", defaultValue = KafkaConstants.PARTITIONER_RANGE_ASSIGNOR)
     private String partitionAssignor = KafkaConstants.PARTITIONER_RANGE_ASSIGNOR;
     // request.timeout.ms
-    @UriParam(label = "consumer", defaultValue = "40000")
-    private Integer consumerRequestTimeoutMs = 40000;
+    @UriParam(label = "consumer", defaultValue = "30000")
+    private Integer consumerRequestTimeoutMs = 30000;
     // auto.commit.interval.ms
     @UriParam(label = "consumer", defaultValue = "5000")
     private Integer autoCommitIntervalMs = 5000;
@@ -149,10 +158,11 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     private String isolationLevel;
 
     // Producer configuration properties
-    @UriParam(label = "producer", defaultValue = KafkaConstants.KAFKA_DEFAULT_PARTITIONER)
-    private String partitioner = KafkaConstants.KAFKA_DEFAULT_PARTITIONER;
-    @UriParam(label = "producer", defaultValue = "100")
-    private Integer retryBackoffMs = 100;
+    @UriParam(label = "producer")
+    private String partitioner;
+
+    @UriParam(label = "producer", defaultValue = "false")
+    private boolean partitionerIgnoreKeys;
 
     @UriParam(label = "producer")
     private ExecutorService workerPool;
@@ -173,6 +183,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     private String key;
     @UriParam(label = "producer")
     private Integer partitionKey;
+    @UriParam(label = "producer", defaultValue = "true")
+    private boolean useIterator = true;
     @UriParam(label = "producer", enums = "all,-1,0,1", defaultValue = "all")
     private String requestRequiredAcks = "all";
     // buffer.memory
@@ -324,10 +336,10 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     // sasl.jaas.config
     private String saslJaasConfig;
 
-    // Confluent only options
-    @UriParam(label = "confluent")
+    // Schema registry only options
+    @UriParam(label = "schema")
     private String schemaRegistryURL;
-    @UriParam(label = "confluent,consumer")
+    @UriParam(label = "schema,consumer")
     private boolean specificAvroReader;
 
     // Additional properties
@@ -339,6 +351,14 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     @UriParam(defaultValue = "false", label = "advanced",
               description = "Sets whether synchronous processing should be strictly used")
     private boolean synchronous;
+
+    @UriParam(label = "common,security")
+    private String kerberosConfigLocation;
+
+    @UriParam(label = "consumer")
+    private boolean batching;
+    @UriParam(label = "consumer")
+    private Integer batchingIntervalMs;
 
     public KafkaConfiguration() {
     }
@@ -372,6 +392,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         addPropertyIfNotEmpty(props, ProducerConfig.MAX_BLOCK_MS_CONFIG, getMaxBlockMs());
         addPropertyIfNotEmpty(props, ProducerConfig.MAX_REQUEST_SIZE_CONFIG, getMaxRequestSize());
         addPropertyIfNotEmpty(props, ProducerConfig.PARTITIONER_CLASS_CONFIG, getPartitioner());
+        addPropertyIfNotEmpty(props, ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG, isPartitionerIgnoreKeys());
         addPropertyIfNotEmpty(props, ProducerConfig.RECEIVE_BUFFER_CONFIG, getReceiveBufferBytes());
         addPropertyIfNotEmpty(props, ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, getRequestTimeoutMs());
         addPropertyIfNotEmpty(props, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, getDeliveryTimeoutMs());
@@ -383,6 +404,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         addPropertyIfNotEmpty(props, ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, getMetricsSampleWindowMs());
         addPropertyIfNotEmpty(props, ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, getReconnectBackoffMs());
         addPropertyIfNotEmpty(props, ProducerConfig.RETRY_BACKOFF_MS_CONFIG, getRetryBackoffMs());
+        addPropertyIfNotEmpty(props, ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, getRetryBackoffMaxMs());
         addPropertyIfNotEmpty(props, ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isEnableIdempotence());
         addPropertyIfNotEmpty(props, ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, getReconnectBackoffMaxMs());
         addPropertyIfNotEmpty(props, "schema.registry.url", getSchemaRegistryURL());
@@ -422,16 +444,16 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     private void applyProducerSslConfiguration(Properties props) {
         if (securityProtocol.equals(SecurityProtocol.SSL.name()) || securityProtocol.equals(SecurityProtocol.SASL_SSL.name())) {
             addPropertyIfNotEmpty(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, getSecurityProtocol());
-            addPropertyIfNotEmpty(props, SslConfigs.SSL_KEY_PASSWORD_CONFIG, getSslKeyPassword());
+            addPropertyIfNotNull(props, SslConfigs.SSL_KEY_PASSWORD_CONFIG, getSslKeyPassword());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, getSslKeystoreLocation());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, getSslKeystorePassword());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, getSslTruststoreLocation());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, getSslTruststorePassword());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, getSslEnabledProtocols());
-            addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, getSslKeystoreType());
+            addUpperCasePropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, getSslKeystoreType());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_PROTOCOL_CONFIG, getSslProtocol());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_PROVIDER_CONFIG, getSslProvider());
-            addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, getSslTruststoreType());
+            addUpperCasePropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, getSslTruststoreType());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_CIPHER_SUITES_CONFIG, getSslCipherSuites());
             String algo = getSslEndpointAlgorithm();
             if (algo != null && !algo.equals("none") && !algo.equals("false")) {
@@ -470,6 +492,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         addPropertyIfNotEmpty(props, ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, getMetricsSampleWindowMs());
         addPropertyIfNotEmpty(props, ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, getReconnectBackoffMs());
         addPropertyIfNotEmpty(props, ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, getRetryBackoffMs());
+        addPropertyIfNotEmpty(props, ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, getRetryBackoffMaxMs());
         addPropertyIfNotEmpty(props, ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, getReconnectBackoffMaxMs());
         addPropertyIfNotEmpty(props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, getIsolationLevel());
         addPropertyIfNotEmpty(props, "schema.registry.url", getSchemaRegistryURL());
@@ -503,7 +526,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     private void applySslConsumerConfigurationFromOptions(Properties props) {
         if (securityProtocol.equals(SecurityProtocol.SSL.name()) || securityProtocol.equals(SecurityProtocol.SASL_SSL.name())) {
-            addPropertyIfNotEmpty(props, SslConfigs.SSL_KEY_PASSWORD_CONFIG, getSslKeyPassword());
+            addPropertyIfNotNull(props, SslConfigs.SSL_KEY_PASSWORD_CONFIG, getSslKeyPassword());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, getSslKeystoreLocation());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, getSslKeystorePassword());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, getSslTruststoreLocation());
@@ -516,10 +539,10 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
             addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, getSslKeymanagerAlgorithm());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, getSslTrustmanagerAlgorithm());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, getSslEnabledProtocols());
-            addPropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, getSslKeystoreType());
+            addUpperCasePropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, getSslKeystoreType());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_PROTOCOL_CONFIG, getSslProtocol());
             addPropertyIfNotEmpty(props, SslConfigs.SSL_PROVIDER_CONFIG, getSslProvider());
-            addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, getSslTruststoreType());
+            addUpperCasePropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, getSslTruststoreType());
             addPropertyIfNotEmpty(props, ProducerConfig.SEND_BUFFER_CONFIG, getSendBufferBytes());
         }
     }
@@ -549,11 +572,15 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         if (keyManagers != null) {
             addPropertyIfNotNull(props, SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagers.getAlgorithm());
             addPropertyIfNotNull(props, SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyManagers.getKeyPassword());
-
             KeyStoreParameters keyStore = keyManagers.getKeyStore();
             if (keyStore != null) {
-                addPropertyIfNotNull(props, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, keyStore.getType());
-                addPropertyIfNotNull(props, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStore.getResource());
+                // kakfa loads the resource itself and you cannot have a prefix
+                String location = keyStore.getResource();
+                if (ResourceHelper.hasScheme(location)) {
+                    location = StringHelper.after(location, ":");
+                }
+                addUpperCasePropertyIfNotEmpty(props, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, keyStore.getType());
+                addPropertyIfNotNull(props, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, location);
                 addPropertyIfNotNull(props, SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keyStore.getPassword());
             }
         }
@@ -561,11 +588,15 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         TrustManagersParameters trustManagers = sslContextParameters.getTrustManagers();
         if (trustManagers != null) {
             addPropertyIfNotNull(props, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagers.getAlgorithm());
-
             KeyStoreParameters keyStore = trustManagers.getKeyStore();
             if (keyStore != null) {
+                // kakfa loads the resource itself and you cannot have a prefix
+                String location = keyStore.getResource();
+                if (ResourceHelper.hasScheme(location)) {
+                    location = StringHelper.after(location, ":");
+                }
                 addPropertyIfNotNull(props, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, keyStore.getType());
-                addPropertyIfNotNull(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, keyStore.getResource());
+                addPropertyIfNotNull(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, location);
                 addPropertyIfNotEmpty(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, keyStore.getPassword());
             }
         }
@@ -573,28 +604,39 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     private void applyAdditionalProperties(final Properties props, final Map<String, Object> additionalProperties) {
         if (!ObjectHelper.isEmpty(getAdditionalProperties())) {
-            additionalProperties.forEach((property, value) -> addPropertyIfNotNull(props, property, value));
+            additionalProperties.forEach((property, value) -> {
+                if (value != null) {
+                    // value should be as-is
+                    props.put(property, value);
+                }
+            });
         }
     }
 
     private static void addPropertyIfNotFalse(Properties props, String key, boolean value) {
         if (value) {
-            // Kafka expects all properties as String
+            // value should be as-is
             props.put(key, value);
         }
     }
 
     private static <T> void addPropertyIfNotEmpty(Properties props, String key, T value) {
         if (ObjectHelper.isNotEmpty(value)) {
-            // Kafka expects all properties as String
-            props.put(key, value.toString());
+            // value should be as-is
+            props.put(key, value);
+        }
+    }
+
+    private static <T> void addUpperCasePropertyIfNotEmpty(Properties props, String key, T value) {
+        if (ObjectHelper.isNotEmpty(value)) {
+            props.put(key, String.valueOf(value).toUpperCase(Locale.ROOT));
         }
     }
 
     private static <T> void addPropertyIfNotNull(Properties props, String key, T value) {
         if (value != null) {
-            // Kafka expects all properties as String
-            props.put(key, value.toString());
+            // value should be as-is
+            props.put(key, value);
         }
     }
 
@@ -602,6 +644,21 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         if (values != null && !values.isEmpty()) {
             props.put(key, values.stream().collect(Collectors.joining(",")));
         }
+    }
+
+    public boolean isPreValidateHostAndPort() {
+        return preValidateHostAndPort;
+    }
+
+    /**
+     * Whether to eager validate that broker host:port is valid and can be DNS resolved to known host during starting
+     * this consumer. If the validation fails, then an exception is thrown, which makes Camel fail fast.
+     *
+     * Disabling this will postpone the validation after the consumer is started, and Camel will keep re-connecting in
+     * case of validation or DNS resolution error.
+     */
+    public void setPreValidateHostAndPort(boolean preValidateHostAndPort) {
+        this.preValidateHostAndPort = preValidateHostAndPort;
     }
 
     public boolean isTopicIsPattern() {
@@ -622,7 +679,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * A string that uniquely identifies the group of consumer processes to which this consumer belongs. By setting the
-     * same group id multiple processes indicate that they are all part of the same consumer group. This option is
+     * same group id, multiple processes can indicate that they are all part of the same consumer group. This option is
      * required for consumers.
      */
     public void setGroupId(String groupId) {
@@ -637,7 +694,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
      * A unique identifier of the consumer instance provided by the end user. Only non-empty strings are permitted. If
      * set, the consumer is treated as a static member, which means that only one instance with this ID is allowed in
      * the consumer group at any time. This can be used in combination with a larger session timeout to avoid group
-     * rebalances caused by transient unavailability (e.g. process restarts). If not set, the consumer will join the
+     * rebalances caused by transient unavailability (e.g., process restarts). If not set, the consumer will join the
      * group as a dynamic member, which is the traditional behavior.
      */
     public void setGroupInstanceId(String groupInstanceId) {
@@ -654,6 +711,18 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
      */
     public void setPartitioner(String partitioner) {
         this.partitioner = partitioner;
+    }
+
+    /**
+     * Whether the message keys should be ignored when computing the partition. This setting has effect only when
+     * {@link #partitioner} is not set
+     */
+    public boolean isPartitionerIgnoreKeys() {
+        return partitionerIgnoreKeys;
+    }
+
+    public void setPartitionerIgnoreKeys(boolean partitionerIgnoreKeys) {
+        this.partitionerIgnoreKeys = partitionerIgnoreKeys;
     }
 
     public String getTopic() {
@@ -673,7 +742,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The number of consumers that connect to kafka server. Each consumer is run on a separate thread, that retrieves
+     * The number of consumers that connect to kafka server. Each consumer is run on a separate thread that retrieves
      * and process the incoming data.
      */
     public void setConsumersCount(int consumersCount) {
@@ -697,7 +766,11 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     public boolean getAutoCommitEnable() {
-        return autoCommitEnable;
+        if (!batching) {
+            return autoCommitEnable;
+        }
+
+        return false;
     }
 
     /**
@@ -727,7 +800,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * Timeout in milliseconds to wait gracefully for the consumer or producer to shutdown and terminate its worker
+     * Timeout in milliseconds to wait gracefully for the consumer or producer to shut down and terminate its worker
      * threads.
      */
     public void setShutdownTimeout(int shutdownTimeout) {
@@ -739,8 +812,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The offset repository to use in order to locally store the offset of each partition of the topic. Defining one
-     * will disable the autocommit.
+     * The offset repository to use to locally store the offset of each partition of the topic. Defining one will
+     * disable the autocommit.
      */
     public void setOffsetRepository(StateRepository<String, String> offsetRepository) {
         this.offsetRepository = offsetRepository;
@@ -762,7 +835,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The minimum amount of data the server should return for a fetch request. If insufficient data is available the
+     * The minimum amount of data the server should return for a fetch request. If insufficient data is available, the
      * request will wait for that much data to accumulate before answering the request.
      */
     public void setFetchMinBytes(Integer fetchMinBytes) {
@@ -770,7 +843,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The maximum amount of data the server should return for a fetch request This is not an absolute maximum, if the
+     * The maximum amount of data the server should return for a fetch request. This is not an absolute maximum, if the
      * first message in the first non-empty partition of the fetch is larger than this value, the message will still be
      * returned to ensure that the consumer can make progress. The maximum message size accepted by the broker is
      * defined via message.max.bytes (broker config) or max.message.bytes (topic config). Note that the consumer
@@ -789,8 +862,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The maximum amount of time the server will block before answering the fetch request if there isn't sufficient
-     * data to immediately satisfy fetch.min.bytes
+     * The maximum amount of time the server will block before answering the fetch request if there isn't enough data to
+     * immediately satisfy fetch.min.bytes
      */
     public void setFetchWaitMaxMs(Integer fetchWaitMaxMs) {
         this.fetchWaitMaxMs = fetchWaitMaxMs;
@@ -802,7 +875,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * What to do when there is no initial offset in ZooKeeper or if an offset is out of range: earliest : automatically
-     * reset the offset to the earliest offset latest : automatically reset the offset to the latest offset fail: throw
+     * reset the offset to the earliest offset latest: automatically reset the offset to the latest offset fail: throw
      * exception to the consumer
      */
     public void setAutoOffsetReset(String autoOffsetReset) {
@@ -816,10 +889,15 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     /**
      * This options controls what happens when a consumer is processing an exchange and it fails. If the option is
      * <tt>false</tt> then the consumer continues to the next message and processes it. If the option is <tt>true</tt>
-     * then the consumer breaks out, and will seek back to offset of the message that caused a failure, and then
-     * re-attempt to process this message. However this can lead to endless processing of the same message if its bound
-     * to fail every time, eg a poison message. Therefore its recommended to deal with that for example by using Camel's
-     * error handler.
+     * then the consumer breaks out.
+     *
+     * Using the default NoopCommitManager will cause the consumer to not commit the offset so that the message is
+     * re-attempted. The consumer should use the KafkaManualCommit to determine the best way to handle the message.
+     *
+     * Using either the SyncCommitManager or the AsyncCommitManager, the consumer will seek back to the offset of the
+     * message that caused a failure, and then re-attempt to process this message. However, this can lead to endless
+     * processing of the same message if it's bound to fail every time, e.g., a poison message. Therefore, it's
+     * recommended to deal with that, for example, by using Camel's error handler.
      */
     public void setBreakOnFirstError(boolean breakOnFirstError) {
         this.breakOnFirstError = breakOnFirstError;
@@ -844,9 +922,9 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * URL of the Confluent Platform schema registry servers to use. The format is host1:port1,host2:port2. This is
-     * known as schema.registry.url in the Confluent Platform documentation. This option is only available in the
-     * Confluent Platform (not standard Apache Kafka)
+     * URL of the schema registry servers to use. The format is host1:port1,host2:port2. This is known as
+     * schema.registry.url in multiple Schema registries documentation. This option is only available externally (not
+     * standard Apache Kafka)
      */
     public void setSchemaRegistryURL(String schemaRegistryURL) {
         this.schemaRegistryURL = schemaRegistryURL;
@@ -857,9 +935,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * This enables the use of a specific Avro reader for use with the Confluent Platform schema registry and the
-     * io.confluent.kafka.serializers.KafkaAvroDeserializer. This option is only available in the Confluent Platform
-     * (not standard Apache Kafka)
+     * This enables the use of a specific Avro reader for use with the in multiple Schema registries documentation with
+     * Avro Deserializers implementation. This option is only available externally (not standard Apache Kafka)
      */
     public void setSpecificAvroReader(boolean specificAvroReader) {
         this.specificAvroReader = specificAvroReader;
@@ -882,12 +959,28 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * Before each retry, the producer refreshes the metadata of relevant topics to see if a new leader has been
-     * elected. Since leader election takes a bit of time, this property specifies the amount of time that the producer
-     * waits before refreshing the metadata.
+     * The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids
+     * repeatedly sending requests in a tight loop under some failure scenarios. This value is the initial backoff value
+     * and will increase exponentially for each failed request, up to the retry.backoff.max.ms value.
      */
     public void setRetryBackoffMs(Integer retryBackoffMs) {
         this.retryBackoffMs = retryBackoffMs;
+    }
+
+    public Integer getRetryBackoffMaxMs() {
+        return retryBackoffMaxMs;
+    }
+
+    /**
+     * The maximum amount of time in milliseconds to wait when retrying a request to the broker that has repeatedly
+     * failed. If provided, the backoff per client will increase exponentially for each failed request, up to this
+     * maximum. To prevent all clients from being synchronized upon retry, a randomized jitter with a factor of 0.2 will
+     * be applied to the backoff, resulting in the backoff falling within a range between 20% below and 20% above the
+     * computed value. If retry.backoff.ms is set to be higher than retry.backoff.max.ms, then retry.backoff.max.ms will
+     * be used as a constant backoff from the beginning without any exponential increase
+     */
+    public void setRetryBackoffMaxMs(Integer retryBackoffMaxMs) {
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
     }
 
     public Integer getSendBufferBytes() {
@@ -1011,11 +1104,11 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * A list of rules for mapping from principal names to short names (typically operating system usernames). The rules
-     * are evaluated in order and the first rule that matches a principal name is used to map it to a short name. Any
+     * are evaluated in order, and the first rule that matches a principal name is used to map it to a short name. Any
      * later rules in the list are ignored. By default, principal names of the form {username}/{hostname}@{REALM} are
-     * mapped to {username}. For more details on the format please see the security authorization and acls documentation
-     * (at the Apache Kafka project).
-     * <p/>
+     * mapped to {username}. For more details on the format, please see the Security Authorization and ACLs
+     * documentation (at the Apache Kafka project website).
+     *
      * Multiple values can be separated by comma
      */
     public void setKerberosPrincipalToLocalRules(String kerberosPrincipalToLocalRules) {
@@ -1029,7 +1122,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     /**
      * A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange
      * algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. By
-     * default all the available cipher suites are supported.
+     * default, all the available cipher suites are supported.
      */
     public void setSslCipherSuites(String sslCipherSuites) {
         this.sslCipherSuites = sslCipherSuites;
@@ -1090,7 +1183,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The file format of the key store file. This is optional for client. Default value is JKS
+     * The file format of the key store file. This is optional for the client. The default value is JKS
      */
     public void setSslKeystoreType(String sslKeystoreType) {
         this.sslKeystoreType = sslKeystoreType;
@@ -1129,7 +1222,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The file format of the trust store file. Default value is JKS.
+     * The file format of the trust store file. The default value is JKS.
      */
     public void setSslTruststoreType(String sslTruststoreType) {
         this.sslTruststoreType = sslTruststoreType;
@@ -1187,7 +1280,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * SSL configuration using a Camel {@link SSLContextParameters} object. If configured it's applied before the other
+     * SSL configuration using a Camel {@link SSLContextParameters} object. If configured, it's applied before the other
      * SSL endpoint parameters.
      *
      * NOTE: Kafka only supports loading keystore from file locations, so prefix the location with file: in the
@@ -1214,8 +1307,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The location of the key store file. This is optional for client and can be used for two-way authentication for
-     * client.
+     * The location of the key store file. This is optional for the client and can be used for two-way authentication
+     * for the client.
      */
     public void setSslKeystoreLocation(String sslKeystoreLocation) {
         this.sslKeystoreLocation = sslKeystoreLocation;
@@ -1226,8 +1319,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The store password for the key store file. This is optional for client and only needed if sslKeystoreLocation' is
-     * configured. Key store password is not supported for PEM format.
+     * The store password for the key store file. This is optional for the client and only needed if sslKeystoreLocation
+     * is configured. Key store password is not supported for PEM format.
      */
     public void setSslKeystorePassword(String sslKeystorePassword) {
         this.sslKeystorePassword = sslKeystorePassword;
@@ -1262,7 +1355,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are
-     * sent faster than they can be delivered to the server the producer will either block or throw an exception based
+     * sent faster than they can be delivered to the server, the producer will either block or throw an exception based
      * on the preference specified by block.on.buffer.full.This setting should correspond roughly to the total memory
      * the producer will use, but is not a hard bound since not all memory the producer uses is used for buffering. Some
      * additional memory will be used for compression (if compression is enabled) as well as for maintaining in-flight
@@ -1296,6 +1389,18 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         this.partitionKey = partitionKey;
     }
 
+    public boolean isUseIterator() {
+        return useIterator;
+    }
+
+    /**
+     * Sets whether sending to kafka should send the message body as a single record, or use a java.util.Iterator to
+     * send multiple records to kafka (if the message body can be iterated).
+     */
+    public void setUseIterator(boolean useIterator) {
+        this.useIterator = useIterator;
+    }
+
     public String getRequestRequiredAcks() {
         return requestRequiredAcks;
     }
@@ -1304,13 +1409,13 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
      * The number of acknowledgments the producer requires the leader to have received before considering a request
      * complete. This controls the durability of records that are sent. The following settings are allowed:
      *
-     * acks=0 If set to zero then the producer will not wait for any acknowledgment from the server at all. The record
+     * acks=0 If set to zero, then the producer will not wait for any acknowledgment from the server at all. The record
      * will be immediately added to the socket buffer and considered sent. No guarantee can be made that the server has
-     * received the record in this case, and the retries configuration will not take effect (as the client won't
-     * generally know of any failures). The offset given back for each record will always be set to -1. acks=1 This will
-     * mean the leader will write the record to its local log but will respond without awaiting full acknowledgement
-     * from all followers. In this case should the leader fail immediately after acknowledging the record but before the
-     * followers have replicated it then the record will be lost. acks=all This means the leader will wait for the full
+     * received the record in this case, and the retry configuration will not take effect (as the client won't generally
+     * know of any failures). The offset given back for each record will always be set to -1. acks=1 This will mean the
+     * leader will write the record to its local log but will respond without awaiting full acknowledgment from all
+     * followers. In this case should the leader fail immediately after acknowledging the record, but before the
+     * followers have replicated it, then the record will be lost. acks=all This means the leader will wait for the full
      * set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost as long as at
      * least one in-sync replica remains alive. This is the strongest available guarantee. This is equivalent to the
      * acks=-1 setting. Note that enabling idempotence requires this config value to be 'all'. If conflicting
@@ -1325,18 +1430,18 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially
-     * transient error. Note that this retry is no different than if the client resent the record upon receiving the
-     * error. Produce requests will be failed before the number of retries has been exhausted if the timeout configured
-     * by delivery.timeout.ms expires first before successful acknowledgement. Users should generally prefer to leave
-     * this config unset and instead use delivery.timeout.ms to control retry behavior.
+     * Setting a value greater than zero will cause the client to resend any record that has failed to be sent due to a
+     * potentially transient error. Note that this retry is no different from if the client re-sending the record upon
+     * receiving the error. Produce requests will be failed before the number of retries has been exhausted if the
+     * timeout configured by delivery.timeout.ms expires first before successful acknowledgement. Users should generally
+     * prefer to leave this config unset and instead use delivery.timeout.ms to control retry behavior.
      *
      * Enabling idempotence requires this config value to be greater than 0. If conflicting configurations are set and
      * idempotence is not explicitly enabled, idempotence is disabled.
      *
      * Allowing retries while setting enable.idempotence to false and max.in.flight.requests.per.connection to 1 will
-     * potentially change the ordering of records because if two batches are sent to a single partition, and the first
-     * fails and is retried but the second succeeds, then the records in the second batch may appear first.
+     * potentially change the ordering of records, because if two batches are sent to a single partition, and the first
+     * fails and is retried but the second succeeds; then the records in the second batch may appear first.
      */
     public void setRetries(Integer retries) {
         this.retries = retries;
@@ -1349,8 +1454,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     /**
      * The producer will attempt to batch records together into fewer requests whenever multiple records are being sent
      * to the same partition. This helps performance on both the client and the server. This configuration controls the
-     * default batch size in bytes. No attempt will be made to batch records larger than this size.Requests sent to
-     * brokers will contain multiple batches, one for each partition with data available to be sent.A small batch size
+     * default batch size in bytes. No attempt will be made to batch records larger than this size. Requests sent to
+     * brokers will contain multiple batches, one for each partition with data available to be sent. A small batch size
      * will make batching less common and may reduce throughput (a batch size of zero will disable batching entirely). A
      * very large batch size may use memory a bit more wastefully as we will always allocate a buffer of the specified
      * batch size in anticipation of additional records.
@@ -1365,8 +1470,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * If this feature is enabled and a single element of a batch is an Exchange or Message, the producer will generate
-     * individual kafka header values for it by using the batch Message to determine the values. Normal behaviour
-     * consists in always using the same header values (which are determined by the parent Exchange which contains the
+     * individual kafka header values for it by using the batch Message to determine the values. Normal behavior
+     * consists of always using the same header values (which are determined by the parent Exchange which contains the
      * Iterable or Iterator).
      */
     public void setBatchWithIndividualHeaders(boolean batchWithIndividualHeaders) {
@@ -1389,17 +1494,17 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * The producer groups together any records that arrive in between request transmissions into a single batched
-     * request. Normally this occurs only under load when records arrive faster than they can be sent out. However in
-     * some circumstances the client may want to reduce the number of requests even under moderate load. This setting
-     * accomplishes this by adding a small amount of artificial delay that is, rather than immediately sending out a
-     * record the producer will wait for up to the given delay to allow other records to be sent so that the sends can
-     * be batched together. This can be thought of as analogous to Nagle's algorithm in TCP. This setting gives the
-     * upper bound on the delay for batching: once we get batch.size worth of records for a partition it will be sent
-     * immediately regardless of this setting, however if we have fewer than this many bytes accumulated for this
-     * partition we will 'linger' for the specified time waiting for more records to show up. This setting defaults to 0
-     * (i.e. no delay). Setting linger.ms=5, for example, would have the effect of reducing the number of requests sent
-     * but would add up to 5ms of latency to records sent in the absense of load.
+     * The producer groups together any records that arrive in between request transmissions into a single, batched,
+     * request. Normally, this occurs only under load when records arrive faster than they can be sent out. However, in
+     * some circumstances, the client may want to reduce the number of requests even under a moderate load. This setting
+     * achieves this by adding a small amount of artificial delay. That is, rather than immediately sending out a
+     * record, the producer will wait for up to the given delay to allow other records to be sent so that they can be
+     * batched together. This can be thought of as analogous to Nagle's algorithm in TCP. This setting gives the upper
+     * bound on the delay for batching: once we get batch.size worth of records for a partition, it will be sent
+     * immediately regardless of this setting, however, if we have fewer than this many bytes accumulated for this
+     * partition, we will 'linger' for the specified time waiting for more records to show up. This setting defaults to
+     * 0 (i.e., no delay). Setting linger.ms=5, for example, would have the effect of reducing the number of requests
+     * sent but would add up to 5ms of latency to records sent in the absence of load.
      */
     public void setLingerMs(Integer lingerMs) {
         this.lingerMs = lingerMs;
@@ -1413,9 +1518,9 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
      * The configuration controls how long the KafkaProducer's send(), partitionsFor(), initTransactions(),
      * sendOffsetsToTransaction(), commitTransaction() and abortTransaction() methods will block. For send() this
      * timeout bounds the total time waiting for both metadata fetch and buffer allocation (blocking in the
-     * user-supplied serializers or partitioner is not counted against this timeout). For partitionsFor() this timeout
+     * user-supplied serializers or partitioner is not counted against this timeout). For partitionsFor() this time out
      * bounds the time spent waiting for metadata if it is unavailable. The transaction-related methods always block,
-     * but may timeout if the transaction coordinator could not be discovered or did not respond within the timeout.
+     * but may time out if the transaction coordinator could not be discovered or did not respond within the timeout.
      */
     public void setMaxBlockMs(Integer maxBlockMs) {
         this.maxBlockMs = maxBlockMs;
@@ -1579,17 +1684,17 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
         this.pollTimeoutMs = pollTimeoutMs;
     }
 
-    public Long getMaxPollIntervalMs() {
+    public Integer getMaxPollIntervalMs() {
         return maxPollIntervalMs;
     }
 
     /**
      * The maximum delay between invocations of poll() when using consumer group management. This places an upper bound
      * on the amount of time that the consumer can be idle before fetching more records. If poll() is not called before
-     * expiration of this timeout, then the consumer is considered failed and the group will rebalance in order to
-     * reassign the partitions to another member.
+     * expiration of this timeout, then the consumer is considered failed, and the group will re-balance to reassign the
+     * partitions to another member.
      */
-    public void setMaxPollIntervalMs(Long maxPollIntervalMs) {
+    public void setMaxPollIntervalMs(Integer maxPollIntervalMs) {
         this.maxPollIntervalMs = maxPollIntervalMs;
     }
 
@@ -1611,7 +1716,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * The configuration controls the maximum amount of time the client will wait for the response of a request. If the
-     * response is not received before the timeout elapses the client will resend the request if necessary or fail the
+     * response is not received before the timeout elapsed, the client will resend the request if necessary or fail the
      * request if retries are exhausted.
      */
     public void setConsumerRequestTimeoutMs(Integer consumerRequestTimeoutMs) {
@@ -1635,7 +1740,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * Deserializer class for key that implements the Deserializer interface.
+     * Deserializer class for the key that implements the Deserializer interface.
      */
     public void setKeyDeserializer(String keyDeserializer) {
         this.keyDeserializer = keyDeserializer;
@@ -1657,8 +1762,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * Set if KafkaConsumer will read from beginning or end on startup: SeekPolicy.BEGINNING: read from beginning.
-     * SeekPolicy.END: read from end.
+     * Set if KafkaConsumer should read from the beginning or the end on startup: SeekPolicy.BEGINNING: read from the
+     * beginning. SeekPolicy.END: read from the end.
      */
     public void setSeekTo(SeekPolicy seekTo) {
         this.seekTo = seekTo;
@@ -1669,8 +1774,8 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * To use a custom worker pool for continue routing {@link Exchange} after kafka server has acknowledge the message
-     * that was sent to it from {@link KafkaProducer} using asynchronous non-blocking processing. If using this option
+     * To use a custom worker pool for continue routing {@link Exchange} after kafka server has acknowledged the message
+     * that was sent to it from {@link KafkaProducer} using asynchronous non-blocking processing. If using this option,
      * then you must handle the lifecycle of the thread pool to shut the pool down when no longer needed.
      */
     public void setWorkerPool(ExecutorService workerPool) {
@@ -1683,7 +1788,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * Number of core threads for the worker pool for continue routing {@link Exchange} after kafka server has
-     * acknowledge the message that was sent to it from {@link KafkaProducer} using asynchronous non-blocking
+     * acknowledged the message that was sent to it from {@link KafkaProducer} using asynchronous non-blocking
      * processing.
      */
     public void setWorkerPoolCoreSize(Integer workerPoolCoreSize) {
@@ -1696,7 +1801,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * Maximum number of threads for the worker pool for continue routing {@link Exchange} after kafka server has
-     * acknowledge the message that was sent to it from {@link KafkaProducer} using asynchronous non-blocking
+     * acknowledged the message that was sent to it from {@link KafkaProducer} using asynchronous non-blocking
      * processing.
      */
     public void setWorkerPoolMaxSize(Integer workerPoolMaxSize) {
@@ -1769,7 +1874,7 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
     }
 
     /**
-     * To use a custom HeaderFilterStrategy to filter header to and from Camel message.
+     * To use a custom HeaderFilterStrategy to filter header to and from the Camel message.
      */
     @Override
     public void setHeaderFilterStrategy(HeaderFilterStrategy headerFilterStrategy) {
@@ -1804,9 +1909,12 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
 
     /**
      * Sets additional properties for either kafka consumer or kafka producer in case they can't be set directly on the
-     * camel configurations (e.g: new Kafka properties that are not reflected yet in Camel configurations), the
-     * properties have to be prefixed with `additionalProperties.`. E.g:
-     * `additionalProperties.transactional.id=12345&additionalProperties.schema.registry.url=http://localhost:8811/avro`
+     * camel configurations (e.g.: new Kafka properties that are not reflected yet in Camel configurations), the
+     * properties have to be prefixed with `additionalProperties.`., e.g.:
+     * `additionalProperties.transactional.id=12345&additionalProperties.schema.registry.url=http://localhost:8811/avro`.
+     * If the properties are set in the `application.properties` file, they must be prefixed with
+     * `camel.component.kafka.additional-properties` and the property enclosed in square brackets, like this example:
+     * `camel.component.kafka.additional-properties[delivery.timeout.ms]=15000`.
      */
     public void setAdditionalProperties(Map<String, Object> additionalProperties) {
         this.additionalProperties = additionalProperties;
@@ -1834,10 +1942,11 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
      * Will by default use the value from the component configuration unless an explicit value has been configured on
      * the endpoint level.
      *
-     * DISCARD will discard the message and continue to poll next message. ERROR_HANDLER will use Camel's error handler
-     * to process the exception, and afterwards continue to poll next message. RECONNECT will re-connect the consumer
-     * and try poll the message again RETRY will let the consumer retry polling the same message again STOP will stop
-     * the consumer (have to be manually started/restarted if the consumer should be able to consume messages again)
+     * DISCARD will discard the message and continue to poll the next message. ERROR_HANDLER will use Camel's error
+     * handler to process the exception, and afterwards continue to poll the next message. RECONNECT will re-connect the
+     * consumer and try polling the message again. RETRY will let the consumer retry poll the same message again. STOP
+     * will stop the consumer (it has to be manually started/restarted if the consumer should be able to consume
+     * messages again)
      */
     public void setPollOnError(PollOnError pollOnError) {
         this.pollOnError = pollOnError;
@@ -1864,12 +1973,56 @@ public class KafkaConfiguration implements Cloneable, HeaderFilterStrategyAware 
      * return all messages, even transactional messages which have been aborted. Non-transactional messages will be
      * returned unconditionally in either mode. Messages will always be returned in offset order. Hence, in
      * read_committed mode, consumer.poll() will only return messages up to the last stable offset (LSO), which is the
-     * one less than the offset of the first open transaction. In particular any messages appearing after messages
+     * one less than the offset of the first open transaction. In particular, any messages appearing after messages
      * belonging to ongoing transactions will be withheld until the relevant transaction has been completed. As a
      * result, read_committed</code> consumers will not be able to read up to the high watermark when there are in
      * flight transactions. Further, when in read_committed the seekToEnd method will return the LSO
      */
     public void setIsolationLevel(String isolationLevel) {
         this.isolationLevel = isolationLevel;
+    }
+
+    public String getKerberosConfigLocation() {
+        return kerberosConfigLocation;
+    }
+
+    /**
+     * Location of the kerberos config file.
+     */
+    public void setKerberosConfigLocation(String kerberosConfigLocation) {
+        this.kerberosConfigLocation = kerberosConfigLocation;
+    }
+
+    public boolean isBatching() {
+        return batching;
+    }
+
+    /**
+     * Whether to use batching for processing or streaming. The default is false, which uses streaming.
+     *
+     * In streaming mode, then a single kafka record is processed per Camel exchange in the message body.
+     *
+     * In batching mode, then Camel groups many kafka records together as a List<Exchange> objects in the message body.
+     * The option maxPollRecords is used to define the number of records to group together in batching mode.
+     */
+    public void setBatching(boolean batching) {
+        this.batching = batching;
+    }
+
+    public Integer getBatchingIntervalMs() {
+        return batchingIntervalMs;
+    }
+
+    /**
+     * In consumer batching mode, then this option is specifying a time in millis, to trigger batch completion eager
+     * when the current batch size has not reached the maximum size defined by maxPollRecords.
+     *
+     * Notice the trigger is not exact at the given interval, as this can only happen between kafka polls (see
+     * pollTimeoutMs option). So for example setting this to 10000, then the trigger happens in the interval 10000 +
+     * pollTimeoutMs. The default value for pollTimeoutMs is 5000, so this would mean a trigger interval at about every
+     * 15 seconds.
+     */
+    public void setBatchingIntervalMs(Integer batchingIntervalMs) {
+        this.batchingIntervalMs = batchingIntervalMs;
     }
 }

@@ -45,6 +45,9 @@ public class RestOpenApiProcessorTest {
         });
 
         RestOpenApiProcessor processor = new RestOpenApiProcessor(null, context.getRestConfiguration());
+        processor.setCamelContext(context);
+        processor.start();
+
         Exchange exchange = new DefaultExchange(context);
         processor.process(exchange);
 
@@ -68,6 +71,9 @@ public class RestOpenApiProcessorTest {
         });
 
         RestOpenApiProcessor processor = new RestOpenApiProcessor(null, context.getRestConfiguration());
+        processor.setCamelContext(context);
+        processor.start();
+
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setHeader(Exchange.HTTP_PATH, "/openapi.json");
         processor.process(exchange);
@@ -93,6 +99,9 @@ public class RestOpenApiProcessorTest {
         });
 
         RestOpenApiProcessor processor = new RestOpenApiProcessor(null, context.getRestConfiguration());
+        processor.setCamelContext(context);
+        processor.start();
+
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setHeader(Exchange.HTTP_PATH, "/openapi.yaml");
         processor.process(exchange);
@@ -122,6 +131,9 @@ public class RestOpenApiProcessorTest {
         });
 
         RestOpenApiProcessor processor = new RestOpenApiProcessor(null, context.getRestConfiguration());
+        processor.setCamelContext(context);
+        processor.start();
+
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setHeader(Exchange.HTTP_PATH, "/openapi.yaml");
         processor.process(exchange);
@@ -131,8 +143,8 @@ public class RestOpenApiProcessorTest {
         assertEquals("text/yaml", exchange.getMessage().getHeader(Exchange.CONTENT_TYPE));
         assertTrue(yaml.contains("/foo:"));
         assertTrue(yaml.contains("/bar:"));
-        assertTrue(yaml.contains("summary: \"Foo endpoint\""));
-        assertTrue(yaml.contains("summary: \"Bar endpoint\""));
+        assertTrue(yaml.contains("summary: Foo endpoint"));
+        assertTrue(yaml.contains("summary: Bar endpoint"));
     }
 
     @Test
@@ -147,6 +159,9 @@ public class RestOpenApiProcessorTest {
         });
 
         RestOpenApiProcessor processor = new RestOpenApiProcessor(null, context.getRestConfiguration());
+        processor.setCamelContext(context);
+        processor.start();
+
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setHeader(Exchange.HTTP_PATH, "/");
         exchange.getMessage().setHeader("Accept", "application/json");
@@ -173,6 +188,9 @@ public class RestOpenApiProcessorTest {
         });
 
         RestOpenApiProcessor processor = new RestOpenApiProcessor(null, context.getRestConfiguration());
+        processor.setCamelContext(context);
+        processor.start();
+
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setHeader(Exchange.HTTP_PATH, "/");
         exchange.getMessage().setHeader("Accept", "application/yaml");
@@ -183,8 +201,8 @@ public class RestOpenApiProcessorTest {
         assertEquals("text/yaml", exchange.getMessage().getHeader(Exchange.CONTENT_TYPE));
         assertTrue(yaml.contains("/foo:"));
         assertTrue(yaml.contains("/bar:"));
-        assertTrue(yaml.contains("summary: \"Foo endpoint\""));
-        assertTrue(yaml.contains("summary: \"Bar endpoint\""));
+        assertTrue(yaml.contains("summary: Foo endpoint"));
+        assertTrue(yaml.contains("summary: Bar endpoint"));
     }
 
 }

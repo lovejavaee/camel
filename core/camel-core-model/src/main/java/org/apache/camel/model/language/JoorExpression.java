@@ -30,6 +30,7 @@ import org.apache.camel.spi.Metadata;
 @Metadata(firstVersion = "3.7.0", label = "language", title = "jOOR")
 @XmlRootElement(name = "joor")
 @XmlAccessorType(XmlAccessType.FIELD)
+@Deprecated(since = "4.3.0")
 public class JoorExpression extends TypedExpressionDefinition {
 
     @XmlAttribute
@@ -42,6 +43,12 @@ public class JoorExpression extends TypedExpressionDefinition {
     public JoorExpression() {
     }
 
+    protected JoorExpression(JoorExpression source) {
+        super(source);
+        this.preCompile = source.preCompile;
+        this.singleQuotes = source.singleQuotes;
+    }
+
     public JoorExpression(String expression) {
         super(expression);
     }
@@ -50,6 +57,11 @@ public class JoorExpression extends TypedExpressionDefinition {
         super(builder);
         this.preCompile = builder.preCompile;
         this.singleQuotes = builder.singleQuotes;
+    }
+
+    @Override
+    public JoorExpression copyDefinition() {
+        return new JoorExpression(this);
     }
 
     @Override

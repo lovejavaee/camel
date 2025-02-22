@@ -20,9 +20,9 @@ import java.nio.charset.StandardCharsets;
 
 import org.apache.camel.component.as2.api.AS2Header;
 import org.apache.camel.component.as2.api.AS2MediaType;
-import org.apache.camel.component.as2.api.entity.ApplicationEDIEntity;
-import org.apache.http.Header;
-import org.apache.http.entity.ContentType;
+import org.apache.camel.component.as2.api.entity.ApplicationEntity;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -32,11 +32,12 @@ public class EntityUtilsTest {
     public void testCreateEDIEntityContentTypeWithoutEncoding() throws Exception {
         ContentType ediMessageContentType = ContentType.create(AS2MediaType.APPLICATION_EDIFACT, (String) null);
         String ediMessage = "whatever";
-        ApplicationEDIEntity applicationEDIEntity
-                = EntityUtils.createEDIEntity(ediMessage, ediMessageContentType, null, false, "sample.txt");
-        String actualContentType = applicationEDIEntity.getContentTypeValue();
+        ApplicationEntity applicationEntity
+                = EntityUtils.createEDIEntity(ediMessage.getBytes(StandardCharsets.US_ASCII), ediMessageContentType, null,
+                        false, "sample.txt");
+        String actualContentType = applicationEntity.getContentType();
         Assertions.assertEquals("application/edifact", actualContentType, "content type matches");
-        Header[] actualContentDisposition = applicationEDIEntity.getHeaders(AS2Header.CONTENT_DISPOSITION);
+        Header[] actualContentDisposition = applicationEntity.getHeaders(AS2Header.CONTENT_DISPOSITION);
         Assertions.assertEquals(1, actualContentDisposition.length, "exactly one Content-Disposition header found");
         Assertions.assertEquals("Content-Disposition: attachment; filename=sample.txt",
                 actualContentDisposition[0].toString());
@@ -46,11 +47,12 @@ public class EntityUtilsTest {
     public void testCreateEDIEntityContentTypeWithEncoding() throws Exception {
         ContentType ediMessageContentType = ContentType.create(AS2MediaType.APPLICATION_EDIFACT, StandardCharsets.US_ASCII);
         String ediMessage = "whatever";
-        ApplicationEDIEntity applicationEDIEntity
-                = EntityUtils.createEDIEntity(ediMessage, ediMessageContentType, null, false, "sample.txt");
-        String actualContentType = applicationEDIEntity.getContentTypeValue();
+        ApplicationEntity applicationEntity
+                = EntityUtils.createEDIEntity(ediMessage.getBytes(StandardCharsets.US_ASCII), ediMessageContentType, null,
+                        false, "sample.txt");
+        String actualContentType = applicationEntity.getContentType();
         Assertions.assertEquals("application/edifact; charset=US-ASCII", actualContentType, "content type matches");
-        Header[] actualContentDisposition = applicationEDIEntity.getHeaders(AS2Header.CONTENT_DISPOSITION);
+        Header[] actualContentDisposition = applicationEntity.getHeaders(AS2Header.CONTENT_DISPOSITION);
         Assertions.assertEquals(1, actualContentDisposition.length, "exactly one Content-Disposition header found");
         Assertions.assertEquals("Content-Disposition: attachment; filename=sample.txt",
                 actualContentDisposition[0].toString());
@@ -60,11 +62,12 @@ public class EntityUtilsTest {
     public void testCreateEDIEntityContentTypeWithoutContentDisposition() throws Exception {
         ContentType ediMessageContentType = ContentType.create(AS2MediaType.APPLICATION_EDIFACT, (String) null);
         String ediMessage = "whatever";
-        ApplicationEDIEntity applicationEDIEntity
-                = EntityUtils.createEDIEntity(ediMessage, ediMessageContentType, null, false, "");
-        String actualContentType = applicationEDIEntity.getContentTypeValue();
+        ApplicationEntity applicationEntity
+                = EntityUtils.createEDIEntity(ediMessage.getBytes(StandardCharsets.US_ASCII), ediMessageContentType, null,
+                        false, "");
+        String actualContentType = applicationEntity.getContentType();
         Assertions.assertEquals("application/edifact", actualContentType, "content type matches");
-        Header[] actualContentDisposition = applicationEDIEntity.getHeaders(AS2Header.CONTENT_DISPOSITION);
+        Header[] actualContentDisposition = applicationEntity.getHeaders(AS2Header.CONTENT_DISPOSITION);
         Assertions.assertEquals(0, actualContentDisposition.length, "no Content-Disposition headers found");
     }
 }

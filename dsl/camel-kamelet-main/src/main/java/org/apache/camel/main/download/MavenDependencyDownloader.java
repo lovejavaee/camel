@@ -23,10 +23,12 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -47,14 +49,14 @@ import org.apache.camel.tooling.maven.MavenDownloader;
 import org.apache.camel.tooling.maven.MavenDownloaderImpl;
 import org.apache.camel.tooling.maven.MavenGav;
 import org.apache.camel.tooling.maven.MavenResolutionException;
+import org.apache.camel.tooling.maven.RemoteArtifactDownloadListener;
+import org.apache.camel.tooling.maven.RepositoryResolver;
 import org.apache.camel.util.FileUtil;
+import org.apache.camel.util.ObjectHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MavenDependencyDownloader extends ServiceSupport implements DependencyDownloader {
-
-    public static final String MAVEN_CENTRAL_REPO = "https://repo1.maven.org/maven2";
-    public static final String APACHE_SNAPSHOT_REPO = "https://repository.apache.org/snapshots";
 
     private static final String MINIMUM_QUARKUS_VERSION = "2.0.0";
 
@@ -63,22 +65,28 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
 
     private String[] bootClasspath;
     private DownloadThreadPool threadPool;
+    private boolean verbose;
     private ClassLoader classLoader;
     private CamelContext camelContext;
     private final Set<DownloadListener> downloadListeners = new LinkedHashSet<>();
     private final Set<ArtifactDownloadListener> artifactDownloadListeners = new LinkedHashSet<>();
+    private final Map<String, DownloadRecord> downloadRecords = new HashMap<>();
     private KnownReposResolver knownReposResolver;
+    private boolean download = true;
 
     // all maven-resolver work is delegated to camel-tooling-maven
     private MavenDownloader mavenDownloader;
 
     // repository URLs set from "camel.jbang.repos" property or --repos option.
-    private String repos;
+    private String repositories;
     private boolean fresh;
 
     // settings.xml and settings-security.xml locations to be passed to MavenDownloader from camel-tooling-maven
     private String mavenSettings;
     private String mavenSettingsSecurity;
+    // to make it easy to turn off maven central/snapshot
+    boolean mavenCentralEnabled = true;
+    boolean mavenApacheSnapshotEnabled = true;
 
     @Override
     public CamelContext getCamelContext() {
@@ -98,12 +106,29 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
         this.classLoader = classLoader;
     }
 
+    public boolean isVerbose() {
+        return verbose;
+    }
+
+    public void setVerbose(boolean verbose) {
+        this.verbose = verbose;
+    }
+
     public KnownReposResolver getKnownReposResolver() {
         return knownReposResolver;
     }
 
     public void setKnownReposResolver(KnownReposResolver knownReposResolver) {
         this.knownReposResolver = knownReposResolver;
+    }
+
+    @Override
+    public RepositoryResolver getRepositoryResolver() {
+        if (mavenDownloader != null) {
+            return mavenDownloader.getRepositoryResolver();
+        } else {
+            return null;
+        }
     }
 
     @Override
@@ -119,13 +144,13 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
     }
 
     @Override
-    public String getRepos() {
-        return repos;
+    public String getRepositories() {
+        return repositories;
     }
 
     @Override
-    public void setRepos(String repos) {
-        this.repos = repos;
+    public void setRepositories(String repositories) {
+        this.repositories = repositories;
     }
 
     @Override
@@ -136,6 +161,14 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
     @Override
     public void setFresh(boolean fresh) {
         this.fresh = fresh;
+    }
+
+    public boolean isDownload() {
+        return download;
+    }
+
+    public void setDownload(boolean download) {
+        this.download = download;
     }
 
     @Override
@@ -156,6 +189,26 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
     @Override
     public void setMavenSettingsSecurity(String mavenSettingsSecurity) {
         this.mavenSettingsSecurity = mavenSettingsSecurity;
+    }
+
+    @Override
+    public boolean isMavenCentralEnabled() {
+        return mavenCentralEnabled;
+    }
+
+    @Override
+    public void setMavenCentralEnabled(boolean mavenCentralEnabled) {
+        this.mavenCentralEnabled = mavenCentralEnabled;
+    }
+
+    @Override
+    public boolean isMavenApacheSnapshotEnabled() {
+        return mavenApacheSnapshotEnabled;
+    }
+
+    @Override
+    public void setMavenApacheSnapshotEnabled(boolean mavenApacheSnapshotEnabled) {
+        this.mavenApacheSnapshotEnabled = mavenApacheSnapshotEnabled;
     }
 
     @Override
@@ -205,17 +258,16 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
         }
 
         // we need version to be able to download from maven
-        if (version == null) {
+        if (ObjectHelper.isEmpty(version)) {
             return;
         }
 
         String gav = groupId + ":" + artifactId + ":" + version;
         threadPool.download(LOG, () -> {
-            LOG.debug("Downloading: {}", gav);
             List<String> deps = List.of(gav);
 
             // include Apache snapshot to make it easy to use upcoming releases
-            boolean useApacheSnaphots = "org.apache.camel".equals(groupId) && version.contains("SNAPSHOT");
+            boolean useApacheSnapshots = "org.apache.camel".equals(groupId) && version.contains("SNAPSHOT");
 
             // include extra repositories (if any) - these will be used in addition
             // to the ones detected from ~/.m2/settings.xml and configured in
@@ -228,9 +280,13 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
             }
 
             List<MavenArtifact> artifacts = resolveDependenciesViaAether(deps, extraRepositories,
-                    transitively, useApacheSnaphots);
+                    transitively, useApacheSnapshots);
             List<File> files = new ArrayList<>();
-            LOG.debug("Resolved {} -> [{}]", gav, artifacts);
+            if (verbose) {
+                LOG.info("Dependencies: {} -> [{}]", gav, artifacts);
+            } else {
+                LOG.debug("Dependencies: {} -> [{}]", gav, artifacts);
+            }
 
             for (MavenArtifact a : artifacts) {
                 File file = a.getFile();
@@ -242,7 +298,11 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
                         ddc.addFile(file);
                     }
                     files.add(file);
-                    LOG.trace("Added classpath: {}", a.getGav());
+                    if (verbose) {
+                        LOG.info("Added classpath: {}", a.getGav());
+                    } else {
+                        LOG.debug("Added classpath: {}", a.getGav());
+                    }
                 }
             }
 
@@ -271,14 +331,17 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
     @Override
     public MavenArtifact downloadArtifact(String groupId, String artifactId, String version) {
         String gav = groupId + ":" + artifactId + ":" + version;
-        LOG.debug("DownloadingArtifact: {}", gav);
         List<String> deps = List.of(gav);
 
         // include Apache snapshot to make it easy to use upcoming releases
-        boolean useApacheSnaphots = "org.apache.camel".equals(groupId) && version.contains("SNAPSHOT");
+        boolean useApacheSnapshots = "org.apache.camel".equals(groupId) && version.contains("SNAPSHOT");
 
-        List<MavenArtifact> artifacts = resolveDependenciesViaAether(deps, null, false, useApacheSnaphots);
-        LOG.debug("Resolved {} -> [{}]", gav, artifacts);
+        List<MavenArtifact> artifacts = resolveDependenciesViaAether(deps, null, false, useApacheSnapshots);
+        if (verbose) {
+            LOG.info("Dependencies: {} -> [{}]", gav, artifacts);
+        } else {
+            LOG.debug("Dependencies: {} -> [{}]", gav, artifacts);
+        }
 
         if (artifacts.size() == 1) {
             return artifacts.get(0);
@@ -292,10 +355,13 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
             String groupId, String artifactId,
             String minimumVersion, String repo) {
         String gav = groupId + ":" + artifactId;
-        LOG.debug("DownloadAvailableVersions: {}", gav);
+        if (verbose) {
+            LOG.info("Downloading available versions: {}", gav);
+        } else {
+            LOG.debug("Downloading available versions: {}", gav);
+        }
 
         List<String[]> answer = new ArrayList<>();
-
         try {
             List<MavenGav> gavs = mavenDownloader.resolveAvailableVersions(groupId, artifactId, repo);
 
@@ -304,28 +370,37 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
             for (MavenGav mavenGav : gavs) {
                 String v = mavenGav.getVersion();
                 if ("camel-spring-boot".equals(artifactId)) {
-                    String sbv = null;
-                    if (VersionHelper.isGE(v, minimumVersion)) {
-                        sbv = resolveSpringBootVersionByCamelVersion(v, extraRepos);
-                    }
-                    answer.add(new String[] { v, sbv });
+                    resolveSpringBoot(minimumVersion, v, extraRepos, answer);
                 } else if ("camel-quarkus-catalog".equals(artifactId)) {
-                    if (VersionHelper.isGE(v, MINIMUM_QUARKUS_VERSION)) {
-                        String cv = resolveCamelVersionByQuarkusVersion(v, extraRepos);
-                        if (cv != null && VersionHelper.isGE(cv, minimumVersion)) {
-                            answer.add(new String[] { cv, v });
-                        }
-                    }
+                    resolveQuarkus(minimumVersion, v, extraRepos, answer);
                 } else {
                     answer.add(new String[] { v, null });
                 }
             }
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
             throw new DownloadException(e.getMessage(), e);
         }
 
         return answer;
+    }
+
+    private void resolveQuarkus(String minimumVersion, String v, Set<String> extraRepos, List<String[]> answer)
+            throws Exception {
+        if (VersionHelper.isGE(v, MINIMUM_QUARKUS_VERSION)) {
+            String cv = resolveCamelVersionByQuarkusVersion(v, extraRepos);
+            if (cv != null && VersionHelper.isGE(cv, minimumVersion)) {
+                answer.add(new String[] { cv, v });
+            }
+        }
+    }
+
+    private void resolveSpringBoot(String minimumVersion, String v, Set<String> extraRepos, List<String[]> answer)
+            throws Exception {
+        String sbv = null;
+        if (VersionHelper.isGE(v, minimumVersion)) {
+            sbv = resolveSpringBootVersionByCamelVersion(v, extraRepos);
+        }
+        answer.add(new String[] { v, sbv });
     }
 
     public boolean alreadyOnClasspath(String groupId, String artifactId, String version) {
@@ -398,10 +473,19 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
         }
     }
 
+    @Override
+    public DownloadRecord getDownloadState(String groupId, String artifactId, String version) {
+        return downloadRecords.get(groupId + ":" + artifactId + ":" + version);
+    }
+
+    @Override
+    public Collection<DownloadRecord> downloadRecords() {
+        return downloadRecords.values();
+    }
+
     private Set<String> resolveExtraRepositories(String repositoryList) {
         Set<String> repositories = new LinkedHashSet<>();
         if (repositoryList != null) {
-            Set<String> repositoryURLs = new HashSet<>();
             for (String repo : repositoryList.split("\\s*,\\s*")) {
                 try {
                     URL url = new URL(repo);
@@ -410,7 +494,7 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
                     }
                     repositories.add(url.toExternalForm());
                 } catch (MalformedURLException e) {
-                    LOG.warn("Can't use {} URL: {}. Skipping.", repo, e.getMessage(), e);
+                    LOG.warn("Cannot use {} URL: {}. Skipping.", repo, e.getMessage(), e);
                 }
             }
         }
@@ -422,15 +506,43 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
         if (classLoader == null && camelContext != null) {
             classLoader = camelContext.getApplicationContextClassLoader();
         }
-        threadPool = new DownloadThreadPool();
+        threadPool = new DownloadThreadPool(this);
+        threadPool.setVerbose(verbose);
         threadPool.setCamelContext(camelContext);
         ServiceHelper.buildService(threadPool);
 
         MavenDownloaderImpl mavenDownloaderImpl = new MavenDownloaderImpl();
         mavenDownloaderImpl.setMavenSettingsLocation(mavenSettings);
         mavenDownloaderImpl.setMavenSettingsSecurityLocation(mavenSettingsSecurity);
-        mavenDownloaderImpl.setRepos(repos);
+        mavenDownloaderImpl.setMavenCentralEnabled(mavenCentralEnabled);
+        mavenDownloaderImpl.setMavenApacheSnapshotEnabled(mavenApacheSnapshotEnabled);
+        mavenDownloaderImpl.setRepos(repositories);
         mavenDownloaderImpl.setFresh(fresh);
+        mavenDownloaderImpl.setOffline(!download);
+        // use listener to keep track of which JARs was downloaded from a remote Maven repo (and how long time it took)
+        mavenDownloaderImpl.setRemoteArtifactDownloadListener(new RemoteArtifactDownloadListener() {
+            @Override
+            public void artifactDownloading(String groupId, String artifactId, String version, String repoId, String repoUrl) {
+                String gav = groupId + ":" + artifactId + ":" + version;
+                if (verbose) {
+                    LOG.info("Downloading: {} from: {}@{}", gav, repoId, repoUrl);
+                } else {
+                    LOG.debug("Downloading: {} from: {}@{}", gav, repoId, repoUrl);
+                }
+            }
+
+            @Override
+            public void artifactDownloaded(
+                    String groupId, String artifactId, String version, String repoId, String repoUrl, long elapsed) {
+                String gav = groupId + ":" + artifactId + ":" + version;
+                downloadRecords.put(gav, new DownloadRecord(groupId, artifactId, version, repoId, repoUrl, elapsed));
+                if (verbose) {
+                    LOG.info("Downloaded: {} (took: {}ms) from: {}@{}", gav, elapsed, repoId, repoUrl);
+                } else {
+                    LOG.debug("Downloaded: {} (took: {}ms) from: {}@{}", gav, elapsed, repoId, repoUrl);
+                }
+            }
+        });
         ServiceHelper.buildService(mavenDownloaderImpl);
 
         mavenDownloader = mavenDownloaderImpl;
@@ -458,7 +570,7 @@ public class MavenDependencyDownloader extends ServiceSupport implements Depende
         try {
             return mavenDownloader.resolveArtifacts(depIds, extraRepositories, transitively, useApacheSnapshots);
         } catch (MavenResolutionException e) {
-            String repos = e.getRepositories() == null
+            String repos = (e.getRepositories() == null || e.getRepositories().isEmpty())
                     ? "(empty URL list)"
                     : String.join(", ", e.getRepositories());
             String msg = "Cannot resolve dependencies in " + repos;

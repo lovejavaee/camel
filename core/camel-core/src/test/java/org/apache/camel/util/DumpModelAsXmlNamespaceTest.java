@@ -18,6 +18,7 @@ package org.apache.camel.util;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
 
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
@@ -39,23 +40,31 @@ public class DumpModelAsXmlNamespaceTest extends ContextTestSupport {
         assertNotNull(xml);
 
         Document dom = context.getTypeConverter().convertTo(Document.class, xml);
-        Element rootNode = dom.getDocumentElement();
-        assertNotNull(rootNode);
+        NodeList nl = dom.getElementsByTagName("xpath");
+        assertEquals(2, nl.getLength());
 
-        String attributeFoo = rootNode.getAttribute("xmlns:foo");
+        String attributeFoo = dom.getDocumentElement().getAttribute("xmlns:foo");
+        if (attributeFoo.isEmpty()) {
+            Element n1 = (Element) nl.item(0);
+            attributeFoo = n1.getAttribute("xmlns:foo");
+        }
         assertNotNull(attributeFoo);
         assertEquals(URL_FOO, attributeFoo);
 
-        String attributeBar = rootNode.getAttribute("xmlns:bar");
+        String attributeBar = dom.getDocumentElement().getAttribute("xmlns:bar");
+        if (attributeBar.isEmpty()) {
+            Element n1 = (Element) nl.item(0);
+            attributeBar = n1.getAttribute("xmlns:bar");
+        }
         assertNotNull(attributeBar);
         assertEquals(URL_BAR, attributeBar);
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Namespaces foo = new Namespaces("foo", URL_FOO);
                 Namespaces bar = new Namespaces("bar", URL_BAR);
 

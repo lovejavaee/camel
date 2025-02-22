@@ -20,22 +20,30 @@ import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
+@Isolated("Flaky test")
 public class FileRecursiveNoopTest extends ContextTestSupport {
 
-    @Test
-    public void testRecursiveNoop() throws Exception {
-        MockEndpoint mock = getMockEndpoint("mock:result");
-        mock.expectedBodiesReceivedInAnyOrder("a", "b", "a2", "c", "b2");
-
+    @BeforeEach
+    void sendMessages() {
         template.sendBodyAndHeader(fileUri(), "a", Exchange.FILE_NAME, "a.txt");
         template.sendBodyAndHeader(fileUri(), "b", Exchange.FILE_NAME, "b.txt");
         template.sendBodyAndHeader(fileUri("foo"), "a2", Exchange.FILE_NAME, "a.txt");
         template.sendBodyAndHeader(fileUri("bar"), "c", Exchange.FILE_NAME, "c.txt");
         template.sendBodyAndHeader(fileUri("bar"), "b2", Exchange.FILE_NAME, "b.txt");
+    }
 
-        assertMockEndpointsSatisfied();
+    @Test
+    public void testRecursiveNoop() throws Exception {
+        context.getRouteController().startAllRoutes();
+
+        MockEndpoint mock = getMockEndpoint("mock:result");
+        mock.expectedBodiesReceivedInAnyOrder("a", "b", "a2", "c", "b2");
+
+        mock.assertIsSatisfied();
 
         // reset mock and send in a new file to be picked up only
         mock.reset();
@@ -43,15 +51,16 @@ public class FileRecursiveNoopTest extends ContextTestSupport {
 
         template.sendBodyAndHeader(fileUri(), "c2", Exchange.FILE_NAME, "c.txt");
 
-        assertMockEndpointsSatisfied();
+        mock.assertIsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("?initialDelay=0&delay=10&recursive=true&noop=true")).convertBodyTo(String.class)
+                        .autoStartup(false)
                         .to("mock:result");
             }
         };

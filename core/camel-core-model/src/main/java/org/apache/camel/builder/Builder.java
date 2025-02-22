@@ -21,12 +21,15 @@ import org.apache.camel.model.language.CSimpleExpression;
 import org.apache.camel.model.language.ConstantExpression;
 import org.apache.camel.model.language.ExchangePropertyExpression;
 import org.apache.camel.model.language.HeaderExpression;
+import org.apache.camel.model.language.JavaExpression;
 import org.apache.camel.model.language.JoorExpression;
 import org.apache.camel.model.language.JqExpression;
 import org.apache.camel.model.language.JsonPathExpression;
 import org.apache.camel.model.language.LanguageExpression;
 import org.apache.camel.model.language.MethodCallExpression;
 import org.apache.camel.model.language.SimpleExpression;
+import org.apache.camel.model.language.VariableExpression;
+import org.apache.camel.model.language.WasmExpression;
 import org.apache.camel.util.ObjectHelper;
 
 /**
@@ -69,8 +72,8 @@ public final class Builder {
      */
     public static ValueBuilder method(Object beanOrBeanRef, String method) {
         Expression exp;
-        if (beanOrBeanRef instanceof String) {
-            exp = new MethodCallExpression((String) beanOrBeanRef, method);
+        if (beanOrBeanRef instanceof String str) {
+            exp = new MethodCallExpression(str, method);
         } else {
             exp = new MethodCallExpression(beanOrBeanRef, method);
         }
@@ -94,8 +97,8 @@ public final class Builder {
      */
     public static ValueBuilder constant(Object value) {
         Expression exp;
-        if (value instanceof String) {
-            exp = new ConstantExpression((String) value);
+        if (value instanceof String str) {
+            exp = new ConstantExpression(str);
         } else {
             exp = ExpressionBuilder.constantExpression(value);
         }
@@ -116,8 +119,8 @@ public final class Builder {
      */
     public static ValueBuilder constant(Object value, boolean trim) {
         Expression exp;
-        if (value instanceof String) {
-            ConstantExpression ce = new ConstantExpression((String) value);
+        if (value instanceof String str) {
+            ConstantExpression ce = new ConstantExpression(str);
             ce.setTrim(trim ? "true" : "false");
             exp = ce;
         } else {
@@ -171,6 +174,7 @@ public final class Builder {
     /**
      * Returns a JOOR expression value builder
      */
+    @Deprecated(since = "4.3.0")
     public static ValueBuilder joor(String value) {
         JoorExpression exp = new JoorExpression(value);
         return new ValueBuilder(exp);
@@ -179,8 +183,26 @@ public final class Builder {
     /**
      * Returns a JOOR expression value builder
      */
+    @Deprecated(since = "4.3.0")
     public static ValueBuilder joor(String value, Class<?> resultType) {
         JoorExpression exp = new JoorExpression(value);
+        exp.setResultType(resultType);
+        return new ValueBuilder(exp);
+    }
+
+    /**
+     * Returns a Java expression value builder
+     */
+    public static ValueBuilder java(String value) {
+        JavaExpression exp = new JavaExpression(value);
+        return new ValueBuilder(exp);
+    }
+
+    /**
+     * Returns a Java expression value builder
+     */
+    public static ValueBuilder java(String value, Class<?> resultType) {
+        JavaExpression exp = new JavaExpression(value);
         exp.setResultType(resultType);
         return new ValueBuilder(exp);
     }
@@ -256,6 +278,14 @@ public final class Builder {
     }
 
     /**
+     * Returns a predicate and value builder for variable
+     */
+    public static ValueBuilder variable(String name) {
+        Expression exp = new VariableExpression(name);
+        return new ValueBuilder(exp);
+    }
+
+    /**
      * Returns an expression for the given system property
      */
     public static ValueBuilder systemProperty(final String name) {
@@ -302,4 +332,20 @@ public final class Builder {
         return new ValueBuilder(newExp);
     }
 
+    /**
+     * Call a wasm (web assembly) function.
+     */
+    public static ValueBuilder wasm(String value) {
+        WasmExpression exp = new WasmExpression(value);
+        return new ValueBuilder(exp);
+    }
+
+    /**
+     * Call a wasm (web assembly) function.
+     */
+    public static ValueBuilder wasm(String value, Class<?> resultType) {
+        WasmExpression exp = new WasmExpression(value);
+        exp.setResultType(resultType);
+        return new ValueBuilder(exp);
+    }
 }

@@ -35,12 +35,15 @@ import org.apache.camel.support.ScheduledPollEndpoint;
  * component uses JDK ScheduledExecutorService. Where as the timer uses a JDK Timer.
  */
 @UriEndpoint(firstVersion = "2.15.0", scheme = "scheduler", title = "Scheduler", syntax = "scheduler:name",
-             consumerOnly = true, category = { Category.CORE, Category.SCHEDULING }, headersClass = SchedulerConstants.class)
+             remote = false, consumerOnly = true, category = { Category.CORE, Category.SCHEDULING },
+             headersClass = SchedulerConstants.class)
 public class SchedulerEndpoint extends ScheduledPollEndpoint {
 
     @UriPath
     @Metadata(required = true)
     private String name;
+    @UriParam
+    private boolean includeMetadata;
     @UriParam(defaultValue = "1", label = "scheduler")
     private int poolSize = 1;
     @UriParam(defaultValue = "false", label = "advanced",
@@ -50,6 +53,11 @@ public class SchedulerEndpoint extends ScheduledPollEndpoint {
     public SchedulerEndpoint(String uri, SchedulerComponent component, String remaining) {
         super(uri, component);
         this.name = remaining;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override
@@ -78,6 +86,17 @@ public class SchedulerEndpoint extends ScheduledPollEndpoint {
      */
     public void setName(String name) {
         this.name = name;
+    }
+
+    public boolean isIncludeMetadata() {
+        return includeMetadata;
+    }
+
+    /**
+     * Whether to include metadata in the exchange such as fired time, timer name, timer count etc.
+     */
+    public void setIncludeMetadata(boolean includeMetadata) {
+        this.includeMetadata = includeMetadata;
     }
 
     public int getPoolSize() {

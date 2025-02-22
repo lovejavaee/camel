@@ -22,11 +22,11 @@ import org.apache.camel.dsl.jbang.core.common.CommandLineHelper;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "unset",
-                     description = "Remove user configuration value")
+                     description = "Remove user configuration value", sortOptions = false, showDefaultValues = true)
 public class ConfigUnset extends CamelCommand {
 
     @CommandLine.Parameters(description = "Configuration key", arity = "1")
-    private String key;
+    String key;
 
     public ConfigUnset(CamelJBangMain main) {
         super(main);
@@ -36,7 +36,7 @@ public class ConfigUnset extends CamelCommand {
     public Integer doCall() throws Exception {
         CommandLineHelper.loadProperties(properties -> {
             properties.remove(key);
-            CommandLineHelper.storeProperties(properties);
+            CommandLineHelper.storeProperties(properties, printer());
         });
 
         return 0;

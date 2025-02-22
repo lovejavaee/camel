@@ -35,7 +35,7 @@ import org.apache.camel.support.jsse.SSLContextParameters;
  * Receive logs messages using the Lumberjack protocol.
  */
 @UriEndpoint(firstVersion = "2.18.0", scheme = "lumberjack", title = "Lumberjack", syntax = "lumberjack:host:port",
-             consumerOnly = true, category = { Category.LOG })
+             remote = false, consumerOnly = true, category = { Category.MONITORING })
 public class LumberjackEndpoint extends DefaultEndpoint {
     @UriPath(description = "Network interface on which to listen for Lumberjack")
     @Metadata(required = true)
@@ -46,10 +46,15 @@ public class LumberjackEndpoint extends DefaultEndpoint {
     @UriParam(description = "SSL configuration")
     private SSLContextParameters sslContextParameters;
 
-    LumberjackEndpoint(String endpointUri, LumberjackComponent component, String host, int port) {
+    public LumberjackEndpoint(String endpointUri, LumberjackComponent component, String host, int port) {
         super(endpointUri, component);
         this.host = host;
         this.port = port;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

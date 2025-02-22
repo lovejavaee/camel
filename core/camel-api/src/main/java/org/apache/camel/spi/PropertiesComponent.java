@@ -85,6 +85,14 @@ public interface PropertiesComponent extends StaticService {
     Optional<String> resolveProperty(String key);
 
     /**
+     * Returns metadata about a property which has successfully been resolved.
+     *
+     * @param  key the name of the property
+     * @return     the property value and metadata if present
+     */
+    Optional<PropertiesResolvedValue> getResolvedValue(String key);
+
+    /**
      * Loads the properties from the default locations and sources.
      *
      * @return the properties loaded.
@@ -113,6 +121,15 @@ public interface PropertiesComponent extends StaticService {
      * @return        the properties loaded.
      */
     Properties loadProperties(Predicate<String> filter);
+
+    /**
+     * Loads the properties from the default locations and extract properties by the given prefix.
+     *
+     * @param  optionPrefix prefix to filter
+     * @param  nested       whether to include nested properties
+     * @return              the properties loaded with option prefix removed.
+     */
+    Properties extractProperties(String optionPrefix, boolean nested);
 
     /**
      * Loads the properties from the default locations and sources filtering them out according to a predicate, and maps
@@ -153,15 +170,21 @@ public interface PropertiesComponent extends StaticService {
 
     /**
      * A list of locations to load properties. You can use comma to separate multiple locations. This option will
-     * override any default locations and only use the locations from this option.
+     * override any default locations and only use the locations from this option. Camel loads by default from
+     * classpath, so use file: as prefix to load from file system.
      */
     void setLocation(String location);
 
     /**
      * Adds the list of locations to the current locations, where to load properties. You can use comma to separate
-     * multiple locations.
+     * multiple locations. Camel loads by default from classpath, so use file: as prefix to load from file system.
      */
     void addLocation(String location);
+
+    /**
+     * Gets the {@link PropertiesSourceFactory}.
+     */
+    PropertiesSourceFactory getPropertiesSourceFactory();
 
     /**
      * Adds a custom {@link PropertiesSource} to use as source for loading and/or looking up property values.
@@ -203,6 +226,12 @@ public interface PropertiesComponent extends StaticService {
      * Whether to silently ignore if a location cannot be located, such as a properties file not found.
      */
     void setIgnoreMissingLocation(boolean ignoreMissingLocation);
+
+    /**
+     * Whether to silently ignore if a property cannot be resolved (i.e. all properties is marked as optional), and
+     * return the value as-is.
+     */
+    void setIgnoreMissingProperty(boolean ignoreMissingProperty);
 
     /**
      * Whether to support nested property placeholders. A nested placeholder, means that a placeholder, has also a

@@ -21,6 +21,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 
+import org.apache.camel.builder.ExpressionBuilder;
 import org.apache.camel.spi.Metadata;
 
 /**
@@ -34,12 +35,24 @@ public class ConstantExpression extends TypedExpressionDefinition {
     public ConstantExpression() {
     }
 
+    protected ConstantExpression(ConstantExpression source) {
+        super(source);
+    }
+
     public ConstantExpression(String expression) {
         super(expression);
     }
 
     private ConstantExpression(Builder builder) {
         super(builder);
+        if (builder.value != null) {
+            setExpressionValue(ExpressionBuilder.constantExpression(builder.value));
+        }
+    }
+
+    @Override
+    public ConstantExpression copyDefinition() {
+        return new ConstantExpression(this);
     }
 
     @Override
@@ -52,6 +65,13 @@ public class ConstantExpression extends TypedExpressionDefinition {
      */
     @XmlTransient
     public static class Builder extends AbstractBuilder<Builder, ConstantExpression> {
+
+        private Object value;
+
+        public Builder value(Object value) {
+            this.value = value;
+            return this;
+        }
 
         @Override
         public ConstantExpression end() {

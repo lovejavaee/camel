@@ -20,6 +20,7 @@ import java.util.List;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -41,6 +42,8 @@ import org.apache.camel.component.netty.http.handlers.HttpOutboundStreamHandler;
 import org.apache.camel.component.netty.ssl.SSLEngineFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.camel.component.netty.http.InitializerHelper.logConfiguration;
 
 /**
  * {@link ServerInitializerFactory} for the Netty HTTP server.
@@ -147,15 +150,7 @@ public class HttpServerInitializerFactory extends ServerInitializerFactory {
         if (configuration.getSslContextParameters() != null) {
             answer = configuration.getSslContextParameters().createSSLContext(camelContext);
         } else {
-            if (configuration.getKeyStoreFile() == null && configuration.getKeyStoreResource() == null) {
-                LOG.debug("keystorefile is null");
-            }
-            if (configuration.getTrustStoreFile() == null && configuration.getTrustStoreResource() == null) {
-                LOG.debug("truststorefile is null");
-            }
-            if (configuration.getPassphrase() == null) {
-                LOG.debug("passphrase is null");
-            }
+            logConfiguration(configuration);
             char[] pw = configuration.getPassphrase() != null ? configuration.getPassphrase().toCharArray() : null;
 
             SSLEngineFactory sslEngineFactory;
@@ -192,6 +187,11 @@ public class HttpServerInitializerFactory extends ServerInitializerFactory {
             SSLEngine engine = sslContext.createSSLEngine();
             engine.setUseClientMode(false);
             engine.setNeedClientAuth(consumer.getConfiguration().isNeedClientAuth());
+            if (consumer.getConfiguration().isHostnameVerification()) {
+                SSLParameters sslParams = engine.getSSLParameters();
+                sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+                engine.setSSLParameters(sslParams);
+            }
             if (consumer.getConfiguration().getSslContextParameters() == null) {
                 // just set the enabledProtocols if the SslContextParameter doesn't set
                 engine.setEnabledProtocols(consumer.getConfiguration().getEnabledProtocols().split(","));

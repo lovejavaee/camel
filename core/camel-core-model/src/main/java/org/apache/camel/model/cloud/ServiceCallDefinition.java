@@ -32,6 +32,7 @@ import org.apache.camel.cloud.ServiceDiscovery;
 import org.apache.camel.cloud.ServiceFilter;
 import org.apache.camel.cloud.ServiceLoadBalancer;
 import org.apache.camel.model.NoOutputDefinition;
+import org.apache.camel.model.ProcessorDefinition;
 import org.apache.camel.model.language.RefExpression;
 import org.apache.camel.spi.Metadata;
 
@@ -41,7 +42,7 @@ import org.apache.camel.spi.Metadata;
 @Metadata(label = "eip,routing")
 @XmlRootElement(name = "serviceCall")
 @XmlAccessorType(XmlAccessType.FIELD)
-@Deprecated
+@Deprecated(since = "3.19.0")
 public class ServiceCallDefinition extends NoOutputDefinition<ServiceCallDefinition> {
     @XmlAttribute
     @Metadata(required = true)
@@ -107,6 +108,12 @@ public class ServiceCallDefinition extends NoOutputDefinition<ServiceCallDefinit
 
     public ServiceCallDefinition(String name) {
         this.name = name;
+    }
+
+    @Override
+    public ProcessorDefinition<?> copyDefinition() {
+        // deprecated so we do not implement copy
+        return this;
     }
 
     @Override

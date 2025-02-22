@@ -19,10 +19,32 @@ package org.apache.camel.component.jms;
 import java.util.List;
 
 import org.apache.camel.Exchange;
+import org.apache.camel.spi.BrowsableEndpoint;
 import org.springframework.jms.core.JmsOperations;
 
+/**
+ * Strategy for browsing JMS queues
+ */
 public interface QueueBrowseStrategy {
 
-    List<Exchange> browse(JmsOperations template, String queue, JmsBrowsableEndpoint endpoint);
+    /**
+     * Browse the given queue
+     */
+    List<Exchange> browse(JmsOperations template, String queue, JmsBrowsableEndpoint endpoint, int limit);
+
+    /**
+     * Browse quick status of the given queue
+     */
+    default BrowsableEndpoint.BrowseStatus browseStatus(
+            JmsOperations template, String queue, JmsBrowsableEndpoint endpoint, int limit) {
+        List<Exchange> list = browse(template, queue, endpoint, limit);
+        long ts = 0;
+        long ts2 = 0;
+        if (!list.isEmpty()) {
+            ts = list.get(0).getMessage().getHeader(Exchange.MESSAGE_TIMESTAMP, 0, long.class);
+            ts2 = list.get(list.size() - 1).getMessage().getHeader(Exchange.MESSAGE_TIMESTAMP, 0, long.class);
+        }
+        return new BrowsableEndpoint.BrowseStatus(list.size(), ts, ts2);
+    }
 
 }

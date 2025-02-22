@@ -22,6 +22,7 @@ import java.util.stream.StreamSupport;
 
 import com.azure.core.util.BinaryData;
 import com.azure.messaging.servicebus.ServiceBusMessage;
+import org.apache.camel.util.ObjectHelper;
 
 public final class ServiceBusUtils {
 
@@ -29,7 +30,8 @@ public final class ServiceBusUtils {
     }
 
     public static ServiceBusMessage createServiceBusMessage(
-            final Object data, final Map<String, Object> applicationProperties) {
+            final Object data, final Map<String, Object> applicationProperties, final String correlationId,
+            final String sessionId) {
         ServiceBusMessage serviceBusMessage;
         if (data instanceof String) {
             serviceBusMessage = new ServiceBusMessage((String) data);
@@ -43,13 +45,33 @@ public final class ServiceBusUtils {
         if (applicationProperties != null) {
             serviceBusMessage.getRawAmqpMessage().getApplicationProperties().putAll(applicationProperties);
         }
+        if (ObjectHelper.isNotEmpty(correlationId)) {
+            serviceBusMessage.setCorrelationId(correlationId);
+        }
+        if (ObjectHelper.isNotEmpty(sessionId)) {
+            serviceBusMessage.setSessionId(sessionId);
+        }
         return serviceBusMessage;
     }
 
     public static Iterable<ServiceBusMessage> createServiceBusMessages(
-            final Iterable<Object> data, final Map<String, Object> applicationProperties) {
+            final Iterable<?> data, final Map<String, Object> applicationProperties, final String correlationId,
+            final String sessionId) {
         return StreamSupport.stream(data.spliterator(), false)
-                .map(obj -> createServiceBusMessage(obj, applicationProperties))
+                .map(obj -> createServiceBusMessage(obj, applicationProperties, correlationId, sessionId))
                 .collect(Collectors.toList());
+    }
+
+    public static void validateConfiguration(final ServiceBusConfiguration configuration, final boolean isConsumer) {
+        final boolean customClientAbsent
+                = isConsumer ? configuration.getProcessorClient() == null : configuration.getSenderClient() == null;
+        if (customClientAbsent && isConnectionStringOrFQNSAbsent(configuration)) {
+            throw new IllegalArgumentException("Azure ServiceBus ConnectionString or FQNS must be specified.");
+        }
+    }
+
+    static boolean isConnectionStringOrFQNSAbsent(final ServiceBusConfiguration configuration) {
+        return ObjectHelper.isEmpty(configuration.getConnectionString())
+                && ObjectHelper.isEmpty(configuration.getFullyQualifiedNamespace());
     }
 }

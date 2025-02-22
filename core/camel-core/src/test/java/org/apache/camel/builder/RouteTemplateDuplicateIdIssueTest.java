@@ -38,7 +38,7 @@ public class RouteTemplateDuplicateIdIssueTest extends ContextTestSupport {
     void shouldNotFailDueToDuplicatedNodeId() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 routeTemplate("myTemplate")
                         .templateParameter("input")
                         .from("direct:{{input}}")
@@ -58,7 +58,7 @@ public class RouteTemplateDuplicateIdIssueTest extends ContextTestSupport {
         assertDoesNotThrow(() -> context.start(), "Route creation should not fail");
 
         // should generate unique id per template for the runtime processors
-        List<Processor> processors = getProcessors("recipientList*");
+        List<Processor> processors = getProcessors(".*recipientList.*");
         assertEquals(2, processors.size());
         Processor p1 = processors.get(0);
         Processor p2 = processors.get(1);

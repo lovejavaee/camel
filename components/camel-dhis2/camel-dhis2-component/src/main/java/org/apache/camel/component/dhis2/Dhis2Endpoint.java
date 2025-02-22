@@ -22,13 +22,16 @@ import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.component.dhis2.api.Dhis2Delete;
 import org.apache.camel.component.dhis2.api.Dhis2Get;
 import org.apache.camel.component.dhis2.api.Dhis2Post;
+import org.apache.camel.component.dhis2.api.Dhis2Put;
 import org.apache.camel.component.dhis2.api.Dhis2ResourceTables;
 import org.apache.camel.component.dhis2.internal.Dhis2ApiCollection;
 import org.apache.camel.component.dhis2.internal.Dhis2ApiName;
 import org.apache.camel.component.dhis2.internal.Dhis2Constants;
 import org.apache.camel.component.dhis2.internal.Dhis2PropertiesHelper;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.component.AbstractApiEndpoint;
@@ -38,12 +41,10 @@ import org.hisp.dhis.integration.sdk.api.Dhis2Client;
 
 /**
  * Leverages the DHIS2 Java SDK to integrate Apache Camel with the DHIS2 Web API.
- * <p>
  */
-@UriEndpoint(firstVersion = "4.0.0", scheme = "dhis2", title = "DHIS2", syntax = "dhis2:methodName",
-             apiSyntax = "apiName/methodName", category = {
-                     Category.API })
-public class Dhis2Endpoint extends AbstractApiEndpoint<Dhis2ApiName, Dhis2Configuration> {
+@UriEndpoint(firstVersion = "4.0.0", scheme = "dhis2", title = "DHIS2", syntax = "dhis2:apiName/methodName",
+             apiSyntax = "apiName/methodName", category = { Category.API })
+public class Dhis2Endpoint extends AbstractApiEndpoint<Dhis2ApiName, Dhis2Configuration> implements EndpointServiceLocation {
 
     @UriParam
     private final Dhis2Configuration configuration;
@@ -57,13 +58,11 @@ public class Dhis2Endpoint extends AbstractApiEndpoint<Dhis2ApiName, Dhis2Config
         this.configuration = endpointConfiguration;
     }
 
-    public Producer createProducer()
-            throws Exception {
+    public Producer createProducer() throws Exception {
         return new Dhis2Producer(this);
     }
 
-    public Consumer createConsumer(Processor processor)
-            throws Exception {
+    public Consumer createConsumer(Processor processor) throws Exception {
         // make sure inBody is not set for consumers
         if (inBody != null) {
             throw new IllegalArgumentException("Option inBody is not supported for consumer endpoint");
@@ -79,6 +78,24 @@ public class Dhis2Endpoint extends AbstractApiEndpoint<Dhis2ApiName, Dhis2Config
         return Dhis2PropertiesHelper.getHelper(getCamelContext());
     }
 
+    @Override
+    public String getServiceUrl() {
+        return configuration.getBaseApiUrl();
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (configuration.getUsername() != null) {
+            return Map.of("username", configuration.getUsername());
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "http";
+    }
+
     protected String getThreadProfileName() {
         return Dhis2Constants.THREAD_PROFILE_NAME;
     }
@@ -92,6 +109,12 @@ public class Dhis2Endpoint extends AbstractApiEndpoint<Dhis2ApiName, Dhis2Config
                 break;
             case POST:
                 apiProxy = new Dhis2Post(dhis2Client);
+                break;
+            case DELETE:
+                apiProxy = new Dhis2Delete(dhis2Client);
+                break;
+            case PUT:
+                apiProxy = new Dhis2Put(dhis2Client);
                 break;
             case RESOURCE_TABLES:
                 apiProxy = new Dhis2ResourceTables(dhis2Client);

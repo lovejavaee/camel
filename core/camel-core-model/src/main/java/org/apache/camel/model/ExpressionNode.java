@@ -38,7 +38,8 @@ import org.apache.camel.model.language.ExpressionDefinition;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlTransient
-public abstract class ExpressionNode extends ProcessorDefinition<ExpressionNode> implements HasExpressionType {
+public abstract class ExpressionNode extends ProcessorDefinition<ExpressionNode>
+        implements HasExpressionType {
 
     @XmlElementRef
     private ExpressionDefinition expression;
@@ -56,6 +57,11 @@ public abstract class ExpressionNode extends ProcessorDefinition<ExpressionNode>
 
     public ExpressionNode(Predicate predicate) {
         setPredicate(predicate);
+    }
+
+    protected ExpressionNode(ExpressionNode source) {
+        super(source);
+        this.expression = source.expression != null ? source.expression.copyDefinition() : null;
     }
 
     public ExpressionDefinition getExpression() {
@@ -111,8 +117,7 @@ public abstract class ExpressionNode extends ProcessorDefinition<ExpressionNode>
             exp = getExpression().getExpressionValue();
         }
 
-        if (exp instanceof ExpressionClause) {
-            ExpressionClause<?> clause = (ExpressionClause<?>) exp;
+        if (exp instanceof ExpressionClause clause) {
             if (clause.getExpressionType() != null) {
                 // if using the Java DSL then the expression may have been set
                 // using the
@@ -123,8 +128,8 @@ public abstract class ExpressionNode extends ProcessorDefinition<ExpressionNode>
                 // reset the expression to the expression type the
                 // ExpressionClause did build for us
                 ExpressionFactory model = clause.getExpressionType();
-                if (model instanceof ExpressionDefinition) {
-                    setExpression((ExpressionDefinition) model);
+                if (model instanceof ExpressionDefinition expressionDefinition) {
+                    setExpression(expressionDefinition);
                 }
             }
         }
@@ -143,17 +148,6 @@ public abstract class ExpressionNode extends ProcessorDefinition<ExpressionNode>
     @Override
     public List<ProcessorDefinition<?>> getOutputs() {
         return Collections.emptyList();
-    }
-
-    @Override
-    public ExpressionNode id(String id) {
-        if (!(this instanceof OutputNode)) {
-            // let parent handle assigning the id, as we do not support outputs
-            getParent().id(id);
-            return this;
-        } else {
-            return super.id(id);
-        }
     }
 
 }

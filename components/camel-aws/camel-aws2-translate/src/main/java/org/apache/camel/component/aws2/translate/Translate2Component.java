@@ -22,13 +22,14 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 /**
  * For working with Amazon Translate SDK v2.
  */
 @Component("aws2-translate")
-public class Translate2Component extends DefaultComponent {
+public class Translate2Component extends HealthCheckComponent {
+
     @Metadata
     private Translate2Configuration configuration = new Translate2Configuration();
 
@@ -47,10 +48,13 @@ public class Translate2Component extends DefaultComponent {
 
         Translate2Endpoint endpoint = new Translate2Endpoint(uri, this, configuration);
         setProperties(endpoint, parameters);
-        if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider()) && configuration.getTranslateClient() == null
+        if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseProfileCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseSessionCredentials())
+                && configuration.getTranslateClient() == null
                 && (configuration.getAccessKey() == null || configuration.getSecretKey() == null)) {
             throw new IllegalArgumentException(
-                    "useDefaultCredentialsProvider is set to false, Amazon translate client or accessKey and secretKey must be specified");
+                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, useSessionCredentials is set to false, Amazon translate client or accessKey and secretKey must be specified");
         }
         return endpoint;
     }

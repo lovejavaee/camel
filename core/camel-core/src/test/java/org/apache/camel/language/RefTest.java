@@ -23,51 +23,49 @@ import org.apache.camel.support.ExpressionAdapter;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RefTest extends LanguageTestSupport {
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("myExp", new MyExpression());
         return jndi;
     }
 
     @Test
-    public void testRefExpressions() throws Exception {
+    public void testRefExpressions() {
         assertExpression("myExp", "Hello World");
     }
 
     @Test
-    public void testRefExpressionsNotFound() throws Exception {
-        try {
-            assertExpression("foo", "Hello World");
-            fail("Should have thrown exception");
-        } catch (IllegalArgumentException e) {
-            assertEquals("Cannot find expression or predicate in registry with ref: foo", e.getMessage());
-        }
+    public void testRefExpressionsNotFound() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> assertExpression("foo", "Hello World"),
+                "Should have thrown an exception");
+
+        assertEquals("Cannot find expression or predicate in registry with ref: foo", e.getMessage());
     }
 
     @Test
-    public void testRefDynamicExpressions() throws Exception {
+    public void testRefDynamicExpressions() {
         exchange.getMessage().setHeader("foo", "myExp");
         assertExpression("${header.foo}", "Hello World");
     }
 
     @Test
-    public void testRefDynamicExpressionsNotFound() throws Exception {
+    public void testRefDynamicExpressionsNotFound() {
         exchange.getMessage().setHeader("foo", "myExp2");
-        try {
-            assertExpression("${header.foo}", "Hello World");
-            fail("Should have thrown exception");
-        } catch (IllegalArgumentException e) {
-            assertEquals("Cannot find expression or predicate in registry with ref: myExp2", e.getMessage());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> assertExpression("${header.foo}", "Hello World"),
+                "Should have thrown an exception");
+
+        assertEquals("Cannot find expression or predicate in registry with ref: myExp2", e.getMessage());
     }
 
     @Test
-    public void testPredicates() throws Exception {
+    public void testPredicates() {
         assertPredicate("myExp");
     }
 

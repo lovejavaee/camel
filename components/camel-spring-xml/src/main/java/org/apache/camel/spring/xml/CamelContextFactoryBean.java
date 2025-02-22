@@ -517,7 +517,17 @@ public class CamelContextFactoryBean extends AbstractCamelContextFactoryBean<Spr
     protected SpringCamelContext createContext() {
         SpringCamelContext ctx = newCamelContext();
         ctx.setApplicationContext(getApplicationContext());
-        ctx.setName(getId());
+        ctx.getCamelContextExtension().setName(getId());
+
+        /*
+         * We need to enable the statistics before the type converter is created, as
+         * it is immutable in the registry.
+         * Because it's disabled by default, we simply parse the value and enable if
+         * it is set to true. Everything else can be ignored.
+         */
+        if (Boolean.parseBoolean(getTypeConverterStatisticsEnabled())) {
+            ctx.setTypeConverterStatisticsEnabled(true);
+        }
 
         return ctx;
     }
@@ -897,7 +907,7 @@ public class CamelContextFactoryBean extends AbstractCamelContextFactoryBean<Spr
     /**
      * Whether to capture precise source location:line-number for all EIPs in Camel routes.
      *
-     * Enabling this will impact parsing Java based routes (also Groovy, Kotlin, etc.) on startup as this uses JDK
+     * Enabling this will impact parsing Java based routes (also Groovy, etc.) on startup as this uses JDK
      * StackTraceElement to calculate the location from the Camel route, which comes with a performance cost. This only
      * impact startup, not the performance of the routes at runtime.
      */
@@ -1078,7 +1088,7 @@ public class CamelContextFactoryBean extends AbstractCamelContextFactoryBean<Spr
      *
      * Turning this off should only be done if you are sure you do not use any of these Camel features.
      *
-     * Not all runtimes allow turning this off (such as camel-blueprint or camel-cdi with XML).
+     * Not all runtimes allow turning this off.
      *
      * The default value is true (enabled).
      */
@@ -1230,10 +1240,6 @@ public class CamelContextFactoryBean extends AbstractCamelContextFactoryBean<Spr
      * <p/>
      * By default the type converter utilization statistics is disabled. <b>Notice:</b> If enabled then there is a
      * slight performance impact under very heavy load.
-     * <p/>
-     * You can enable/disable the statistics at runtime using the
-     * {@link org.apache.camel.spi.TypeConverterRegistry#getStatistics()#setTypeConverterStatisticsEnabled(Boolean)}
-     * method, or from JMX on the {@link org.apache.camel.api.management.mbean.ManagedTypeConverterRegistryMBean} mbean.
      */
     public void setTypeConverterStatisticsEnabled(String typeConverterStatisticsEnabled) {
         this.typeConverterStatisticsEnabled = typeConverterStatisticsEnabled;

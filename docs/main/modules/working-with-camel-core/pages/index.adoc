@@ -1,11 +1,11 @@
 = Working with Camel Core
 
-== Walk-troughs
+== Context
 
-We have prepared these two guides to explain in greater detail a few of the concepts presented in the xref:getting-started:index.adoc[Getting Started With Camel] Guide.
+The xref:manual::camelcontext.adoc[Camel Context] is the hearth of Apache Camel, which holds everything together.
 
-1. xref:manual::walk-through-an-example.adoc[Example Walk-through 1].
-2. xref:manual::walk-through-another-example.adoc[Example Walk-through 2].
+If you are not familiar with Apache Camel, then we recommend reading the xref:manual::camelcontext.adoc[Camel Context] first
+before coming back here.
 
 == Routes
 
@@ -16,6 +16,9 @@ In other words, a Camel _route_ is where the integration flow is defined. For ex
 * xref:manual::routes.adoc[Routes]: the basic guide about Camel Routes.
 
 If you have basic knowledge about _routes_, you can use the following guides to learn how to write them in different languages, handle errors, and customize them.
+
+* Content
+** xref:manual::camelcontext.adoc[Camel Context]: the hearth of Apache Camel
 
 * Routes (Basic + DSL)
 ** xref:manual::java-dsl.adoc[Java DSL]: the default language to write _routes_.
@@ -37,6 +40,11 @@ If you have basic knowledge about _routes_, you can use the following guides to 
 ** xref:manual::Endpoint-dsl.adoc[Endpoint DSL]
 ** xref:manual::route-template.adoc[Route Template]
 ** xref:manual::using-propertyplaceholder.adoc[Using Property Placeholder]
+** xref:manual::variables.adoc[Using Variables]
+
+* Routes (Rest DSL)
+** xref:manual::rest-dsl.adoc[Rest DSL]
+** xref:manual::rest-dsl-openapi.adoc[Rest DSL contract first with OpenAPI]
 
 == Components
 
@@ -95,12 +103,12 @@ Learn about additional ways to customize your integrations. Explore alternatives
 ** xref:manual::parameter-binding-annotations.adoc[Parameter-Binding Annotations]
 ** xref:manual::property-binding.adoc[Property Binding]
 ** xref:manual::registry.adoc[Registry]
-** xref:manual::rest-dsl.adoc[Rest DSL]
 ** xref:manual::route-configuration.adoc[Route Configuration]
 ** xref:manual::service-registry.adoc[Service Registry]
 ** xref:manual::spring.adoc[Spring]
 ** xref:manual::spring-xml-extensions.adoc[Spring XML Extensions]
 ** xref:manual::validator.adoc[Validator]
+** xref:manual::variables.adoc[Variables]
 ** xref:manual::what-are-the-dependencies.adoc[Camel Requirements]
 ** xref:manual::testing.adoc[Testing]
 

@@ -16,21 +16,21 @@
  */
 package org.apache.camel.component.atom;
 
-import org.apache.abdera.model.Feed;
 import org.apache.camel.Category;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.apache.camel.component.feed.FeedComponent;
 import org.apache.camel.component.feed.FeedEndpoint;
 import org.apache.camel.component.feed.FeedPollingConsumer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.UriEndpoint;
 
 /**
  * Poll Atom RSS feeds.
  */
 @UriEndpoint(firstVersion = "1.2.0", scheme = "atom", title = "Atom", syntax = "atom:feedUri", consumerOnly = true,
-             category = { Category.RSS }, lenientProperties = true, headersClass = AtomConstants.class)
-public class AtomEndpoint extends FeedEndpoint {
+             category = { Category.DOCUMENT }, lenientProperties = true, headersClass = AtomConstants.class)
+public class AtomEndpoint extends FeedEndpoint implements EndpointServiceLocation {
 
     public AtomEndpoint() {
     }
@@ -40,9 +40,19 @@ public class AtomEndpoint extends FeedEndpoint {
     }
 
     @Override
+    public String getServiceUrl() {
+        return feedUri;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "atom";
+    }
+
+    @Override
     public Exchange createExchange(Object feed) {
         Exchange exchange = createExchangeWithFeedHeader(feed, AtomConstants.ATOM_FEED);
-        exchange.getIn().setBody(((Feed) feed).getEntries());
+        exchange.getIn().setBody(feed);
         return exchange;
     }
 

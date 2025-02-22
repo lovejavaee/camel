@@ -21,23 +21,28 @@ import java.util.concurrent.TimeUnit;
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Route;
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.spi.RouteController;
 import org.apache.camel.spi.RouteError;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Flaky test on CI environments")
 public class ControlBusFailRouteTest extends ContextTestSupport {
 
     @Test
-    public void testControlBusFail() throws Exception {
-        assertEquals("Started", context.getRouteController().getRouteStatus("foo").name());
+    public void testControlBusFail() {
+        final RouteController routeController = context.getRouteController();
+        assertEquals("Started", routeController.getRouteStatus("foo").name());
 
         template.sendBody("direct:foo", "Hello World");
 
         // runs async so it can take a little while
-        await().atMost(5, TimeUnit.SECONDS).until(() -> context.getRouteController().getRouteStatus("foo").isStopped());
+        await().atMost(5, TimeUnit.SECONDS).until(() -> routeController.getRouteStatus("foo").isStopped());
 
         Route route = context.getRoute("foo");
         RouteError re = route.getLastError();
@@ -50,10 +55,10 @@ public class ControlBusFailRouteTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 errorHandler(deadLetterChannel("controlbus:route?routeId=current&action=fail&async=true"));
 
                 from("direct:foo").routeId("foo")

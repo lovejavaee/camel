@@ -25,6 +25,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Unit test to verify that the noop file strategy usage of lock files.
  */
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class FileNoOpLockFileTest extends ContextTestSupport {
 
     @Test
@@ -77,9 +80,9 @@ public class FileNoOpLockFileTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 // for locks
                 from(fileUri("locked/?initialDelay=0&delay=10&noop=true&readLock=markerFile"))
                         .process(new MyNoopProcessor()).to("mock:report");
@@ -93,7 +96,7 @@ public class FileNoOpLockFileTest extends ContextTestSupport {
 
     private class MyNoopProcessor implements Processor {
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             String body = exchange.getIn().getBody(String.class);
             boolean locked = "Hello Locked".equals(body);
             checkLockFile(locked);

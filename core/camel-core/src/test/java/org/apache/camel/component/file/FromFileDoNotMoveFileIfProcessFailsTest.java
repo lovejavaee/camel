@@ -16,6 +16,8 @@
  */
 package org.apache.camel.component.file;
 
+import java.util.UUID;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -24,12 +26,12 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
 
 public class FromFileDoNotMoveFileIfProcessFailsTest extends ContextTestSupport {
-
-    private String body = "Hello World this file will NOT be moved";
+    private static final String TEST_FILE_NAME = "hello" + UUID.randomUUID() + ".txt";
 
     @Test
     public void testPollFileAndShouldNotBeMoved() throws Exception {
-        template.sendBodyAndHeader(fileUri(), body, Exchange.FILE_NAME, "hello.txt");
+        String body = "Hello World this file will NOT be moved";
+        template.sendBodyAndHeader(fileUri(), body, Exchange.FILE_NAME, TEST_FILE_NAME);
 
         MockEndpoint mock = getMockEndpoint("mock:error");
         // it could potentially retry the file on the 2nd poll and then fail
@@ -41,17 +43,17 @@ public class FromFileDoNotMoveFileIfProcessFailsTest extends ContextTestSupport 
         oneExchangeDone.matchesWaitTime();
 
         // assert the file is not moved
-        assertFileExists(testFile("hello.txt"));
+        assertFileExists(testFile(TEST_FILE_NAME));
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 onException(IllegalArgumentException.class).to("mock:error");
 
                 from(fileUri("?initialDelay=0&delay=10&move=done")).process(new Processor() {
-                    public void process(Exchange exchange) throws Exception {
+                    public void process(Exchange exchange) {
                         throw new IllegalArgumentException("Forced by unittest");
                     }
                 });

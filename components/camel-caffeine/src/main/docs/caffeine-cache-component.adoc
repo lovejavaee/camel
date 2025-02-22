@@ -5,6 +5,7 @@
 :description: Perform caching operations using Caffeine Cache.
 :since: 2.20
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: caffeine
@@ -33,8 +34,7 @@ their `pom.xml` for this component:
 caffeine-cache://cacheName[?options]
 -----------------------------
 
-You can append query options to the URI in the following
-format, `?option=value&option=#beanRef&...`
+You can append query options to the URI in the following format: `?option=value&option=#beanRef&...`.
 
 // component-configure options: START
 
@@ -52,6 +52,15 @@ include::partial$component-endpoint-options.adoc[]
 // component headers: START
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
+
+== Usage
+
+=== Checking the operation result
+
+Each time you'll use an operation on the cache, you'll have two different headers to check for status:
+
+* `CaffeineConstants.ACTION_HAS_RESULT`
+* `CaffeineConstants.ACTION_SUCCEEDED`
 
 == Examples
 
@@ -77,17 +86,6 @@ protected RouteBuilder createRouteBuilder() throws Exception {
 }
 ------------------------------------------------------------
 
-In this way you'll work always on the same cache in the registry.
-
-== Check operation result
-
-Each time you'll use an operation on the cache you'll have two different headers to check for status:
-
-[source,java]
-------------------------------------------------------------
-CaffeineConstants.ACTION_HAS_RESULT
-CaffeineConstants.ACTION_SUCCEEDED
-------------------------------------------------------------
-
+In this way, you'll work always on the same cache in the registry.
 
 include::spring-boot:partial$starter.adoc[]

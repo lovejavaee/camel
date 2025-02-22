@@ -44,7 +44,7 @@ public final class DmsRegion {
     }
 
     private static Map<String, Region> createStaticFields() {
-        Map<String, Region> map = new HashMap();
+        Map<String, Region> map = new HashMap<>();
         map.put("af-south-1", AF_SOUTH_1);
         map.put("cn-north-4", CN_NORTH_4);
         map.put("cn-north-1", CN_NORTH_1);
@@ -62,7 +62,7 @@ public final class DmsRegion {
         if (StringUtils.isEmpty(regionId)) {
             throw new IllegalArgumentException("Unexpected empty parameter: regionId.");
         } else {
-            Region result = (Region) STATIC_FIELDS.get(regionId);
+            Region result = STATIC_FIELDS.get(regionId);
             if (Objects.nonNull(result)) {
                 return result;
             } else {

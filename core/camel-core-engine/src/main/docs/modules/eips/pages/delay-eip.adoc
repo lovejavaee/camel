@@ -4,6 +4,7 @@
 :description: Delays processing for a specified length of time
 :since: 
 :supportlevel: Stable
+:tabs-sync-option:
 
 The Delay EIP is used for delaying messages during routing.
 
@@ -13,10 +14,20 @@ The Delay EIP is used for delaying messages during routing.
 include::partial$eip-options.adoc[]
 // eip options: END
 
+== Exchange properties
+
+// eip exchangeProperties: START
+include::partial$eip-exchangeProperties.adoc[]
+// eip exchangeProperties: END
+
 == Example
 
 The example below will delay all messages received on *seda:b* 1 second before sending them to *mock:result*.
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("seda:b")
@@ -24,8 +35,8 @@ from("seda:b")
   .to("mock:result");
 ----
 
-And in XML:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -36,6 +47,21 @@ And in XML:
     <to uri="mock:result"/>
 </route>
 ----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: seda:b
+    steps:
+      - delay:
+          expression:
+            constant: 1000
+      - to:
+          uri: mock:result
+----
+====
 
 Note that delay creates its own block, so some DSLs (including Java) require the delay block be closed:
 [source,java]
@@ -54,9 +80,13 @@ Note that delay creates its own block, so some DSLs (including Java) require the
 
 The delayed value can be a dynamic xref:manual::expression.adoc[Expression].
 
-For example to delay a random between 1 and 5 seconds, we can use
+For example, to delay a random between 1 and 5 seconds, we can use
 the xref:languages:simple-language.adoc[Simple] language:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("seda:b")
@@ -64,8 +94,8 @@ from("seda:b")
   .to("mock:result");
 ----
 
-And in XML DSL:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -76,6 +106,21 @@ And in XML DSL:
     <to uri="mock:result"/>
 </route>
 ----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: seda:b
+    steps:
+      - delay:
+          expression:
+            simple: "${random(1000,5000)}"
+      - to:
+          uri: mock:result
+----
+====
 
 You can also call a xref:languages:bean-language.adoc[Bean Method] to compute the
 delayed value from Java code:
@@ -109,6 +154,10 @@ This allows the caller thread to not block and be able to service other messages
 
 You use the `asyncDelayed()` to enable the async behavior.
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("activemq:queue:foo")
@@ -116,8 +165,8 @@ from("activemq:queue:foo")
   .to("activemq:aDelayedQueue");
 ----
 
-In XML DSL you use the `asyncDelayed` attribute to enable the async mode:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -125,6 +174,22 @@ In XML DSL you use the `asyncDelayed` attribute to enable the async mode:
    <delay asyncDelayed="true">
        <constant>1000</constant>
    </delay>
-   <to uri="activemq:aDealyedQueue"/>
+   <to uri="activemq:aDelayedQueue"/>
 </route>
 ----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: activemq:queue:foo
+    steps:
+      - delay:
+          expression:
+            constant: 1000
+          asyncDelayed: true
+      - to:
+          uri: activemq:aDelayedQueue
+----
+====

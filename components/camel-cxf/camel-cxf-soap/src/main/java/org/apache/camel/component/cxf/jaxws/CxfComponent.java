@@ -43,8 +43,11 @@ public class CxfComponent extends HeaderFilterStrategyComponent implements SSLCo
     private Boolean allowStreaming;
     @Metadata(label = "security", defaultValue = "false")
     private boolean useGlobalSslContextParameters;
+    @Metadata(defaultValue = "false", label = "producer,advanced",
+              description = "Sets whether synchronous processing should be strictly used")
+    private boolean synchronous;
 
-    private Map<String, BeanCacheEntry> beanCache = new HashMap<String, BeanCacheEntry>();
+    private final Map<String, BeanCacheEntry> beanCache = new HashMap<>();
 
     public CxfComponent() {
     }
@@ -79,14 +82,20 @@ public class CxfComponent extends HeaderFilterStrategyComponent implements SSLCo
         this.useGlobalSslContextParameters = useGlobalSslContextParameters;
     }
 
+    public boolean isSynchronous() {
+        return synchronous;
+    }
+
+    public void setSynchronous(boolean synchronous) {
+        this.synchronous = synchronous;
+    }
+
     /**
      * Create a {@link CxfEndpoint} which, can be a Spring bean endpoint having URI format cxf:bean:<i>beanId</i> or
      * transport address endpoint having URI format cxf://<i>transportAddress</i>.
      */
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
-
-        CxfEndpoint result;
 
         Object value = parameters.remove("setDefaultBus");
         if (value != null) {
@@ -100,38 +109,11 @@ public class CxfComponent extends HeaderFilterStrategyComponent implements SSLCo
             parameters.put("allowStreaming", Boolean.toString(allowStreaming));
         }
 
-        if (remaining.startsWith(CxfConstants.SPRING_CONTEXT_ENDPOINT)) {
-            // Get the bean from the Spring context
-            String beanId = remaining.substring(CxfConstants.SPRING_CONTEXT_ENDPOINT.length());
-            if (beanId.startsWith("//")) {
-                beanId = beanId.substring(2);
-            }
+        final CxfEndpoint result = createCxfEndpoint(remaining, parameters);
 
-            result = createCxfSpringEndpoint(beanId);
-            result.setBeanId(beanId);
-            if (beanCache.containsKey(beanId)) {
-                BeanCacheEntry entry = beanCache.get(beanId);
-                if (entry.cxfEndpoint == result
-                        && !entry.parameters.equals(parameters)) {
-                    /*different URI refer to the same CxfEndpoint Bean instance
-                      but with different parameters. This can make stateful bean's
-                      behavior uncertainty. This can be addressed by using proper
-                      bean scope, such as "prototype" in Spring or "Session" in CDI
-                      */
-                    throw new RuntimeException(
-                            "Different URI refer to the same CxfEndpoint Bean instance"
-                                               + " with ID : " + beanId
-                                               + " but with different parameters. Please use the proper Bean scope ");
-                }
-            } else {
-                beanCache.put(beanId, new BeanCacheEntry(result, new HashMap<String, Object>(parameters)));
-            }
-        } else {
-            // endpoint URI does not specify a bean
-            result = createCxfEndpoint(remaining);
-        }
         result.setComponent(this);
         result.setCamelContext(getCamelContext());
+        result.setSynchronous(isSynchronous());
         setEndpointHeaderFilterStrategy(result);
         setProperties(result, parameters);
 
@@ -144,6 +126,47 @@ public class CxfComponent extends HeaderFilterStrategyComponent implements SSLCo
             result.setSslContextParameters(retrieveGlobalSslContextParameters());
         }
 
+        return result;
+    }
+
+    private CxfEndpoint createCxfEndpoint(String remaining, Map<String, Object> parameters) {
+        CxfEndpoint result;
+        if (remaining.startsWith(CxfConstants.SPRING_CONTEXT_ENDPOINT)) {
+            result = createSpringContextEndpoint(remaining, parameters);
+        } else {
+            // endpoint URI does not specify a bean
+            result = createCxfEndpoint(remaining);
+        }
+        return result;
+    }
+
+    private CxfEndpoint createSpringContextEndpoint(String remaining, Map<String, Object> parameters) {
+        CxfEndpoint result;
+        // Get the bean from the Spring context
+        String beanId = remaining.substring(CxfConstants.SPRING_CONTEXT_ENDPOINT.length());
+        if (beanId.startsWith("//")) {
+            beanId = beanId.substring(2);
+        }
+
+        result = createCxfSpringEndpoint(beanId);
+        result.setBeanId(beanId);
+        if (beanCache.containsKey(beanId)) {
+            BeanCacheEntry entry = beanCache.get(beanId);
+            if (entry.cxfEndpoint == result
+                    && !entry.parameters.equals(parameters)) {
+                /*different URI refer to the same CxfEndpoint Bean instance
+                  but with different parameters. This can make stateful bean's
+                  behavior uncertainty. This can be addressed by using proper
+                  bean scope, such as "prototype" in Spring or "Session" in CDI
+                  */
+                throw new RuntimeException(
+                        "Different URI refer to the same CxfEndpoint Bean instance"
+                                           + " with ID : " + beanId
+                                           + " but with different parameters. Please use the proper Bean scope ");
+            }
+        } else {
+            beanCache.put(beanId, new BeanCacheEntry(result, new HashMap<>(parameters)));
+        }
         return result;
     }
 

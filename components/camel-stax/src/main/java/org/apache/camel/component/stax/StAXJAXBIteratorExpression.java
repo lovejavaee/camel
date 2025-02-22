@@ -101,16 +101,17 @@ public class StAXJAXBIteratorExpression<T> extends ExpressionAdapter {
     }
 
     private static JAXBContext jaxbContext(Class<?> handled) throws JAXBException {
-        if (JAX_CONTEXTS.containsKey(handled)) {
-            return JAX_CONTEXTS.get(handled);
+        try {
+            return JAX_CONTEXTS.computeIfAbsent(handled, k -> {
+                try {
+                    return JAXBContext.newInstance(handled);
+                } catch (JAXBException e) {
+                    throw new RuntimeCamelException(e);
+                }
+            });
+        } catch (RuntimeCamelException e) {
+            throw (JAXBException) e.getCause();
         }
-
-        JAXBContext context;
-        synchronized (JAX_CONTEXTS) {
-            context = JAXBContext.newInstance(handled);
-            JAX_CONTEXTS.put(handled, context);
-        }
-        return context;
     }
 
     @Override
@@ -134,16 +135,7 @@ public class StAXJAXBIteratorExpression<T> extends ExpressionAdapter {
                 clazz = (Class<T>) exchange.getContext().getClassResolver().resolveMandatoryClass(handledName);
             }
             return createIterator(reader, clazz, inputStream);
-        } catch (InvalidPayloadException e) {
-            exchange.setException(e);
-            return null;
-        } catch (JAXBException e) {
-            exchange.setException(e);
-            return null;
-        } catch (ClassNotFoundException e) {
-            exchange.setException(e);
-            return null;
-        } catch (XMLStreamException e) {
+        } catch (InvalidPayloadException | JAXBException | ClassNotFoundException | XMLStreamException e) {
             exchange.setException(e);
             return null;
         }

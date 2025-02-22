@@ -29,8 +29,10 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Stream;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -132,7 +134,7 @@ public class StreamConsumer extends DefaultConsumer implements Runnable {
                 readFromStreamRawMode();
             }
         } catch (InterruptedException e) {
-            // we are closing down so ignore
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             getExceptionHandler().handleException(e);
         }
@@ -333,43 +335,53 @@ public class StreamConsumer extends DefaultConsumer implements Runnable {
     /**
      * Strategy method for processing the line
      */
-    protected synchronized long processLine(String line, boolean last, long index) throws Exception {
-        if (endpoint.getGroupLines() > 0) {
-            // remember line
-            if (line != null) {
-                lines.add(line);
-            }
+    protected long processLine(String line, boolean last, long index) throws Exception {
+        lock.lock();
+        try {
+            if (endpoint.getGroupLines() > 0) {
+                // remember line
+                if (line != null) {
+                    lines.add(line);
+                }
 
-            // should we flush lines?
-            if (!lines.isEmpty() && (lines.size() >= endpoint.getGroupLines() || last)) {
-                // spit out lines as we hit the size, or it was the last
-                List<String> copy = new ArrayList<>(lines);
-                Object body = endpoint.getGroupStrategy().groupLines(copy);
+                // should we flush lines?
+                if (!lines.isEmpty() && (lines.size() >= endpoint.getGroupLines() || last)) {
+                    // spit out lines as we hit the size, or it was the last
+                    List<String> copy = new ArrayList<>(lines);
+                    Object body = endpoint.getGroupStrategy().groupLines(copy);
+                    // remember to inc index when we create an exchange
+                    Exchange exchange = createExchange(body, index++, last);
+
+                    // clear lines
+                    lines.clear();
+
+                    getProcessor().process(exchange);
+                }
+            } else if (line != null) {
+                // single line
                 // remember to inc index when we create an exchange
-                Exchange exchange = createExchange(body, index++, last);
-
-                // clear lines
-                lines.clear();
-
+                Exchange exchange = createExchange(line, index++, last);
                 getProcessor().process(exchange);
             }
-        } else if (line != null) {
-            // single line
-            // remember to inc index when we create an exchange
-            Exchange exchange = createExchange(line, index++, last);
-            getProcessor().process(exchange);
-        }
 
-        return index;
+            return index;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
      * Strategy method for processing the data
      */
-    protected synchronized long processRaw(byte[] body, long index) throws Exception {
-        Exchange exchange = createExchange(body, index++, true);
-        getProcessor().process(exchange);
-        return index;
+    protected long processRaw(byte[] body, long index) throws Exception {
+        lock.lock();
+        try {
+            Exchange exchange = createExchange(body, index++, true);
+            getProcessor().process(exchange);
+            return index;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -430,6 +442,21 @@ public class StreamConsumer extends DefaultConsumer implements Runnable {
         return fileStream;
     }
 
+    /**
+     * From a comma-separated list of headers in the format of "FIELD=VALUE" or "FIELD:VALUE", split on the commas and
+     * split on the separator to create a stream of Map.Entry values while filtering out invalid combinations
+     *
+     * @param  headerList A string containing a comma-separated list of headers
+     * @return            A Stream of Map.Entry items which can then be added as headers to a URLConnection
+     */
+    Stream<Map.Entry<String, String>> parseHeaders(String headerList) {
+        return Arrays.asList(headerList.split(","))
+                .stream()
+                .map(s -> s.split("[=:]"))
+                .filter(h -> h.length == 2)
+                .map(h -> Map.entry(h[0].trim(), h[1].trim()));
+    }
+
     private InputStream resolveStreamFromUrl() throws IOException {
         String url = endpoint.getHttpUrl();
         StringHelper.notEmpty(url, "httpUrl");
@@ -438,13 +465,8 @@ public class StreamConsumer extends DefaultConsumer implements Runnable {
         urlConnectionToClose.setUseCaches(false);
         String headers = endpoint.getHttpHeaders();
         if (headers != null) {
-            for (String h : headers.split(",")) {
-                String k = StringHelper.before(h, "=");
-                String v = StringHelper.after(h, "=");
-                if (k != null && v != null) {
-                    urlConnectionToClose.setRequestProperty(k, v);
-                }
-            }
+            parseHeaders(headers)
+                    .forEach(e -> urlConnectionToClose.setRequestProperty(e.getKey(), e.getValue()));
         }
 
         InputStream is;

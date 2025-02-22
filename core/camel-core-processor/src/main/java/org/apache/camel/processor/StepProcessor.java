@@ -42,8 +42,6 @@ public class StepProcessor extends Pipeline {
     public static Processor newInstance(CamelContext camelContext, List<Processor> processors, String stepId) {
         if (processors.isEmpty()) {
             return null;
-        } else if (processors.size() == 1) {
-            return processors.get(0);
         }
         return new StepProcessor(camelContext, processors, stepId);
     }
@@ -65,7 +63,7 @@ public class StepProcessor extends Pipeline {
                 } else {
                     EventHelper.notifyStepDone(exchange.getContext(), exchange, stepId);
                 }
-            } catch (Throwable t) {
+            } catch (Exception t) {
                 // must catch exceptions to ensure synchronizations is also invoked
                 LOG.warn("Exception occurred during event notification. This exception will be ignored.", t);
             } finally {

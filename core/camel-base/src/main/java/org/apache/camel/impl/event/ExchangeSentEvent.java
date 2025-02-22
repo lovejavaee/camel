@@ -16,6 +16,8 @@
  */
 package org.apache.camel.impl.event;
 
+import java.io.Serial;
+
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.spi.CamelEvent;
@@ -32,7 +34,7 @@ import org.apache.camel.util.TimeUtils;
  * @see ExchangeSendingEvent
  */
 public class ExchangeSentEvent extends AbstractExchangeEvent implements CamelEvent.ExchangeSentEvent {
-    private static final long serialVersionUID = -19248832613958123L;
+    private static final @Serial long serialVersionUID = -19248832613958123L;
 
     private final Endpoint endpoint;
     private final long timeTaken;
@@ -54,7 +56,7 @@ public class ExchangeSentEvent extends AbstractExchangeEvent implements CamelEve
     }
 
     @Override
-    public String toString() {
+    public final String toString() {
         return getExchange().getExchangeId() + " exchange sent to: " + endpoint
                + " took: " + TimeUtils.printDuration(timeTaken, true);
     }

@@ -5,6 +5,7 @@
 :description: Offers publish/subscribe, peer-to-peer (via a server), and RPC style messaging using the CometD/Bayeux protocol.
 :since: 2.0
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: cometd
@@ -13,13 +14,12 @@
 
 *{component-header}*
 
-The Cometd component is a transport for working with the
+The Cometd component is a transport mechanism for working with the
 http://www.mortbay.org/jetty[jetty] implementation of the
 http://docs.codehaus.org/display/JETTY/Cometd+%28aka+Bayeux%29[cometd/bayeux
 protocol]. +
- Using this component in combination with the dojo toolkit library it's
-possible to push Camel messages directly into the browser using an AJAX
-based mechanism.
+ Using this component in combination with the dojo toolkit library, it's
+possible to push Camel messages directly into the browser using an AJAX-based mechanism.
 
 Maven users will need to add the following dependency to their `pom.xml`
 for this component:
@@ -69,39 +69,41 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Sample
+== Examples
 
-Here is some examples on How to pass the parameters
+Below, you can find some examples of how to pass the parameters.
 
-For file (for webapp resources located in the Web Application directory
---> cometd://localhost:8080?resourceBase=file./webapp +
- For classpath (when by example the web resources are packaged inside
-the webapp folder -->
-cometd://localhost:8080?resourceBase=classpath:webapp
+For file, for webapp resources located in the Web Application directory --> `cometd://localhost:8080?resourceBase=file./webapp`.
 
-== Authentication
+For classpath, when, for example, the web resources are packaged inside the webapp folder --> `cometd://localhost:8080?resourceBase=classpath:webapp`
+
+=== Authentication
 
 You can configure custom `SecurityPolicy` and `Extension`'s to the
 `CometdComponent` which allows you to use authentication as
 http://cometd.org/documentation/howtos/authentication[documented here]
 
-== Setting up SSL for Cometd Component
+=== Setting up SSL for Cometd Component
 
-=== Using the JSSE Configuration Utility
+==== Using the JSSE Configuration Utility
 
 The Cometd component supports SSL/TLS configuration
 through the xref:manual::camel-configuration-utilities.adoc[Camel JSSE
 Configuration Utility].  This utility greatly decreases the amount of
-component specific code you need to write and is configurable at the
+component-specific code you need to write and is configurable at the
 endpoint and component levels.  The following examples demonstrate how
 to use the utility with the Cometd component. You need to configure SSL
-on the CometdComponent.
+on the CometdComponent.x
 
-[[Cometd-Programmaticconfigurationofthecomponent]]
-Programmatic configuration of the component
 
+[tabs]
+====
+Java::
++
+Programmatic configuration of the component:
++
 [source,java]
------------------------------------------------------------------------------------------------
+----
 KeyStoreParameters ksp = new KeyStoreParameters();
 ksp.setResource("/users/home/server/keystore.jks");
 ksp.setPassword("keystorePassword");
@@ -119,13 +121,12 @@ scp.setTrustManagers(tmp);
 
 CometdComponent commetdComponent = getContext().getComponent("cometds", CometdComponent.class);
 commetdComponent.setSslContextParameters(scp);
------------------------------------------------------------------------------------------------
+----
 
-[[Cometd-SpringDSLbasedconfigurationofendpoint]]
-Spring DSL based configuration of endpoint
-
+Spring XML::
++
 [source,xml]
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----
   <camel:sslContextParameters
       id="sslContextParameters">
     <camel:keyManagers
@@ -146,8 +147,9 @@ Spring DSL based configuration of endpoint
   </bean>
 
   <to uri="cometds://127.0.0.1:443/service/test?baseResource=file:./target/test-classes/webapp&timeout=240000&interval=0&maxInterval=30000&multiFrameInterval=1500&jsonCommented=true&logLevel=2"/>...
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----
 
+====
 
 
 include::spring-boot:partial$starter.adoc[]

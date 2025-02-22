@@ -39,41 +39,42 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.support.jsse.SSLContextParameters;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.camel.component.jetty.BaseJettyTest.SSL_SYSPROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Isolated
 @ResourceLock(SSL_SYSPROPS)
-@DisabledOnOs(value = OS.WINDOWS, disabledReason = "these tests does not run well on Windows")
+@EnabledOnOs(value = { OS.LINUX, OS.MAC, OS.FREEBSD, OS.OPENBSD },
+             architectures = { "amd64", "aarch64", "ppc64le" },
+             disabledReason = "This test does not run reliably multiple platforms (see CAMEL-21438)")
 public class HttpsRouteTest extends BaseJettyTest {
 
     public static final String NULL_VALUE_MARKER = CamelTestSupport.class.getCanonicalName();
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpsRouteTest.class);
 
-    protected String expectedBody = "<hello>world!</hello>";
-    protected String pwd = "changeit";
-    protected Properties originalValues = new Properties();
+    protected final String expectedBody = "<hello>world!</hello>";
+    protected final String pwd = "changeit";
+    protected final Properties originalValues = new Properties();
 
     public String getHttpProducerScheme() {
         return "https://";
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() throws Exception {
         // ensure jsse clients can validate the self signed dummy localhost cert,
         // use the server keystore as the trust store for these tests
         URL trustStoreUrl = this.getClass().getClassLoader().getResource("jsse/localhost.p12");
@@ -83,10 +84,8 @@ public class HttpsRouteTest extends BaseJettyTest {
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
+    public void doPostTearDown() throws Exception {
         restoreSystemProperties();
-        super.tearDown();
     }
 
     @Override
@@ -136,9 +135,9 @@ public class HttpsRouteTest extends BaseJettyTest {
 
         Map<String, Object> headers = in.getHeaders();
 
-        LOG.info("Headers: " + headers);
+        LOG.info("Headers: {}", headers);
 
-        assertTrue(headers.size() > 0, "Should be more than one header but was: " + headers);
+        assertFalse(headers.isEmpty(), "Should be more than one header but was: " + headers);
     }
 
     @Test
@@ -160,10 +159,7 @@ public class HttpsRouteTest extends BaseJettyTest {
         ssl.init(null, null, null);
         connection.setSSLSocketFactory(ssl.getSocketFactory());
         InputStream is = connection.getInputStream();
-        int c;
-        while ((c = is.read()) >= 0) {
-            os.write(c);
-        }
+        is.transferTo(os);
 
         String data = new String(os.toByteArray());
         assertEquals("<b>Hello World</b>", data);

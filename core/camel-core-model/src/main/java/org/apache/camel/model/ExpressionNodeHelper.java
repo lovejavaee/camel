@@ -49,16 +49,15 @@ public final class ExpressionNodeHelper {
             // accepts an expression
             XPathExpression answer = new XPathExpression(expression);
             answer.setExpression(aware.getExpressionText());
-            answer.setResultType(answer.getResultType());
+            answer.setResultType(aware.getResultType());
             return answer;
-        } else if (expression instanceof ValueBuilder) {
+        } else if (expression instanceof ValueBuilder builder) {
             // ValueBuilder wraps the actual expression so unwrap
-            ValueBuilder builder = (ValueBuilder) expression;
             expression = builder.getExpression();
         }
 
-        if (expression instanceof ExpressionDefinition) {
-            return (ExpressionDefinition) expression;
+        if (expression instanceof ExpressionDefinition expressionDefinition) {
+            return expressionDefinition;
         }
         return new ExpressionDefinition(expression);
     }
@@ -81,19 +80,18 @@ public final class ExpressionNodeHelper {
             // accepts an expression
             XPathExpression answer = new XPathExpression(expression);
             answer.setExpression(aware.getExpressionText());
-            answer.setResultType(answer.getResultType());
+            answer.setResultType(aware.getResultType());
             return answer;
-        } else if (predicate instanceof ValueBuilder) {
+        } else if (predicate instanceof ValueBuilder builder) {
             // ValueBuilder wraps the actual predicate so unwrap
-            ValueBuilder builder = (ValueBuilder) predicate;
             Expression expression = builder.getExpression();
-            if (expression instanceof Predicate) {
-                predicate = (Predicate) expression;
+            if (expression instanceof Predicate predicateExp) {
+                predicate = predicateExp;
             }
         }
 
-        if (predicate instanceof ExpressionDefinition) {
-            return (ExpressionDefinition) predicate;
+        if (predicate instanceof ExpressionDefinition expressionDefinition) {
+            return expressionDefinition;
         }
         return new ExpressionDefinition(predicate);
     }

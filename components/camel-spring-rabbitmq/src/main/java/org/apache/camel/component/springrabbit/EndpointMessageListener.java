@@ -17,6 +17,8 @@
 package org.apache.camel.component.springrabbit;
 
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.rabbitmq.client.Channel;
 import org.apache.camel.AsyncCallback;
@@ -34,7 +36,6 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
-import org.springframework.amqp.support.converter.MessageConverter;
 
 import static org.apache.camel.RuntimeCamelException.wrapRuntimeCamelException;
 
@@ -45,18 +46,15 @@ public class EndpointMessageListener implements ChannelAwareMessageListener {
     private final SpringRabbitMQConsumer consumer;
     private final SpringRabbitMQEndpoint endpoint;
     private final AsyncProcessor processor;
-    private final MessagePropertiesConverter messagePropertiesConverter;
-    private final MessageConverter messageConverter;
     private RabbitTemplate template;
     private boolean disableReplyTo;
     private boolean async;
+    private final Lock lock = new ReentrantLock();
 
     public EndpointMessageListener(SpringRabbitMQConsumer consumer, SpringRabbitMQEndpoint endpoint, Processor processor) {
         this.consumer = consumer;
         this.endpoint = endpoint;
         this.processor = AsyncProcessorConverterHelper.convert(processor);
-        this.messagePropertiesConverter = endpoint.getMessagePropertiesConverter();
-        this.messageConverter = endpoint.getMessageConverter();
     }
 
     public boolean isAsync() {
@@ -81,11 +79,16 @@ public class EndpointMessageListener implements ChannelAwareMessageListener {
         this.disableReplyTo = disableReplyTo;
     }
 
-    public synchronized RabbitTemplate getTemplate() {
-        if (template == null) {
-            template = endpoint.createInOnlyTemplate();
+    public RabbitTemplate getTemplate() {
+        lock.lock();
+        try {
+            if (template == null) {
+                template = endpoint.createInOnlyTemplate();
+            }
+            return template;
+        } finally {
+            lock.unlock();
         }
-        return template;
     }
 
     public void setTemplate(RabbitTemplate template) {

@@ -33,7 +33,7 @@ import org.apache.camel.util.ObjectHelper;
  * A generic interface for triggering events at times specified through the Unix cron syntax.
  */
 @UriEndpoint(firstVersion = "3.1.0", scheme = "cron", title = "Cron", syntax = "cron:name", consumerOnly = true,
-             category = { Category.SCHEDULING })
+             remote = false, category = { Category.SCHEDULING })
 public class CronEndpoint extends DefaultEndpoint implements DelegateEndpoint {
 
     private Endpoint delegate;
@@ -44,6 +44,11 @@ public class CronEndpoint extends DefaultEndpoint implements DelegateEndpoint {
     public CronEndpoint(String endpointUri, CronComponent component, CamelCronConfiguration configuration) {
         super(endpointUri, component);
         this.configuration = configuration;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     public void setDelegate(Endpoint delegate) {

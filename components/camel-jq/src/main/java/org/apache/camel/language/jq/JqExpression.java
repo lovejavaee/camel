@@ -29,13 +29,15 @@ import net.thisptr.jackson.jq.Versions;
 import net.thisptr.jackson.jq.exception.JsonQueryException;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
+import org.apache.camel.Expression;
+import org.apache.camel.ExpressionIllegalSyntaxException;
 import org.apache.camel.InvalidPayloadException;
-import org.apache.camel.NoSuchHeaderOrPropertyException;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.TypeConverter;
 import org.apache.camel.spi.ExpressionResultTypeAware;
-import org.apache.camel.support.CamelContextHelper;
 import org.apache.camel.support.ExpressionAdapter;
+import org.apache.camel.support.MessageHelper;
+import org.apache.camel.support.builder.ExpressionBuilder;
 
 public class JqExpression extends ExpressionAdapter implements ExpressionResultTypeAware {
 
@@ -46,9 +48,7 @@ public class JqExpression extends ExpressionAdapter implements ExpressionResultT
     private Class<?> resultType;
     private JsonQuery query;
     private TypeConverter typeConverter;
-
-    private String headerName;
-    private String propertyName;
+    private Expression source;
 
     public JqExpression(String expression) {
         this(null, expression);
@@ -61,35 +61,31 @@ public class JqExpression extends ExpressionAdapter implements ExpressionResultT
 
     @Override
     public void init(CamelContext camelContext) {
-        super.init(camelContext);
+        // avoid initializing multiple times
+        if (this.query == null) {
+            super.init(camelContext);
 
-        this.typeConverter = camelContext.getTypeConverter();
+            if (this.scope == null) {
+                JqLanguage lan = (JqLanguage) camelContext.resolveLanguage("jq");
+                this.scope = Scope.newChildScope(lan.getRootScope());
+            }
 
-        if (this.scope == null) {
-            this.scope = CamelContextHelper.findSingleByType(camelContext, Scope.class);
+            this.typeConverter = camelContext.getTypeConverter();
+            try {
+                this.query = JsonQuery.compile(this.expression, Versions.JQ_1_6);
+            } catch (JsonQueryException e) {
+                throw new ExpressionIllegalSyntaxException(this.expression, e);
+            }
+
+            if (resultTypeName != null && (resultType == null || resultType == Object.class)) {
+                resultType = camelContext.getClassResolver().resolveClass(resultTypeName);
+            }
+            if (resultType == null || resultType == Object.class) {
+                resultType = JsonNode.class;
+            }
         }
-
-        if (this.scope == null) {
-            // if no scope is explicit set or no scope is found in the registry,
-            // then a local scope is created and functions are loaded from the
-            // jackson-jq library and the component.
-            this.scope = Scope.newEmptyScope();
-
-            JqFunctions.load(camelContext, scope);
-            JqFunctions.loadLocal(scope);
-        }
-
-        try {
-            this.query = JsonQuery.compile(this.expression, Versions.JQ_1_6);
-        } catch (JsonQueryException e) {
-            throw new RuntimeException(e);
-        }
-
-        if (resultTypeName != null && (resultType == null || resultType == Object.class)) {
-            resultType = camelContext.getClassResolver().resolveClass(resultTypeName);
-        }
-        if (resultType == null || resultType == Object.class) {
-            resultType = JsonNode.class;
+        if (this.source == null) {
+            source = ExpressionBuilder.bodyExpression();
         }
     }
 
@@ -123,30 +119,12 @@ public class JqExpression extends ExpressionAdapter implements ExpressionResultT
         this.resultTypeName = resultTypeName;
     }
 
-    public String getHeaderName() {
-        return headerName;
+    public Expression getSource() {
+        return source;
     }
 
-    /**
-     * Name of header to use as input, instead of the message body
-     * </p>
-     * It has as higher precedent than the propertyName if both are set.
-     */
-    public void setHeaderName(String headerName) {
-        this.headerName = headerName;
-    }
-
-    public String getPropertyName() {
-        return propertyName;
-    }
-
-    /**
-     * Name of property to use as input, instead of the message body.
-     * </p>
-     * It has a lower precedent than the headerName if both are set.
-     */
-    public void setPropertyName(String propertyName) {
-        this.propertyName = propertyName;
+    public void setSource(Expression source) {
+        this.source = source;
     }
 
     @Override
@@ -178,11 +156,16 @@ public class JqExpression extends ExpressionAdapter implements ExpressionResultT
             this.query.apply(scope, payload, outputs::add);
 
             if (outputs.size() == 1) {
-                // no need to convert output
-                if (resultType == JsonNode.class) {
-                    return outputs.get(0);
+                JsonNode out = outputs.get(0);
+                // special if null
+                if (out.isNull()) {
+                    return null;
                 }
 
+                // no need to convert output
+                if (resultType == JsonNode.class) {
+                    return out;
+                }
                 return this.typeConverter.convertTo(resultType, exchange, outputs.get(0));
             } else if (outputs.size() > 1) {
                 // no need to convert outputs
@@ -191,6 +174,7 @@ public class JqExpression extends ExpressionAdapter implements ExpressionResultT
                 }
 
                 return outputs.stream()
+                        .filter(o -> !o.isNull()) // skip null
                         .map(item -> this.typeConverter.convertTo(resultType, exchange, item))
                         .collect(Collectors.toList());
             }
@@ -210,25 +194,12 @@ public class JqExpression extends ExpressionAdapter implements ExpressionResultT
      * @return          the {@link JsonNode} to be processed by the expression
      */
     private JsonNode getPayload(Exchange exchange) throws Exception {
-        JsonNode payload = null;
-
-        if (headerName == null && propertyName == null) {
-            payload = exchange.getMessage().getBody(JsonNode.class);
-            if (payload == null) {
-                throw new InvalidPayloadException(exchange, JsonNode.class);
-            }
-        } else {
-            if (headerName != null) {
-                payload = exchange.getMessage().getHeader(headerName, JsonNode.class);
-            }
-            if (payload == null && propertyName != null) {
-                payload = exchange.getProperty(propertyName, JsonNode.class);
-            }
-            if (payload == null) {
-                throw new NoSuchHeaderOrPropertyException(exchange, headerName, propertyName, JsonNode.class);
-            }
+        JsonNode payload = source.evaluate(exchange, JsonNode.class);
+        // if body is stream cached then reset, so we can re-read it again
+        MessageHelper.resetStreamCache(exchange.getMessage());
+        if (payload == null) {
+            throw new InvalidPayloadException(exchange, JsonNode.class);
         }
-
         return payload;
     }
 }

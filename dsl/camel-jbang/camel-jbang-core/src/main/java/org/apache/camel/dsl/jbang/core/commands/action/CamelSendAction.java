@@ -36,15 +36,20 @@ import org.fusesource.jansi.AnsiConsole;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "send",
-                     description = "Sends a message to a system via an existing running Camel integration")
+                     description = "Send messages to endpoints via running Camel", sortOptions = false,
+                     showDefaultValues = true)
 public class CamelSendAction extends ActionBaseCommand {
 
-    @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "1")
-    String name;
+    @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
+    String name = "*";
 
     @CommandLine.Option(names = { "--endpoint" },
                         description = "Endpoint where to send the message (can be uri, pattern, or refer to a route id)")
     String endpoint;
+
+    @CommandLine.Option(names = { "--poll" },
+                        description = "Poll instead of sending a message. This can be used to receive latest message from a Kafka topic or JMS queue.")
+    boolean poll;
 
     @CommandLine.Option(names = { "--reply" },
                         description = "Whether to expect a reply message (InOut vs InOut messaging style)")
@@ -54,7 +59,7 @@ public class CamelSendAction extends ActionBaseCommand {
                         description = "Saves reply message to the file with the given name (override if exists)")
     String replyFile;
 
-    @CommandLine.Option(names = { "--body" }, required = true,
+    @CommandLine.Option(names = { "--body" },
                         description = "Message body to send (prefix with file: to refer to loading message body from file)")
     String body;
 
@@ -103,8 +108,8 @@ public class CamelSendAction extends ActionBaseCommand {
         if (pids.isEmpty()) {
             return 0;
         } else if (pids.size() > 1) {
-            System.out.println("Name or pid " + name + " matches " + pids.size()
-                               + " running Camel integrations. Specify a name or PID that matches exactly one.");
+            printer().println("Name or pid " + name + " matches " + pids.size()
+                              + " running Camel integrations. Specify a name or PID that matches exactly one.");
             return 0;
         }
 
@@ -117,15 +122,23 @@ public class CamelSendAction extends ActionBaseCommand {
         JsonObject root = new JsonObject();
         root.put("action", "send");
         root.put("endpoint", endpoint);
+        root.put("poll", poll);
+        // timeout cannot be too low
+        if (timeout < 5000) {
+            timeout = 5000;
+        }
+        root.put("pollTimeout", timeout);
         String mep = (reply || replyFile != null) ? "InOut" : "InOnly";
         root.put("exchangePattern", mep);
-        root.put("body", body);
+        if (body != null) {
+            root.put("body", body);
+        }
         if (headers != null) {
             JsonArray arr = new JsonArray();
             for (String h : headers) {
                 JsonObject jo = new JsonObject();
                 if (!h.contains("=")) {
-                    System.out.println("Header must be in key=value format, was: " + h);
+                    printer().println("Header must be in key=value format, was: " + h);
                     return 0;
                 }
                 jo.put("key", StringHelper.before(h, "="));
@@ -173,8 +186,8 @@ public class CamelSendAction extends ActionBaseCommand {
                     tableHelper.setPretty(pretty);
                     tableHelper.setLoggingColor(loggingColor);
                     tableHelper.setShowExchangeProperties(showExchangeProperties);
-                    String table = tableHelper.getDataAsTable(exchangeId, mep, jo, message, cause);
-                    System.out.println(table);
+                    String table = tableHelper.getDataAsTable(exchangeId, mep, jo, null, message, cause);
+                    printer().println(table);
                 }
             }
         }
@@ -192,17 +205,17 @@ public class CamelSendAction extends ActionBaseCommand {
         if (loggingColor) {
             AnsiConsole.out().print(Ansi.ansi().fgBrightDefault().a(Ansi.Attribute.INTENSITY_FAINT).a(ts).reset());
         } else {
-            System.out.print(ts);
+            printer().print(ts);
         }
         // pid
-        System.out.print("  ");
+        printer().print("  ");
         String p = String.format("%5.5s", this.pid);
         if (loggingColor) {
             AnsiConsole.out().print(Ansi.ansi().fgMagenta().a(p).reset());
             AnsiConsole.out().print(Ansi.ansi().fgBrightDefault().a(Ansi.Attribute.INTENSITY_FAINT).a(" --- ").reset());
         } else {
-            System.out.print(p);
-            System.out.print(" --- ");
+            printer().print(p);
+            printer().print(" --- ");
         }
         // endpoint
         String ids = jo.getString("endpoint");
@@ -213,36 +226,52 @@ public class CamelSendAction extends ActionBaseCommand {
         if (loggingColor) {
             AnsiConsole.out().print(Ansi.ansi().fgCyan().a(ids).reset());
         } else {
-            System.out.print(ids);
+            printer().print(ids);
         }
-        System.out.print(" : ");
+        printer().print(" : ");
         // status
-        System.out.print(getStatus(jo));
+        printer().print(getStatus(jo));
         // elapsed
         String e = TimeUtils.printDuration(jo.getLong("elapsed"), true);
         if (loggingColor) {
             AnsiConsole.out().print(Ansi.ansi().fgBrightDefault().a(" (" + e + ")").reset());
         } else {
-            System.out.print("(" + e + ")");
+            printer().print("(" + e + ")");
         }
-        System.out.println();
+        printer().println();
     }
 
     private String getStatus(JsonObject r) {
         boolean failed = "failed".equals(r.getString("status"));
+        boolean timeout = "timeout".equals(r.getString("status"));
         boolean reply = r.containsKey("message");
         String status;
+        Ansi.Color c = Ansi.Color.GREEN;
         if (failed) {
             status = "Failed (exception)";
+            c = Ansi.Color.RED;
         } else if (replyFile != null) {
-            status = "Reply saved to file (success)";
+            if (poll) {
+                status = "Poll save to fill (success)";
+            } else {
+                status = "Reply save to file (success)";
+            }
         } else if (reply) {
-            status = "Reply received (success)";
+            if (poll) {
+                status = "Poll received (success)";
+            } else {
+                status = "Reply received (success)";
+            }
+        } else if (timeout) {
+            status = "Timeout";
+            c = Ansi.Color.YELLOW;
+        } else if (poll) {
+            status = "Poll (success)";
         } else {
             status = "Sent (success)";
         }
         if (loggingColor) {
-            return Ansi.ansi().fg(failed ? Ansi.Color.RED : Ansi.Color.GREEN).a(status).reset().toString();
+            return Ansi.ansi().fg(c).a(status).reset().toString();
         } else {
             return status;
         }
@@ -250,7 +279,8 @@ public class CamelSendAction extends ActionBaseCommand {
 
     protected JsonObject waitForOutputFile(File outputFile) {
         StopWatch watch = new StopWatch();
-        while (watch.taken() < timeout) {
+        long wait = timeout + 10000; // wait longer than timeout
+        while (watch.taken() < wait) {
             try {
                 // give time for response to be ready
                 Thread.sleep(20);
@@ -261,7 +291,8 @@ public class CamelSendAction extends ActionBaseCommand {
                     IOHelper.close(fis);
                     return (JsonObject) Jsoner.deserialize(text);
                 }
-
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 // ignore
             }

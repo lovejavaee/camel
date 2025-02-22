@@ -31,17 +31,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class FileConsumeMultipleDirectoriesTest extends ContextTestSupport {
 
-    private String fileUrl = fileUri("?initialDelay=0&delay=10&recursive=true&delete=true&sortBy=file:path");
+    public static final String FILE_QUERY = "?initialDelay=0&delay=10&recursive=true&delete=true&sortBy=file:path";
 
     @SuppressWarnings("unchecked")
     @Test
     public void testMultiDir() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedBodiesReceived("Bye World", "Hello World", "Godday World");
-
-        template.sendBodyAndHeader(fileUrl, "Bye World", Exchange.FILE_NAME, "bye.txt");
-        template.sendBodyAndHeader(fileUrl, "Hello World", Exchange.FILE_NAME, "sub/hello.txt");
-        template.sendBodyAndHeader(fileUrl, "Godday World", Exchange.FILE_NAME, "sub/sub2/godday.txt");
+        String fileUri = fileUri(FILE_QUERY);
+        template.sendBodyAndHeader(fileUri, "Bye World", Exchange.FILE_NAME, "bye.txt");
+        template.sendBodyAndHeader(fileUri, "Hello World", Exchange.FILE_NAME, "sub/hello.txt");
+        template.sendBodyAndHeader(fileUri, "Godday World", Exchange.FILE_NAME, "sub/sub2/godday.txt");
 
         assertMockEndpointsSatisfied();
 
@@ -65,10 +65,10 @@ public class FileConsumeMultipleDirectoriesTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
-                from(fileUrl).convertBodyTo(String.class).to("mock:result");
+            public void configure() {
+                from(fileUri(FILE_QUERY)).convertBodyTo(String.class).to("mock:result");
             }
         };
     }

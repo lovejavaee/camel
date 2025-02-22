@@ -59,9 +59,9 @@ public class BatchConsumerPooledExchangeTest extends ContextTestSupport {
     @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
-        template.sendBodyAndHeader(fileUri(), "aaa", Exchange.FILE_NAME, "aaa.txt");
-        template.sendBodyAndHeader(fileUri(), "bbb", Exchange.FILE_NAME, "bbb.txt");
-        template.sendBodyAndHeader(fileUri(), "ccc", Exchange.FILE_NAME, "ccc.txt");
+        template.sendBodyAndHeader(fileUri(), "aaa", Exchange.FILE_NAME, "aaa.BatchConsumerPooledExchangeTest.txt");
+        template.sendBodyAndHeader(fileUri(), "bbb", Exchange.FILE_NAME, "bbb.BatchConsumerPooledExchangeTest.txt");
+        template.sendBodyAndHeader(fileUri(), "ccc", Exchange.FILE_NAME, "ccc.BatchConsumerPooledExchangeTest.txt");
     }
 
     @Test
@@ -89,17 +89,17 @@ public class BatchConsumerPooledExchangeTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // maxMessagesPerPoll=1 to force polling 3 times to use pooled exchanges
-                from(fileUri("?initialDelay=0&delay=10&maxMessagesPerPoll=1")).noAutoStartup()
+                from(fileUri("?initialDelay=0&delay=10&maxMessagesPerPoll=1")).autoStartup(false)
                         .setProperty("myprop", counter::incrementAndGet)
                         .setHeader("myheader", counter::incrementAndGet)
                         .process(new Processor() {
                             @Override
-                            public void process(Exchange exchange) throws Exception {
+                            public void process(Exchange exchange) {
                                 // should be same exchange instance as its pooled
                                 Exchange old = ref.get();
                                 if (old == null) {

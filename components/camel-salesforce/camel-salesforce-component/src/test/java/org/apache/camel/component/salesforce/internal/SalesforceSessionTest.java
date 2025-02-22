@@ -24,8 +24,8 @@ import org.apache.camel.component.salesforce.SalesforceLoginConfig;
 import org.apache.camel.component.salesforce.api.SalesforceException;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.camel.support.jsse.KeyStoreParameters;
-import org.eclipse.jetty.client.api.ContentResponse;
-import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.client.ContentResponse;
+import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.http.HttpStatus;
 import org.junit.jupiter.api.Test;
 
@@ -93,7 +93,7 @@ public class SalesforceSessionTest {
         final Request request = mock(Request.class);
         when(client.POST(eq("https://login.salesforce.com/services/oauth2/token"))).thenReturn(request);
 
-        when(request.content(any())).thenReturn(request);
+        when(request.body(any())).thenReturn(request);
         when(request.timeout(anyLong(), any())).thenReturn(request);
 
         final ContentResponse response = mock(ContentResponse.class);

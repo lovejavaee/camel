@@ -33,7 +33,7 @@ import org.apache.camel.support.DefaultEndpoint;
  * Route messages to an endpoint looked up dynamically by name in the Camel Registry.
  */
 @UriEndpoint(firstVersion = "1.2.0", scheme = "ref", title = "Ref", syntax = "ref:name",
-             category = { Category.CORE, Category.ENDPOINT })
+             remote = false, category = { Category.CORE })
 public class RefEndpoint extends DefaultEndpoint implements DelegateEndpoint {
 
     private volatile Endpoint endpoint;
@@ -44,6 +44,11 @@ public class RefEndpoint extends DefaultEndpoint implements DelegateEndpoint {
 
     public RefEndpoint(String endpointUri, Component component) {
         super(endpointUri, component);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     public String getName() {
@@ -77,8 +82,8 @@ public class RefEndpoint extends DefaultEndpoint implements DelegateEndpoint {
         if (endpoint == null) {
             // endpoint is mandatory
             endpoint = CamelContextHelper.mandatoryLookup(getCamelContext(), name, Endpoint.class);
-            if (getCamelContext().getEndpoint(getEndpoint().getEndpointUri()) == null
-                    || getCamelContext().getEndpoint(getEndpoint().getEndpointUri()) != endpoint) {
+            if (getCamelContext().hasEndpoint(getEndpoint().getEndpointUri()) == null
+                    || getCamelContext().hasEndpoint(getEndpoint().getEndpointUri()) != endpoint) {
                 getCamelContext().addEndpoint(getEndpoint().getEndpointUri(), endpoint);
             }
         }

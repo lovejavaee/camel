@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-hazelcast</artifactId>
@@ -32,6 +32,7 @@
     <description>Camel HazelCast based work queue implementation</description>
 
     <properties>
+        <camel.surefire.fork.vmargs>--add-opens java.base/sun.nio.ch=ALL-UNNAMED</camel.surefire.fork.vmargs>
     </properties>
 
     <dependencies>
@@ -72,33 +73,38 @@
             <artifactId>camel-spring-main</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
+       <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-test-infra-hazelcast</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
+            <type>test-jar</type>
         </dependency>
-
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <forkCount>1</forkCount>
-                    <reuseForks>true</reuseForks>
-<!--                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>-->
-                    <systemProperties>
-                        <property>
-                            <name>hazelcast.logging.type</name>
-                            <value>slf4j</value>
-                        </property>
-                    </systemProperties>
-                    <argLine>--add-opens java.base/sun.nio.ch=ALL-UNNAMED</argLine>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
+    <profiles>
+        <profile>
+            <id>full</id>
+            <activation>
+                <property>
+                    <name>!quickly</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <property>
+                                    <name>hazelcast.logging.type</name>
+                                    <value>slf4j</value>
+                                </property>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

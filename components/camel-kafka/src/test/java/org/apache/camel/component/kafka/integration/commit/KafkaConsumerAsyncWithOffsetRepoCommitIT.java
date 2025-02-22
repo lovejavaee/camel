@@ -21,7 +21,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.kafka.KafkaConstants;
 import org.apache.camel.component.kafka.consumer.KafkaManualCommit;
 import org.apache.camel.component.kafka.integration.common.KafkaTestUtil;
-import org.apache.camel.impl.engine.MemoryStateRepository;
+import org.apache.camel.support.processor.state.MemoryStateRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ public class KafkaConsumerAsyncWithOffsetRepoCommitIT extends BaseManualCommitTe
     public static final String TOPIC = "testAsyncCommitWithOffsetRepoTest";
 
     @BindToRegistry("stateRepository")
-    private static MemoryStateRepository stateRepository = new MemoryStateRepository();
+    private static final MemoryStateRepository stateRepository = new MemoryStateRepository();
 
     @AfterEach
     public void after() {

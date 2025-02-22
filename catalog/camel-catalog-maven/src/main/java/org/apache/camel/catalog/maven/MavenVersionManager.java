@@ -16,7 +16,6 @@
  */
 package org.apache.camel.catalog.maven;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -34,7 +33,10 @@ import org.apache.camel.tooling.maven.MavenArtifact;
 import org.apache.camel.tooling.maven.MavenDownloader;
 import org.apache.camel.tooling.maven.MavenDownloaderImpl;
 import org.apache.camel.tooling.maven.MavenResolutionException;
+import org.apache.maven.settings.Settings;
 import org.eclipse.aether.ConfigurationProperties;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +46,7 @@ import org.slf4j.LoggerFactory;
  * <p/>
  * This implementation uses Maven Resolver to download the Maven JARs.
  */
-public class MavenVersionManager implements VersionManager, Closeable {
+public class MavenVersionManager implements VersionManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MavenVersionManager.class);
 
@@ -65,14 +67,31 @@ public class MavenVersionManager implements VersionManager, Closeable {
 
     private boolean customized;
 
+    private MavenVersionManager(MavenDownloaderImpl downloader) {
+        this.downloader = downloader;
+        downloader.build();
+    }
+
     public MavenVersionManager() {
-        downloader = new MavenDownloaderImpl();
-        ((MavenDownloaderImpl) downloader).build();
+        this(new MavenDownloaderImpl());
+    }
+
+    public MavenVersionManager(RepositorySystem repositorySystem, RepositorySystemSession repositorySystemSession,
+                               Settings settings) {
+        this(new MavenDownloaderImpl(repositorySystem, repositorySystemSession, settings));
     }
 
     @Override
     public void setClassLoader(ClassLoader classLoader) {
         this.classLoader = classLoader;
+    }
+
+    @Override
+    public ClassLoader getClassLoader() {
+        if (classLoader != null) {
+            return classLoader;
+        }
+        return helperClassLoader;
     }
 
     /**
@@ -179,10 +198,6 @@ public class MavenVersionManager implements VersionManager, Closeable {
     /**
      * Resolves Maven artifact using passed coordinates and use downloaded artifact as one of the URLs in the
      * helperClassLoader, so further Catalog access may load resources from it.
-     *
-     * @param mavenDownloader
-     * @param gav
-     * @param useSnapshots
      */
     private void resolve(MavenDownloader mavenDownloader, String gav, boolean useSnapshots)
             throws MavenResolutionException, MalformedURLException {
@@ -245,9 +260,5 @@ public class MavenVersionManager implements VersionManager, Closeable {
         }
 
         return null;
-    }
-
-    @Override
-    public void close() {
     }
 }

@@ -42,7 +42,6 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.apache.camel.util.IOHelper;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -69,8 +68,8 @@ public class PrinterPrintTest extends CamelTestSupport {
         setupJavaPrint();
     }
 
-    @AfterEach
-    public void tearDown() throws Exception {
+    @Override
+    public void doPostTearDown() throws Exception {
         restoreJavaPrint();
     }
 
@@ -130,7 +129,7 @@ public class PrinterPrintTest extends CamelTestSupport {
         template.send("direct:start", new Processor() {
             public void process(Exchange exchange) throws Exception {
                 // Read from an input stream
-                InputStream is = IOHelper.buffered(new FileInputStream("src/test/resources/asf-logo.JPG"));
+                InputStream is = IOHelper.buffered(new FileInputStream("src/test/resources/asf-logo.jpg"));
 
                 byte buffer[] = new byte[is.available()];
                 int n = is.available();

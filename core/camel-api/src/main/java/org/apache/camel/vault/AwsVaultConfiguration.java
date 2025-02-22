@@ -41,6 +41,14 @@ public class AwsVaultConfiguration extends VaultConfiguration {
     private long refreshPeriod = 30000;
     @Metadata
     private String secrets;
+    @Metadata
+    private boolean useSqsNotification;
+    @Metadata
+    private String sqsQueueUrl;
+    @Metadata
+    private boolean overrideEndpoint;
+    @Metadata
+    private String uriEndpointOverride;
 
     public String getAccessKey() {
         return accessKey;
@@ -139,5 +147,51 @@ public class AwsVaultConfiguration extends VaultConfiguration {
      */
     public void setSecrets(String secrets) {
         this.secrets = secrets;
+    }
+
+    public boolean isUseSqsNotification() {
+        return useSqsNotification;
+    }
+
+    /**
+     * Whether to use AWS SQS for secrets updates notification, this will require setting up Eventbridge/Cloudtrail/SQS
+     * communication
+     */
+    public void setUseSqsNotification(boolean useSqsNotification) {
+        this.useSqsNotification = useSqsNotification;
+    }
+
+    public String getSqsQueueUrl() {
+        return sqsQueueUrl;
+    }
+
+    /**
+     * In case of usage of SQS notification this field will specified the Queue URL to use
+     */
+    public void setSqsQueueUrl(String sqsQueueUrl) {
+        this.sqsQueueUrl = sqsQueueUrl;
+    }
+
+    public boolean isOverrideEndpoint() {
+        return overrideEndpoint;
+    }
+
+    /**
+     * Set the need for overriding the endpoint. This option needs to be used in combination with the
+     * uriEndpointOverride option
+     */
+    public void setOverrideEndpoint(boolean overrideEndpoint) {
+        this.overrideEndpoint = overrideEndpoint;
+    }
+
+    public String getUriEndpointOverride() {
+        return uriEndpointOverride;
+    }
+
+    /**
+     * Set the overriding uri endpoint. This option needs to be used in combination with overrideEndpoint option
+     */
+    public void setUriEndpointOverride(String uriEndpointOverride) {
+        this.uriEndpointOverride = uriEndpointOverride;
     }
 }

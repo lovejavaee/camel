@@ -4,12 +4,12 @@
     "name": "dsl-modeline",
     "title": "DSL Modeline",
     "description": "Camel DSL Camel K modeline",
-    "deprecated": false,
+    "deprecated": true,
     "firstVersion": "3.16.0",
     "label": "dsl",
     "supportLevel": "Stable",
     "groupId": "org.apache.camel",
     "artifactId": "camel-dsl-modeline",
-    "version": "4.0.0-SNAPSHOT"
+    "version": "4.11.0-SNAPSHOT"
   }
 }

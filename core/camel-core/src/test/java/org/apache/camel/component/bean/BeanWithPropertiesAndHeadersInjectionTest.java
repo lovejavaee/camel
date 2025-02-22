@@ -25,7 +25,6 @@ import org.apache.camel.Headers;
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.processor.BeanRouteTest;
 import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -35,13 +34,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class BeanWithPropertiesAndHeadersInjectionTest extends ContextTestSupport {
-    private static final Logger LOG = LoggerFactory.getLogger(BeanRouteTest.class);
-    protected MyBean myBean = new MyBean();
+    private static final Logger LOG = LoggerFactory.getLogger(BeanWithPropertiesAndHeadersInjectionTest.class);
+    protected final MyBean myBean = new MyBean();
 
     @Test
-    public void testSendMessage() throws Exception {
+    public void testSendMessage() {
         template.send("direct:in", new Processor() {
-            public void process(Exchange exchange) throws Exception {
+            public void process(Exchange exchange) {
                 exchange.setProperty("p1", "abc");
                 exchange.setProperty("p2", 123);
 
@@ -64,8 +63,8 @@ public class BeanWithPropertiesAndHeadersInjectionTest extends ContextTestSuppor
     }
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry answer = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry answer = super.createCamelRegistry();
         answer.bind("myBean", myBean);
         return answer;
     }

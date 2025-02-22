@@ -28,10 +28,11 @@
   <!-- START SNIPPET: example -->
 
   <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
     <route errorHandlerRef="noErrorHandler">
       <from uri="direct:exception"/>
       <loadBalance>
-          <failover/>
+          <failoverLoadBalancer/>
           <to uri="direct:x"/>
           <to uri="direct:y"/>
           <to uri="direct:z"/>
@@ -40,9 +41,9 @@
     <route errorHandlerRef="noErrorHandler">
       <from uri="direct:customerException"/>
       <loadBalance>
-          <failover>
+          <failoverLoadBalancer>
               <exception>org.apache.camel.processor.FailOverLoadBalanceTest$MyException</exception>
-          </failover>
+          </failoverLoadBalancer>
           <to uri="direct:x"/>
           <to uri="direct:y"/>
           <to uri="direct:z"/>

@@ -17,7 +17,6 @@
 package org.apache.camel.component.log;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
 import org.apache.camel.ContextTestSupport;
@@ -27,7 +26,10 @@ import org.apache.camel.Producer;
 import org.apache.camel.support.processor.DefaultExchangeFormatter;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Logger formatter test.
@@ -106,6 +108,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         Producer producer = endpoint.createProducer();
         producer.start();
         producer.process(exchange);
+        assertMockEndpointsSatisfied();
         producer.stop();
     }
 
@@ -119,6 +122,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         Producer producer = endpoint.createProducer();
         producer.start();
         producer.process(exchange);
+        assertMockEndpointsSatisfied();
         producer.stop();
     }
 
@@ -132,6 +136,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         Producer producer = endpoint.createProducer();
         producer.start();
         producer.process(exchange);
+        assertMockEndpointsSatisfied();
         producer.stop();
     }
 
@@ -145,6 +150,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         Producer producer = endpoint.createProducer();
         producer.start();
         producer.process(exchange);
+        assertMockEndpointsSatisfied();
         producer.stop();
     }
 
@@ -158,6 +164,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         Producer producer = endpoint.createProducer();
         producer.start();
         producer.process(exchange);
+        assertMockEndpointsSatisfied();
         producer.stop();
     }
 
@@ -168,6 +175,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         assertFalse(formatter.isShowExchangeId());
         assertFalse(formatter.isShowProperties());
         assertFalse(formatter.isShowHeaders());
+        assertFalse(formatter.isShowVariables());
         assertTrue(formatter.isShowBodyType());
         assertTrue(formatter.isShowBody());
         assertFalse(formatter.isShowException());
@@ -194,7 +202,7 @@ public class DefaultExchangeFormatterTest extends ContextTestSupport {
         }
 
         @Override
-        public String get() throws InterruptedException, ExecutionException {
+        public String get() {
             return "foo";
         }
 

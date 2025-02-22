@@ -35,14 +35,14 @@ public class PersonProcessor implements Processor {
 
         BindingOperationInfo boi = (BindingOperationInfo) exchange.getProperty(BindingOperationInfo.class.getName());
         if (boi != null) {
-            LOG.info("boi.isUnwrapped" + boi.isUnwrapped());
+            LOG.info("boi.isUnwrapped {}", boi.isUnwrapped());
         }
 
         GetPerson person = exchange.getIn().getBody(GetPerson.class);
         String personId = person.getPersonId();
         GetPersonResponse response = new GetPersonResponse();
 
-        if (personId == null || personId.length() == 0) {
+        if (personId == null || personId.isEmpty()) {
             LOG.info("person id 123, so throwing exception");
             // Try to throw out the soap fault message
             org.apache.camel.non_wrapper.types.UnknownPersonFault personFault

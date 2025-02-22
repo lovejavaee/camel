@@ -39,10 +39,10 @@ public class ReduceStacksNeededDuringRoutingTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // context.setTracing(true);
 
                 from("seda:start")
@@ -54,7 +54,7 @@ public class ReduceStacksNeededDuringRoutingTest extends ContextTestSupport {
                                 throw new IllegalArgumentException("Forced to dump stacktrace");
                             } catch (Exception e) {
                                 e.fillInStackTrace();
-                                log.info("There are " + e.getStackTrace().length + " lines in the stacktrace");
+                                log.info("There are {} lines in the stacktrace", e.getStackTrace().length);
                                 log.error("Dump stacktrace to log", e);
                             }
                         })

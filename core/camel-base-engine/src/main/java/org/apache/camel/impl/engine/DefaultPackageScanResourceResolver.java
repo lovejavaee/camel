@@ -18,14 +18,10 @@ package org.apache.camel.impl.engine;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.net.URLDecoder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -45,12 +41,15 @@ import org.apache.camel.support.PluginHelper;
 import org.apache.camel.support.ResourceHelper;
 import org.apache.camel.util.AntPathMatcher;
 import org.apache.camel.util.IOHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Default implement of {@link org.apache.camel.spi.PackageScanResourceResolver}
  */
 public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
         implements PackageScanResourceResolver, NonManagedService, CamelContextAware {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultPackageScanResourceResolver.class);
 
     private static final AntPathMatcher PATH_MATCHER = AntPathMatcher.INSTANCE;
 
@@ -108,10 +107,16 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
             Set<Resource> resources,
             String subPattern) {
 
-        packageName = packageName.replace('.', '/');
+        // special for root package
+        if (".".equals(packageName)) {
+            packageName = "";
+        } else {
+            packageName = packageName.replace('.', '/');
+        }
+
         // If the URL is a jar, the URLClassloader.getResources() seems to require a trailing slash.
         // The trailing slash is harmless for other URLs
-        if (!packageName.endsWith("/")) {
+        if (!packageName.isEmpty() && !packageName.endsWith("/")) {
             packageName = packageName + "/";
         }
 
@@ -128,14 +133,8 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
             Set<Resource> resources,
             String subPattern) {
 
-        Enumeration<URL> urls;
-        try {
-            urls = getResources(classLoader, packageName);
-            if (!urls.hasMoreElements()) {
-                log.trace("No URLs returned by classloader");
-            }
-        } catch (IOException ioe) {
-            log.warn("Cannot read package: {}", packageName, ioe);
+        Enumeration<URL> urls = getUrls(packageName, classLoader);
+        if (urls == null) {
             return;
         }
 
@@ -143,55 +142,20 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
             URL url = null;
             try {
                 url = urls.nextElement();
-                log.trace("URL from classloader: {}", url);
+                LOG.trace("URL from classloader: {}", url);
 
                 url = customResourceLocator(url);
 
-                String urlPath = url.getFile();
-                urlPath = URLDecoder.decode(urlPath, "UTF-8");
-                if (log.isTraceEnabled()) {
-                    log.trace("Decoded urlPath: {} with protocol: {}", urlPath, url.getProtocol());
-                }
-
-                // If it's a file in a directory, trim the stupid file: spec
-                if (urlPath.startsWith("file:")) {
-                    // file path can be temporary folder which uses characters that the URLDecoder decodes wrong
-                    // for example + being decoded to something else (+ can be used in temp folders on Mac OS)
-                    // to remedy this then create new path without using the URLDecoder
-                    try {
-                        urlPath = new URI(url.getFile()).getPath();
-                    } catch (URISyntaxException e) {
-                        // fallback to use as it was given from the URLDecoder
-                        // this allows us to work on Windows if users have spaces in paths
-                    }
-
-                    if (urlPath.startsWith("file:")) {
-                        urlPath = urlPath.substring(5);
-                    }
-                }
-
-                // osgi bundles should be skipped
-                if (url.toString().startsWith("bundle:") || urlPath.startsWith("bundle:")) {
-                    log.trace("Skipping OSGi bundle: {}", url);
+                String urlPath = parseUrlPath(url);
+                if (urlPath == null) {
                     continue;
                 }
 
-                // bundle resource should be skipped
-                if (url.toString().startsWith("bundleresource:") || urlPath.startsWith("bundleresource:")) {
-                    log.trace("Skipping bundleresource: {}", url);
-                    continue;
-                }
-
-                // Else it's in a JAR, grab the path to the jar
-                if (urlPath.indexOf('!') > 0) {
-                    urlPath = urlPath.substring(0, urlPath.indexOf('!'));
-                }
-
-                log.trace("Scanning for resources in: {} matching pattern: {}", urlPath, subPattern);
+                LOG.trace("Scanning for resources in: {} matching pattern: {}", urlPath, subPattern);
 
                 File file = new File(urlPath);
                 if (file.isDirectory()) {
-                    log.trace("Loading from directory using file: {}", file);
+                    LOG.trace("Loading from directory using file: {}", file);
                     loadImplementationsInDirectory(subPattern, packageName, file, resources);
                 } else {
                     InputStream stream;
@@ -200,14 +164,14 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
                             || isAcceptableScheme(urlPath)) {
                         // load resources using http/https, sonicfs and other acceptable scheme
                         // sonic ESB requires to be loaded using a regular URLConnection
-                        log.trace("Loading from jar using url: {}", urlPath);
+                        LOG.trace("Loading from jar using url: {}", urlPath);
                         URL urlStream = new URL(urlPath);
                         URLConnection con = urlStream.openConnection();
                         // disable cache mainly to avoid jar file locking on Windows
                         con.setUseCaches(false);
                         stream = con.getInputStream();
                     } else {
-                        log.trace("Loading from jar using file: {}", file);
+                        LOG.trace("Loading from jar using file: {}", file);
                         stream = new FileInputStream(file);
                     }
 
@@ -215,7 +179,7 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
                 }
             } catch (IOException e) {
                 // use debug logging to avoid being to noisy in logs
-                log.debug("Cannot read entries in url: {}", url, e);
+                LOG.debug("Cannot read entries in url: {}", url, e);
             }
         }
     }
@@ -241,7 +205,7 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
         for (String name : entries) {
             String shortName = name.substring(packageName.length());
             boolean match = PATH_MATCHER.match(subPattern, shortName);
-            log.debug("Found resource: {} matching pattern: {} -> {}", shortName, subPattern, match);
+            LOG.debug("Found resource: {} matching pattern: {} -> {}", shortName, subPattern, match);
             if (match) {
                 final ResourceLoader loader = PluginHelper.getResourceLoader(getCamelContext());
 
@@ -263,21 +227,19 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
 
             JarEntry entry;
             while ((entry = jarStream.getNextJarEntry()) != null) {
-                String name = entry.getName();
-                if (name != null) {
-                    name = name.trim();
-                    if (!entry.isDirectory() && !name.endsWith(".class")) {
-                        // name is FQN so it must start with package name
-                        if (name.startsWith(packageName)) {
-                            entries.add(name);
-                        }
+                final String name = entry.getName().trim();
+                if (!entry.isDirectory() && !name.endsWith(".class")) {
+                    // name is FQN so it must start with package name
+                    if (name.startsWith(packageName)) {
+                        entries.add(name);
                     }
                 }
+
             }
         } catch (IOException ioe) {
-            log.warn("Cannot search jar file '" + urlPath + " due to an IOException: " + ioe.getMessage(), ioe);
+            LOG.warn("Cannot search jar file '{} due to an IOException: {}", urlPath, ioe.getMessage(), ioe);
         } finally {
-            IOHelper.close(jarStream, urlPath, log);
+            IOHelper.close(jarStream, urlPath, LOG);
         }
 
         return entries;
@@ -298,8 +260,7 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
             String subPattern,
             String parent,
             File location,
-            Set<Resource> resources)
-            throws FileNotFoundException {
+            Set<Resource> resources) {
         File[] files = location.listFiles();
         if (files == null || files.length == 0) {
             return;
@@ -317,7 +278,7 @@ public class DefaultPackageScanResourceResolver extends BasePackageScanResolver
                 loadImplementationsInDirectory(subPattern, packageOrClass, file, resources);
             } else if (file.isFile() && file.exists() && !name.endsWith(".class")) {
                 boolean match = PATH_MATCHER.match(subPattern, name);
-                log.debug("Found resource: {} matching pattern: {} -> {}", name, subPattern, match);
+                LOG.debug("Found resource: {} matching pattern: {} -> {}", name, subPattern, match);
                 if (match) {
                     final ResourceLoader loader = PluginHelper.getResourceLoader(getCamelContext());
 

@@ -26,10 +26,10 @@ public final class Strings {
     }
 
     /**
-     * Returns true if the given text is null or empty string or has <tt>null</tt> as the value
+     * Returns true if the given text is null or empty string or has <var>null</var> as the value
      */
     public static boolean isNullOrEmpty(String text) {
-        return text == null || text.length() == 0 || "null".equals(text);
+        return text == null || text.isEmpty() || "null".equals(text);
     }
 
     public static String cutLastZeroDigit(String version) {
@@ -52,7 +52,14 @@ public final class Strings {
     public static String wrapCamelCaseWords(String option, int watermark, String lineSep) {
         String text = option.replaceAll("(?=[A-Z][a-z])", " ");
         text = wrapWords(text, "", lineSep, watermark, false);
-        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
+        text = Character.toUpperCase(text.charAt(0)) + text.substring(1);
+        if (text.startsWith(lineSep)) {
+            text = text.substring(lineSep.length());
+        }
+        if (text.endsWith(lineSep)) {
+            text = text.substring(0, text.length() - lineSep.length());
+        }
+        return text;
     }
 
     /**

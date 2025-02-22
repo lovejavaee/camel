@@ -97,12 +97,21 @@ public abstract class RouteConfigurationBuilder extends RouteBuilder implements 
         }
     }
 
+    @Override
+    protected void initializeCamelContext(CamelContext camelContext) {
+        super.initializeCamelContext(camelContext);
+        getRouteConfigurationCollection().setCamelContext(camelContext);
+    }
+
     protected void populateRoutesConfiguration() throws Exception {
         CamelContext camelContext = getContext();
         if (camelContext == null) {
             throw new IllegalArgumentException("CamelContext has not been injected!");
         }
         getRouteConfigurationCollection().setCamelContext(camelContext);
+        if (getResource() != null) {
+            getRouteConfigurationCollection().setResource(getResource());
+        }
         camelContext.getCamelContextExtension().getContextPlugin(Model.class)
                 .addRouteConfigurations(getRouteConfigurationCollection().getRouteConfigurations());
     }

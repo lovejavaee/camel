@@ -16,37 +16,29 @@
  */
 package org.apache.camel.test.junit5.patterns;
 
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.model.ProcessorDefinition;
 import org.apache.camel.test.junit5.CamelTestSupport;
+import org.apache.camel.test.junit5.DebugBreakpoint;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class DebugNoLazyTypeConverterTest extends CamelTestSupport {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DebugNoLazyTypeConverterTest.class);
-
-    // START SNIPPET: e1
-    @Override
-    public boolean isUseDebugger() {
-        // must enable debugger
-        return true;
-    }
+    private TestDebugBreakpoint testDebugBreakpoint;
 
     @Override
-    protected void debugBefore(
-            Exchange exchange, Processor processor, ProcessorDefinition<?> definition, String id, String shortName) {
-        // this method is invoked before we are about to enter the given
-        // processor
-        // from your Java editor you can just add a breakpoint in the code line
-        // below
-        LOG.info("Before " + definition + " with body " + exchange.getIn().getBody());
+    public void doPreSetup() throws Exception {
+        super.doPreSetup();
+
+        camelContextConfiguration()
+                .withBreakpoint(createBreakpoint());
     }
-    // END SNIPPET: e1
+
+    protected DebugBreakpoint createBreakpoint() {
+        testDebugBreakpoint = new TestDebugBreakpoint();
+        return testDebugBreakpoint;
+    }
 
     @Test
     public void testDebugger() throws Exception {
@@ -59,6 +51,9 @@ public class DebugNoLazyTypeConverterTest extends CamelTestSupport {
 
         // assert mocks
         MockEndpoint.assertIsSatisfied(context);
+
+        Assertions.assertTrue(testDebugBreakpoint.isDebugAfterCalled());
+        Assertions.assertTrue(testDebugBreakpoint.isDebugBeforeCalled());
     }
 
     @Test
@@ -73,6 +68,9 @@ public class DebugNoLazyTypeConverterTest extends CamelTestSupport {
 
         // assert mocks
         MockEndpoint.assertIsSatisfied(context);
+
+        Assertions.assertTrue(testDebugBreakpoint.isDebugAfterCalled());
+        Assertions.assertTrue(testDebugBreakpoint.isDebugBeforeCalled());
     }
 
     // START SNIPPET: e2

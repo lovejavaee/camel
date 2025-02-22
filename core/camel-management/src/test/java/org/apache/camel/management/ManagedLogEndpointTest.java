@@ -38,7 +38,7 @@ public class ManagedLogEndpointTest extends ManagementTestSupport {
         getMockEndpoint("mock:a").expectedMessageCount(10);
 
         for (int i = 0; i < 10; i++) {
-            template.sendBody("direct:start", "" + i);
+            template.sendBody("direct:start", Integer.toString(i));
             Thread.sleep(100);
         }
 
@@ -89,10 +89,10 @@ public class ManagedLogEndpointTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").routeId("foo")
                         .to("log:foo?groupSize=10").id("log-foo")
                         .to("mock:a");

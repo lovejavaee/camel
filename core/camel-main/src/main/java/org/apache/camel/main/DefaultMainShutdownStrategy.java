@@ -38,7 +38,7 @@ public class DefaultMainShutdownStrategy extends SimpleMainShutdownStrategy {
     private final AtomicBoolean hangupIntercepted;
     private final BaseMainSupport main;
 
-    private volatile boolean hangupInterceptorEnabled;
+    private volatile boolean hangupInterceptorEnabled = true;
 
     public DefaultMainShutdownStrategy(BaseMainSupport main) {
         this.main = main;
@@ -60,6 +60,12 @@ public class DefaultMainShutdownStrategy extends SimpleMainShutdownStrategy {
     }
 
     @Override
+    public void init() {
+        installHangupInterceptor();
+        super.init();
+    }
+
+    @Override
     public void await() throws InterruptedException {
         installHangupInterceptor();
         super.await();
@@ -72,7 +78,15 @@ public class DefaultMainShutdownStrategy extends SimpleMainShutdownStrategy {
     }
 
     private void handleHangup() {
-        LOG.debug("Received hangup signal, stopping the main instance.");
+        // only hangup if we are not yet shutting down
+        if (isRunAllowed()) {
+            doHandleHangup();
+        }
+    }
+
+    private void doHandleHangup() {
+        LOG.info("JVM shutdown hook triggered by SIGTERM (PID {}). Shutting down {} {}", getPid(), getAppName(),
+                getAppVersion());
         // and shutdown listener to allow camel context to graceful shutdown if JVM shutdown hook is triggered
         // as otherwise the JVM terminates before Camel is graceful shutdown
         addShutdownListener(() -> {
@@ -111,7 +125,7 @@ public class DefaultMainShutdownStrategy extends SimpleMainShutdownStrategy {
                         // wait 1 sec and loop and log activity, so we can see we are waiting
                         done = latch.await(1000, TimeUnit.MILLISECONDS);
                     } catch (InterruptedException e) {
-                        // ignore
+                        Thread.currentThread().interrupt();
                     }
                 }
                 boolean success = done || main.getCamelContext().isStopped();
@@ -121,9 +135,26 @@ public class DefaultMainShutdownStrategy extends SimpleMainShutdownStrategy {
                 }
                 tracker.close();
             }
-            LOG.trace("OnShutdown complete");
+            LOG.info("{} {} is shutdown", getAppName(), getAppVersion());
         });
+
         shutdown();
+    }
+
+    private String getAppName() {
+        String app = "Apache Camel";
+        if (main instanceof MainSupport ms) {
+            app = ms.getAppName();
+        }
+        return app;
+    }
+
+    private String getAppVersion() {
+        return main.helper.getVersion();
+    }
+
+    private static String getPid() {
+        return String.valueOf(ProcessHandle.current().pid());
     }
 
     private void installHangupInterceptor() {

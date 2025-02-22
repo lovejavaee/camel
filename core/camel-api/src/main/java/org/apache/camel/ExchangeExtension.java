@@ -29,6 +29,7 @@ import org.apache.camel.spi.UnitOfWork;
  * Camel.
  */
 public interface ExchangeExtension {
+
     /**
      * If there is an existing inbound message of the given type then return it as-is, otherwise return null.
      *
@@ -38,10 +39,20 @@ public interface ExchangeExtension {
     <T> T getInOrNull(Class<T> type);
 
     /**
+     * Prepares the exchange by setting IN as OUT
+     */
+    void prepareInToOut();
+
+    /**
      * Sets the endpoint which originated this message exchange. This method should typically only be called by
      * {@link Endpoint} implementations
      */
     void setFromEndpoint(Endpoint fromEndpoint);
+
+    /**
+     * Returns the endpoint which originated this message exchange. See {@link Exchange#getFromEndpoint()} for details.
+     */
+    Endpoint getFromEndpoint();
 
     /**
      * Sets the route id which originated this message exchange. This method should typically only be called by the
@@ -213,6 +224,11 @@ public interface ExchangeExtension {
     void setSafeCopyProperty(String key, SafeCopyProperty value);
 
     /**
+     * Copy the safe copy properties from this exchange to the target exchange
+     */
+    void copySafeCopyPropertiesTo(ExchangeExtension target);
+
+    /**
      * Gets the internal properties from this exchange. The known set of internal keys is defined in
      * {@link ExchangePropertyKey}.
      * <p/>
@@ -241,7 +257,26 @@ public interface ExchangeExtension {
      */
     void setDefaultConsumerCallback(AsyncCallback callback);
 
+    /**
+     * Returns whether the exchange has been failure handed
+     *
+     * @return true if failure handled or false otherwise
+     */
     boolean isFailureHandled();
 
+    /**
+     * Sets whether the exchange has been failure handled
+     *
+     * @param failureHandled true if failure handled or false otherwise
+     */
     void setFailureHandled(boolean failureHandled);
+
+    /**
+     * Create a new exchange copied from this, with the context set to the given context
+     *
+     * @param  context the context associated with the new exchange
+     * @return         A new Exchange instance
+     */
+    Exchange createCopyWithProperties(CamelContext context);
+
 }

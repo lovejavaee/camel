@@ -22,11 +22,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
 import org.apache.camel.util.function.ThrowingFunction;
 
 final class BackOffTimerTask implements BackOffTimer.Task, Runnable {
+    private final Lock lock = new ReentrantLock();
     private final BackOff backOff;
     private final ScheduledExecutorService scheduler;
     private final ThrowingFunction<BackOffTimer.Task, Boolean, Exception> function;
@@ -129,8 +132,11 @@ final class BackOffTimerTask implements BackOffTimer.Task, Runnable {
 
     @Override
     public void whenComplete(BiConsumer<BackOffTimer.Task, Throwable> whenCompleted) {
-        synchronized (this.consumers) {
+        lock.lock();
+        try {
             consumers.add(whenCompleted);
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -142,7 +148,7 @@ final class BackOffTimerTask implements BackOffTimer.Task, Runnable {
     public void run() {
         if (status == Status.Active) {
             try {
-                lastAttemptTime = System.currentTimeMillis();
+                lastAttemptTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
                 if (firstAttemptTime < 0) {
                     firstAttemptTime = lastAttemptTime;
                 }
@@ -186,8 +192,11 @@ final class BackOffTimerTask implements BackOffTimer.Task, Runnable {
     }
 
     void complete(Throwable throwable) {
-        synchronized (this.consumers) {
+        lock.lock();
+        try {
             consumers.forEach(c -> c.accept(this, throwable));
+        } finally {
+            lock.unlock();
         }
     }
 

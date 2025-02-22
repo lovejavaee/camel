@@ -23,6 +23,8 @@ import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
@@ -40,15 +42,18 @@ import org.slf4j.LoggerFactory;
              title = "Kudu", syntax = "kudu:host:port/tableName",
              category = { Category.DATABASE, Category.IOT, Category.CLOUD }, producerOnly = true,
              headersClass = KuduConstants.class)
-public class KuduEndpoint extends DefaultEndpoint {
+public class KuduEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     private static final Logger LOG = LoggerFactory.getLogger(KuduEndpoint.class);
     private KuduClient kuduClient;
+    private boolean userManagedClient;
 
     @UriPath(name = "host", displayName = "Host", label = "common", description = "Host of the server to connect to")
+    @Metadata(required = true)
     private String host;
 
     @UriPath(name = "port", displayName = "Port", label = "common", description = "Port of the server to connect to")
+    @Metadata(required = true)
     private String port;
 
     @UriParam(description = "Operation to perform")
@@ -72,6 +77,16 @@ public class KuduEndpoint extends DefaultEndpoint {
     }
 
     @Override
+    public String getServiceUrl() {
+        return host + ":" + port;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "kudu";
+    }
+
+    @Override
     protected void doStart() throws Exception {
         LOG.trace("Connection: {}, {}", getHost(), getPort());
 
@@ -85,11 +100,17 @@ public class KuduEndpoint extends DefaultEndpoint {
 
     @Override
     protected void doStop() throws Exception {
-        try {
-            LOG.info("doStop()");
-            getKuduClient().shutdown();
-        } catch (Exception e) {
-            LOG.error("Unable to shutdown kudu client", e);
+        // Only shut down clients created by this endpoint
+        if (!isUserManagedClient()) {
+            KuduClient client = getKuduClient();
+            if (client != null) {
+                LOG.debug("Shutting down kudu client");
+                try {
+                    client.shutdown();
+                } catch (Exception e) {
+                    LOG.error("Unable to shutdown kudu client", e);
+                }
+            }
         }
 
         super.doStop();
@@ -158,5 +179,13 @@ public class KuduEndpoint extends DefaultEndpoint {
      */
     public void setOperation(KuduOperations operation) {
         this.operation = operation;
+    }
+
+    public boolean isUserManagedClient() {
+        return userManagedClient;
+    }
+
+    public void setUserManagedClient(boolean userManagedClient) {
+        this.userManagedClient = userManagedClient;
     }
 }

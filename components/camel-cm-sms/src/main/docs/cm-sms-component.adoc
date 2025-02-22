@@ -5,6 +5,7 @@
 :description: Send SMS messages via CM SMS Gateway.
 :since: 2.18
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: cm-sms
@@ -16,9 +17,9 @@
 *Camel-Cm-Sms* is an http://camel.apache.org/[Apache Camel] component 
 for the https://www.cmtelecom.com[CM SMS Gateway]
 
-It allows to integrate https://dashboard.onlinesmsgateway.com/docs[CM SMS API] in an application as a camel component. 
+It allows integrating https://dashboard.onlinesmsgateway.com/docs[CM SMS API] in an application as a camel component.
 
-You must have a valid account.  More information is available at https://www.cmtelecom.com/support[CM Telecom].
+You must have a valid account. More information is available at https://www.cmtelecom.com/support[CM Telecom].
 
 
 // component-configure options: START
@@ -35,7 +36,7 @@ include::partial$component-endpoint-options.adoc[]
 // endpoint options: END
 
 
-== Sample
+== Example
 
 ----
 cm-sms://sgw01.cm.nl/gateway.ashx?defaultFrom=DefaultSender&defaultMaxNumberOfParts=8&productToken=xxxxx

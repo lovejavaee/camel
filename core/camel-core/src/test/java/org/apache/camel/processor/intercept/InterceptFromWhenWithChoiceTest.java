@@ -59,11 +59,11 @@ public class InterceptFromWhenWithChoiceTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
-                interceptFrom().when(simple("${body} contains 'Goofy'")).choice().when(body().contains("Hello"))
+            public void configure() {
+                interceptFrom().onWhen(simple("${body} contains 'Goofy'")).choice().when(body().contains("Hello"))
                         .to("mock:hello").otherwise().to("log:foo").to("mock:goofy").end()
                         .stop();
 

@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-cxf-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-cxf-common</artifactId>
@@ -83,7 +83,6 @@
     </dependencies>
 
     <build>
-        <defaultGoal>install</defaultGoal>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -112,16 +111,6 @@
                     </excludes>
                 </configuration>
             </plugin>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <childDelegation>false</childDelegation>
-                    <forkedProcessTimeoutInSeconds>300</forkedProcessTimeoutInSeconds>
-                    <reportFormat>brief</reportFormat>
-                    <useFile>false</useFile>
-                    <runOrder>alphabetical</runOrder>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
 
@@ -145,22 +134,6 @@
                     <version>${jaxp-ri-version}</version>
                 </dependency>
             </dependencies>
-        </profile>
-        <profile>
-            <id>jdk17-build</id>
-            <activation>
-                <jdk>[17,)</jdk>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration>
-                            <argLine>--add-opens java.xml/com.sun.org.apache.xerces.internal.dom=ALL-UNNAMED --add-opens java.xml/com.sun.org.apache.xerces.internal.jaxp=ALL-UNNAMED --add-opens java.xml/com.sun.org.apache.xerces.internal.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
-                        </configuration>
-                    </plugin>
-                </plugins>
-           </build>
         </profile>
     </profiles>
 </project>

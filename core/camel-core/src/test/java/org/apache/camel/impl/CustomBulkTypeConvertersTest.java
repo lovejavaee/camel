@@ -22,6 +22,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.TypeConversionException;
 import org.apache.camel.TypeConverter;
 import org.apache.camel.spi.BulkTypeConverters;
+import org.apache.camel.spi.TypeConvertible;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,12 +33,18 @@ public class CustomBulkTypeConvertersTest extends ContextTestSupport {
     @Override
     protected CamelContext createCamelContext() throws Exception {
         CamelContext context = super.createCamelContext();
-        context.getTypeConverterRegistry().addBulkTypeConverters(new CustomBulkTypeConverters());
+
+        final CustomBulkTypeConverters customBulkTypeConverters = new CustomBulkTypeConverters();
+        context.getTypeConverterRegistry().addBulkTypeConverters(customBulkTypeConverters);
+        context.getTypeConverterRegistry().addConverter(new TypeConvertible<>(String.class, MyOrder.class),
+                customBulkTypeConverters);
+        context.getTypeConverterRegistry().addConverter(new TypeConvertible<>(Integer.class, MyOrder.class),
+                customBulkTypeConverters);
         return context;
     }
 
     @Test
-    public void testCoreTypeConverter() throws Exception {
+    public void testCoreTypeConverter() {
         MyOrder order = context.getTypeConverter().convertTo(MyOrder.class, "123");
         assertEquals(123, order.getId());
 

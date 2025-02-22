@@ -16,8 +16,6 @@
  */
 package org.apache.camel.component.master;
 
-import java.util.Optional;
-
 import org.apache.camel.Consumer;
 import org.apache.camel.Endpoint;
 import org.apache.camel.Processor;
@@ -35,6 +33,8 @@ import org.apache.camel.resume.ResumeStrategy;
 import org.apache.camel.support.DefaultConsumer;
 import org.apache.camel.support.resume.AdapterHelper;
 import org.apache.camel.support.service.ServiceHelper;
+import org.apache.camel.util.backoff.BackOff;
+import org.apache.camel.util.backoff.BackOffTimer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,8 +42,8 @@ import org.slf4j.LoggerFactory;
  * A consumer which is only really active when the {@link CamelClusterView} has the leadership.
  */
 @ManagedResource(description = "Managed Master Consumer")
-public class MasterConsumer extends DefaultConsumer implements ResumeAware {
-    private static final transient Logger LOG = LoggerFactory.getLogger(MasterConsumer.class);
+public class MasterConsumer extends DefaultConsumer implements ResumeAware<ResumeStrategy> {
+    private static final Logger LOG = LoggerFactory.getLogger(MasterConsumer.class);
 
     private final CamelClusterService clusterService;
     private final MasterEndpoint masterEndpoint;
@@ -126,42 +126,79 @@ public class MasterConsumer extends DefaultConsumer implements ResumeAware {
     // Helpers
     // **************************************
 
-    private synchronized void onLeadershipTaken() throws Exception {
-        if (!isRunAllowed()) {
-            return;
+    private void onLeadershipTaken() throws Exception {
+        lock.lock();
+        try {
+            if (!isRunAllowed()) {
+                return;
+            }
+
+            if (delegatedConsumer != null) {
+                return;
+            }
+
+            // start consumer using background task up till X attempts
+            long delay = masterEndpoint.getComponent().getBackOffDelay();
+            long max = masterEndpoint.getComponent().getBackOffMaxAttempts();
+
+            BackOffTimer timer = new BackOffTimer(masterEndpoint.getComponent().getBackOffThreadPool());
+            timer.schedule(BackOff.builder().delay(delay).maxAttempts(max).build(), task -> {
+                LOG.info("Leadership taken. Attempt #{} to start consumer: {}", task.getCurrentAttempts(),
+                        delegatedEndpoint);
+
+                Exception cause = null;
+                try {
+                    if (delegatedConsumer == null) {
+                        delegatedConsumer = delegatedEndpoint.createConsumer(processor);
+                        if (delegatedConsumer instanceof StartupListener) {
+                            getEndpoint().getCamelContext().addStartupListener((StartupListener) delegatedConsumer);
+                        }
+                        if (delegatedConsumer instanceof ResumeAware resumeAwareConsumer && resumeStrategy != null) {
+                            LOG.debug("Setting up the resume adapter for the resume strategy in consumer");
+                            ResumeAdapter resumeAdapter
+                                    = AdapterHelper.eval(clusterService.getCamelContext(), resumeAwareConsumer,
+                                            resumeStrategy);
+                            resumeStrategy.setAdapter(resumeAdapter);
+
+                            LOG.debug("Setting up the resume strategy for consumer");
+                            resumeAwareConsumer.setResumeStrategy(resumeStrategy);
+                        }
+                    }
+                    ServiceHelper.startService(delegatedEndpoint, delegatedConsumer);
+
+                } catch (Exception e) {
+                    cause = e;
+                }
+
+                if (cause != null) {
+                    String message = "Leadership taken. Attempt #" + task.getCurrentAttempts()
+                                     + " failed to start consumer due to: " + cause.getMessage();
+                    getExceptionHandler().handleException(message, cause);
+                    return true; // retry
+                }
+
+                LOG.info("Leadership taken. Attempt #" + task.getCurrentAttempts() + " success. Consumer started: {}",
+                        delegatedEndpoint);
+                return false; // no more attempts
+            });
+        } finally {
+            lock.unlock();
         }
-
-        if (delegatedConsumer != null) {
-            return;
-        }
-
-        delegatedConsumer = delegatedEndpoint.createConsumer(processor);
-        if (delegatedConsumer instanceof StartupListener) {
-            getEndpoint().getCamelContext().addStartupListener((StartupListener) delegatedConsumer);
-        }
-
-        if (delegatedConsumer instanceof ResumeAware && resumeStrategy != null) {
-            final ResumeAware resumeAwareConsumer = (ResumeAware) delegatedConsumer;
-            LOG.info("Setting up the resume adapter for the resume strategy in the delegated consumer");
-            ResumeAdapter resumeAdapter
-                    = AdapterHelper.eval(clusterService.getCamelContext(), resumeAwareConsumer, resumeStrategy);
-            resumeStrategy.setAdapter(resumeAdapter);
-
-            LOG.info("Setting up the resume strategy for the delegated consumer");
-            resumeAwareConsumer.setResumeStrategy(resumeStrategy);
-        }
-
-        ServiceHelper.startService(delegatedEndpoint, delegatedConsumer);
-
-        LOG.info("Leadership taken. Consumer started: {}", delegatedEndpoint);
     }
 
-    private synchronized void onLeadershipLost() {
-        ServiceHelper.stopAndShutdownServices(delegatedConsumer, delegatedEndpoint);
-
-        delegatedConsumer = null;
-
-        LOG.info("Leadership lost. Consumer stopped: {}", delegatedEndpoint);
+    private void onLeadershipLost() {
+        lock.lock();
+        try {
+            LOG.debug("Leadership lost. Stopping consumer: {}", delegatedEndpoint);
+            try {
+                ServiceHelper.stopAndShutdownServices(delegatedConsumer, delegatedEndpoint);
+            } finally {
+                delegatedConsumer = null;
+            }
+            LOG.info("Leadership lost. Consumer stopped: {}", delegatedEndpoint);
+        } finally {
+            lock.unlock();
+        }
     }
 
     // **************************************
@@ -170,7 +207,7 @@ public class MasterConsumer extends DefaultConsumer implements ResumeAware {
 
     private final class LeadershipListener implements CamelClusterEventListener.Leadership {
         @Override
-        public void leadershipChanged(CamelClusterView view, Optional<CamelClusterMember> leader) {
+        public void leadershipChanged(CamelClusterView view, CamelClusterMember leader) {
             if (!isRunAllowed()) {
                 return;
             }

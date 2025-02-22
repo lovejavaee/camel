@@ -25,6 +25,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.spi.EndpointUriFactory;
 import org.apache.camel.spi.SendDynamicAware;
 import org.apache.camel.support.service.ServiceSupport;
+import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.URISupport;
 
 /**
@@ -84,12 +85,18 @@ public abstract class SendDynamicAwareSupport extends ServiceSupport implements 
                 // parameters using raw syntax: RAW(value)
                 // should have the token removed, so its only the value we have in parameters, as we are about to create
                 // an endpoint and want to have the parameter values without the RAW tokens
-                URISupport.resolveRawParameterValues(map);
+                RawParameterHelper.resolveRawParameterValues(exchange.getContext(), map);
             }
             // okay so only add the known properties as they are the non lenient properties
             properties = new LinkedHashMap<>();
             map.forEach((k, v) -> {
-                if (knownProperties.contains(k)) {
+                boolean accept = knownProperties.contains(k);
+                // we should put the key from a multi-value (prefix) in the
+                // properties too, or the property may be lost
+                if (!accept && !knownPrefixes.isEmpty()) {
+                    accept = knownPrefixes.stream().anyMatch(k::startsWith);
+                }
+                if (accept) {
                     properties.put(k, v);
                 }
             });
@@ -109,7 +116,7 @@ public abstract class SendDynamicAwareSupport extends ServiceSupport implements 
                 // parameters using raw syntax: RAW(value)
                 // should have the token removed, so its only the value we have in parameters, as we are about to create
                 // an endpoint and want to have the parameter values without the RAW tokens
-                URISupport.resolveRawParameterValues(map);
+                RawParameterHelper.resolveRawParameterValues(exchange.getContext(), map);
             }
             properties = new LinkedHashMap<>();
             map.forEach((k, v) -> {
@@ -130,15 +137,8 @@ public abstract class SendDynamicAwareSupport extends ServiceSupport implements 
     }
 
     public String asEndpointUri(Exchange exchange, String uri, Map<String, Object> properties) throws Exception {
-        String answer;
         String query = URISupport.createQueryString(properties, false);
-        int pos = uri.indexOf('?');
-        if (pos != -1) {
-            answer = uri.substring(0, pos) + "?" + query;
-        } else {
-            answer = uri + "?" + query;
-        }
-        return answer;
+        return StringHelper.before(uri, "?", uri) + "?" + query;
     }
 
 }

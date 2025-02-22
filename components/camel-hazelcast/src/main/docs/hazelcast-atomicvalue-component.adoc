@@ -5,6 +5,7 @@
 :description: Increment, decrement, set, etc. Hazelcast atomic number (a grid wide number).
 :since: 2.7
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :group: Hazelcast
@@ -48,10 +49,13 @@ The operations for this producer are:
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-=== Sample for *set*:
+=== Example for *set*:
 
-Java DSL:
+[tabs]
+====
 
+Java DSL::
++
 [source,java]
 -----------------------------------------------------------------------------------------
 from("direct:set")
@@ -59,8 +63,8 @@ from("direct:set")
 .toF("hazelcast-%sfoo", HazelcastConstants.ATOMICNUMBER_PREFIX);
 -----------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -72,13 +76,18 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
+====
+
 Provide the value to set inside the message body (here the value is 10):
 `template.sendBody("direct:set", 10);`
 
-=== Sample for *get*:
+=== Example for *get*:
 
-Java DSL:
+[tabs]
+====
 
+Java DSL::
++
 [source,java]
 ------------------------------------------------------------------------------------
 from("direct:get")
@@ -86,8 +95,8 @@ from("direct:get")
 .toF("hazelcast-%sfoo", HazelcastConstants.ATOMICNUMBER_PREFIX);
 ------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -99,12 +108,18 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
+====
+
 You can get the number with
 `long body = template.requestBody("direct:get", null, Long.class);`.
 
-=== Sample for *increment*:
+=== Example for *increment*:
 
-Java DSL:
+[tabs]
+====
+
+Java DSL::
++
 
 [source,java]
 ------------------------------------------------------------------------------------------
@@ -113,8 +128,8 @@ from("direct:increment")
 .toF("hazelcast-%sfoo", HazelcastConstants.ATOMICNUMBER_PREFIX);
 ------------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -126,12 +141,18 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
+====
+
 The actual value (after increment) will be provided inside the message
 body.
 
-=== Sample for *decrement*:
+=== Example for *decrement*:
 
-Java DSL:
+[tabs]
+====
+
+Java DSL::
++
 
 [source,java]
 ------------------------------------------------------------------------------------------
@@ -140,8 +161,8 @@ from("direct:decrement")
 .toF("hazelcast-%sfoo", HazelcastConstants.ATOMICNUMBER_PREFIX);
 ------------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -153,12 +174,18 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
+====
+
 The actual value (after decrement) will be provided inside the message
 body.
 
-=== Sample for *destroy*
+=== Example for *destroy*
 
-Java DSL:
+[tabs]
+====
+
+Java DSL::
++
 
 [source,java]
 ----------------------------------------------------------------------------------------
@@ -167,8 +194,8 @@ from("direct:destroy")
 .toF("hazelcast-%sfoo", HazelcastConstants.ATOMICNUMBER_PREFIX);
 ----------------------------------------------------------------------------------------
 
-Spring DSL:
-
+Spring XML::
++
 [source,xml]
 -----------------------------------------------------------------------------------------------
 <route>
@@ -180,5 +207,6 @@ Spring DSL:
 </route>
 -----------------------------------------------------------------------------------------------
 
+====
 
 include::spring-boot:partial$starter.adoc[]

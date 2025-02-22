@@ -16,6 +16,7 @@
  */
 package org.apache.camel.processor;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.camel.AsyncCallback;
@@ -27,12 +28,14 @@ import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePattern;
 import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Traceable;
+import org.apache.camel.spi.HeadersMapFactory;
 import org.apache.camel.spi.IdAware;
 import org.apache.camel.spi.ProducerCache;
 import org.apache.camel.spi.RouteIdAware;
 import org.apache.camel.support.AsyncProcessorSupport;
 import org.apache.camel.support.EndpointHelper;
 import org.apache.camel.support.EventHelper;
+import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.cache.DefaultProducerCache;
 import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.ObjectHelper;
@@ -55,7 +58,10 @@ public class SendProcessor extends AsyncProcessorSupport implements Traceable, E
     protected final ExchangePattern pattern;
     protected ProducerCache producerCache;
     protected AsyncProducer producer;
-    protected Endpoint destination;
+    protected HeadersMapFactory headersMapFactory;
+    protected final Endpoint destination;
+    protected String variableSend;
+    protected String variableReceive;
     protected ExchangePattern destinationExchangePattern;
     protected String id;
     protected String routeId;
@@ -125,80 +131,151 @@ public class SendProcessor extends AsyncProcessorSupport implements Traceable, E
         // if you want to permanently to change the MEP then use .setExchangePattern in the DSL
         final ExchangePattern existingPattern = exchange.getPattern();
 
+        // when using variables then we need to remember original data
+        Object body = null;
+        Map<String, Object> headers = null;
+        if (variableSend != null || variableReceive != null) {
+            try {
+                body = exchange.getMessage().getBody();
+                // do a defensive copy of the headers
+                headers = headersMapFactory.newMap(exchange.getMessage().getHeaders());
+            } catch (Exception throwable) {
+                exchange.setException(throwable);
+                callback.done(true);
+                return true;
+            }
+        }
+        final Object originalBody = body;
+        final Map<String, Object> originalHeaders = headers;
+
         if (extendedStatistics) {
             counter.incrementAndGet();
         }
 
         // if we have a producer then use that as its optimized
         if (producer != null) {
-            final Exchange target = exchange;
-            // we can send with a different MEP pattern
-            if (destinationExchangePattern != null || pattern != null) {
-                target.setPattern(destinationExchangePattern != null ? destinationExchangePattern : pattern);
-            }
-            // set property which endpoint we send to
-            exchange.setProperty(ExchangePropertyKey.TO_ENDPOINT, destination.getEndpointUri());
-
-            final boolean sending = camelContext.getCamelContextExtension().isEventNotificationApplicable()
-                    && EventHelper.notifyExchangeSending(exchange.getContext(), target, destination);
-            // record timing for sending the exchange using the producer
-            StopWatch watch;
-            if (sending) {
-                watch = new StopWatch();
-            } else {
-                watch = null;
-            }
-
-            // optimize to only create a new callback if really needed, otherwise we can use the provided callback as-is
-            AsyncCallback ac = callback;
-            boolean newCallback = watch != null || existingPattern != target.getPattern();
-            if (newCallback) {
-                ac = doneSync -> {
-                    try {
-                        // restore previous MEP
-                        target.setPattern(existingPattern);
-                        // emit event that the exchange was sent to the endpoint
-                        if (watch != null) {
-                            long timeTaken = watch.taken();
-                            EventHelper.notifyExchangeSent(target.getContext(), target, destination, timeTaken);
-                        }
-                    } finally {
-                        callback.done(doneSync);
-                    }
-                };
-            }
-            try {
-                LOG.debug(">>>> {} {}", destination, exchange);
-                boolean sync = producer.process(exchange, ac);
-                if (!sync) {
-                    EventHelper.notifyExchangeAsyncProcessingStartedEvent(camelContext, exchange);
-                }
-                return sync;
-            } catch (Throwable throwable) {
-                exchange.setException(throwable);
-                callback.done(true);
-            }
-
-            return true;
+            return sendUsingProducer(exchange, callback, existingPattern, originalBody, originalHeaders);
         } else {
             // we can send with a different MEP pattern
-            if (destinationExchangePattern != null || pattern != null) {
-                exchange.setPattern(destinationExchangePattern != null ? destinationExchangePattern : pattern);
+            return sendUsingPattern(exchange, callback, existingPattern, originalBody, originalHeaders);
+        }
+    }
+
+    private boolean sendUsingPattern(
+            Exchange exchange, AsyncCallback callback, ExchangePattern existingPattern, Object originalBody,
+            Map<String, Object> originalHeaders) {
+        if (destinationExchangePattern != null || pattern != null) {
+            exchange.setPattern(destinationExchangePattern != null ? destinationExchangePattern : pattern);
+        }
+        // set property which endpoint we send to
+        exchange.setProperty(ExchangePropertyKey.TO_ENDPOINT, destination.getEndpointUri());
+
+        // replace message body with variable
+        if (variableSend != null) {
+            Object value = ExchangeHelper.getVariable(exchange, variableSend);
+            exchange.getMessage().setBody(value);
+        }
+
+        LOG.debug(">>>> {} {}", destination, exchange);
+
+        // send the exchange to the destination using the producer cache for the non optimized producers
+        return producerCache.doInAsyncProducer(destination, exchange, callback,
+                (producer, ex, cb) -> producer.process(ex, doneSync -> {
+                    // restore previous MEP
+                    exchange.setPattern(existingPattern);
+                    // result should be stored in variable instead of message body/headers
+                    if (ExchangeHelper.shouldSetVariableResult(exchange, variableReceive)) {
+                        ExchangeHelper.setVariableFromMessageBodyAndHeaders(exchange, variableReceive,
+                                exchange.getMessage());
+                        exchange.getMessage().setBody(originalBody);
+                        exchange.getMessage().setHeaders(originalHeaders);
+                    }
+                    // signal we are done
+                    cb.done(doneSync);
+                }));
+    }
+
+    private boolean sendUsingProducer(
+            Exchange exchange, AsyncCallback callback, ExchangePattern existingPattern, Object originalBody,
+            Map<String, Object> originalHeaders) {
+        final Exchange target = exchange;
+        // we can send with a different MEP pattern
+        if (destinationExchangePattern != null || pattern != null) {
+            target.setPattern(destinationExchangePattern != null ? destinationExchangePattern : pattern);
+        }
+        // set property which endpoint we send to
+        exchange.setProperty(ExchangePropertyKey.TO_ENDPOINT, destination.getEndpointUri());
+
+        final boolean sending = camelContext.getCamelContextExtension().isEventNotificationApplicable()
+                && EventHelper.notifyExchangeSending(exchange.getContext(), target, destination);
+        // record timing for sending the exchange using the producer
+        StopWatch watch;
+        if (sending) {
+            watch = new StopWatch();
+        } else {
+            watch = null;
+        }
+
+        // optimize to only create a new callback if really needed, otherwise we can use the provided callback as-is
+        AsyncCallback ac = callback;
+        boolean newCallback = watch != null || existingPattern != target.getPattern() || variableReceive != null;
+        if (newCallback) {
+            ac = doneSync -> {
+                try {
+                    // result should be stored in variable instead of message body/headers
+                    if (ExchangeHelper.shouldSetVariableResult(target, variableReceive)) {
+                        ExchangeHelper.setVariableFromMessageBodyAndHeaders(target, variableReceive,
+                                target.getMessage());
+                        target.getMessage().setBody(originalBody);
+                        target.getMessage().setHeaders(originalHeaders);
+                    }
+                    // restore previous MEP
+                    target.setPattern(existingPattern);
+                    // emit event that the exchange was sent to the endpoint
+                    if (watch != null) {
+                        long timeTaken = watch.taken();
+                        EventHelper.notifyExchangeSent(target.getContext(), target, destination, timeTaken);
+                    }
+                } finally {
+                    callback.done(doneSync);
+                }
+            };
+        }
+        try {
+            // replace message body with variable
+            if (variableSend != null) {
+                Object value = ExchangeHelper.getVariable(exchange, variableSend);
+                exchange.getMessage().setBody(value);
             }
-            // set property which endpoint we send to
-            exchange.setProperty(ExchangePropertyKey.TO_ENDPOINT, destination.getEndpointUri());
 
             LOG.debug(">>>> {} {}", destination, exchange);
-
-            // send the exchange to the destination using the producer cache for the non optimized producers
-            return producerCache.doInAsyncProducer(destination, exchange, callback,
-                    (producer, ex, cb) -> producer.process(ex, doneSync -> {
-                        // restore previous MEP
-                        exchange.setPattern(existingPattern);
-                        // signal we are done
-                        cb.done(doneSync);
-                    }));
+            boolean sync = producer.process(exchange, ac);
+            if (!sync) {
+                EventHelper.notifyExchangeAsyncProcessingStartedEvent(camelContext, exchange);
+            }
+            return sync;
+        } catch (Exception throwable) {
+            exchange.setException(throwable);
+            callback.done(true);
         }
+
+        return true;
+    }
+
+    public String getVariableSend() {
+        return variableSend;
+    }
+
+    public void setVariableSend(String variableSend) {
+        this.variableSend = variableSend;
+    }
+
+    public String getVariableReceive() {
+        return variableReceive;
+    }
+
+    public void setVariableReceive(String variableReceive) {
+        this.variableReceive = variableReceive;
     }
 
     public Endpoint getDestination() {
@@ -233,6 +310,8 @@ public class SendProcessor extends AsyncProcessorSupport implements Traceable, E
             producerCache = new DefaultProducerCache(this, camelContext, 0);
             // do not add as service as we do not want to manage the producer cache
         }
+
+        headersMapFactory = camelContext.getCamelContextExtension().getHeadersMapFactory();
     }
 
     @Override
@@ -244,6 +323,9 @@ public class SendProcessor extends AsyncProcessorSupport implements Traceable, E
         // yes we can optimize and use the producer directly for sending
         if (destination.isSingletonProducer()) {
             this.producer = destination.createAsyncProducer();
+            if (this.producer instanceof RouteIdAware ria) {
+                ria.setRouteId(getRouteId());
+            }
             // ensure the producer is managed and started
             camelContext.addService(this.producer, true, true);
         } else {

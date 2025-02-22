@@ -28,10 +28,9 @@ public class MyLoggingSentEventNotifer extends EventNotifierSupport {
     private static final Logger LOG = LoggerFactory.getLogger(MyLoggingSentEventNotifer.class);
 
     @Override
-    public void notify(CamelEvent event) throws Exception {
+    public void notify(CamelEvent event) {
         // react only when its the sent event
-        if (event instanceof ExchangeSentEvent) {
-            ExchangeSentEvent sent = (ExchangeSentEvent) event;
+        if (event instanceof ExchangeSentEvent sent) {
             LOG.info("Took {} millis to send to: {}", sent.getTimeTaken(), sent.getEndpoint());
         }
 

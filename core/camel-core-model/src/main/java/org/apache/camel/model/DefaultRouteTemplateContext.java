@@ -27,6 +27,7 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.RouteTemplateContext;
 import org.apache.camel.spi.BeanRepository;
 import org.apache.camel.support.LocalBeanRegistry;
+import org.apache.camel.util.IOHelper;
 import org.apache.camel.util.StringHelper;
 
 /**
@@ -86,6 +87,11 @@ public final class DefaultRouteTemplateContext implements RouteTemplateContext {
     }
 
     @Override
+    public void registerDestroyMethod(String id, String method) {
+        registry.registerDestroyMethod(id, method);
+    }
+
+    @Override
     public Object getProperty(String name) {
         return parameters.get(name);
     }
@@ -122,6 +128,32 @@ public final class DefaultRouteTemplateContext implements RouteTemplateContext {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean hasEnvironmentVariable(String name) {
+        String normalizedKey = IOHelper.normalizeEnvironmentVariable(name);
+        if (parameters.containsKey(normalizedKey)) {
+            return true;
+        }
+        normalizedKey = IOHelper.normalizeEnvironmentVariable(StringHelper.camelCaseToDash(name));
+        if (parameters.containsKey(normalizedKey)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public Object getEnvironmentVariable(String name) {
+        String normalizedKey = IOHelper.normalizeEnvironmentVariable(name);
+        if (parameters.containsKey(normalizedKey)) {
+            return parameters.get(normalizedKey);
+        }
+        normalizedKey = IOHelper.normalizeEnvironmentVariable(StringHelper.camelCaseToDash(name));
+        if (parameters.containsKey(normalizedKey)) {
+            return parameters.get(normalizedKey);
+        }
+        return null;
     }
 
     @Override

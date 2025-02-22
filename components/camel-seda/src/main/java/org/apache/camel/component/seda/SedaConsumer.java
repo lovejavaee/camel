@@ -23,16 +23,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.camel.AsyncCallback;
 import org.apache.camel.AsyncProcessor;
 import org.apache.camel.Exchange;
+import org.apache.camel.ExchangeExtension;
 import org.apache.camel.Processor;
 import org.apache.camel.ShutdownRunningTask;
 import org.apache.camel.Suspendable;
 import org.apache.camel.spi.ShutdownAware;
 import org.apache.camel.spi.Synchronization;
 import org.apache.camel.support.DefaultConsumer;
-import org.apache.camel.support.EmptyAsyncCallback;
-import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.UnitOfWorkHelper;
 import org.apache.camel.util.ObjectHelper;
 import org.slf4j.Logger;
@@ -102,7 +102,7 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
             try {
                 latch.await();
             } catch (InterruptedException e) {
-                // ignore
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -147,6 +147,7 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
                     Thread.sleep(Math.min(pollTimeout, 1000));
                 } catch (InterruptedException e) {
                     LOG.debug("Sleep interrupted, are we stopping? {}", isStopping() || isStopped());
+                    Thread.currentThread().interrupt();
                 }
                 continue;
             }
@@ -165,6 +166,7 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
                         Thread.sleep(Math.min(pollTimeout, 1000));
                     } catch (InterruptedException e) {
                         LOG.debug("Sleep interrupted, are we stopping? {}", isStopping() || isStopped());
+                        Thread.currentThread().interrupt();
                     }
                     continue;
                 }
@@ -180,17 +182,13 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
                 }
                 if (exchange != null) {
                     try {
+                        final Exchange original = exchange;
                         // prepare the exchange before sending to consumer
-                        Exchange newExchange = prepareExchange(exchange);
+                        final Exchange prepared = prepareExchange(exchange);
+                        // callback to be executed when sending to consumer and processing is done
+                        AsyncCallback callback = doneSync -> onProcessingDone(original, prepared);
                         // process the exchange
-                        sendToConsumers(newExchange);
-                        // copy result back
-                        ExchangeHelper.copyResults(exchange, newExchange);
-                        // log exception if an exception occurred and was not handled
-                        if (exchange.getException() != null) {
-                            getExceptionHandler().handleException("Error processing exchange", exchange,
-                                    exchange.getException());
-                        }
+                        sendToConsumers(prepared, callback);
                     } catch (Exception e) {
                         getExceptionHandler().handleException("Error processing exchange", exchange, e);
                     }
@@ -201,8 +199,8 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
                 }
             } catch (InterruptedException e) {
                 LOG.debug("Sleep interrupted, are we stopping? {}", isStopping() || isStopped());
-                continue;
-            } catch (Throwable e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
                 if (exchange != null) {
                     getExceptionHandler().handleException("Error processing exchange", exchange, e);
                 } else {
@@ -213,15 +211,36 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
     }
 
     /**
+     * Strategy to invoke when the exchange is done being processed.
+     * <p/>
+     * This method is meant to be overridden by subclasses to be able to mimic the behavior of the legacy component
+     * camel-vm, that is why the parameter {@code prepared} is not used by default.
+     *
+     * @param original the exchange before being processed
+     * @param prepared the exchange processed
+     */
+    protected void onProcessingDone(Exchange original, Exchange prepared) {
+        // log exception if an exception occurred and was not handled
+        if (original.getException() != null) {
+            getExceptionHandler().handleException("Error processing exchange", original,
+                    original.getException());
+        }
+    }
+
+    /**
      * Strategy to prepare exchange for being processed by this consumer
+     * <p/>
+     * This method is meant to be overridden by subclasses to be able to mimic the behavior of the legacy component
+     * camel-vm, that is why the prepared exchange is returned.
      *
      * @param  exchange the exchange
-     * @return          the exchange to process by this consumer.
+     * @return          the exchange to process by this consumer
      */
     protected Exchange prepareExchange(Exchange exchange) {
-        // this consumer grabbed the exchange so mark its from this route/endpoint
-        exchange.getExchangeExtension().setFromEndpoint(getEndpoint());
-        exchange.getExchangeExtension().setFromRouteId(getRouteId());
+        // this consumer grabbed the exchange so mark it's from this route/endpoint
+        ExchangeExtension exchangeExtension = exchange.getExchangeExtension();
+        exchangeExtension.setFromEndpoint(getEndpoint());
+        exchangeExtension.setFromRouteId(getRouteId());
         return exchange;
     }
 
@@ -234,9 +253,10 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
      * If there is only a single consumer then its dispatched directly to it using same thread.
      *
      * @param  exchange  the exchange
+     * @param  callback  exchange callback to continue routing
      * @throws Exception can be thrown if processing of the exchange failed
      */
-    protected void sendToConsumers(final Exchange exchange) throws Exception {
+    protected void sendToConsumers(final Exchange exchange, final AsyncCallback callback) throws Exception {
         // validate multiple consumers has been enabled
         int size = getEndpoint().getConsumers().size();
         if (size > 1 && !getEndpoint().isMultipleConsumersSupported()) {
@@ -260,11 +280,15 @@ public class SedaConsumer extends DefaultConsumer implements Runnable, ShutdownA
             // and use the asynchronous routing engine to support it
             mp.process(exchange, doneSync -> {
                 // done the uow on the completions
-                UnitOfWorkHelper.doneSynchronizations(exchange, completions, LOG);
+                try {
+                    UnitOfWorkHelper.doneSynchronizations(exchange, completions);
+                } finally {
+                    callback.done(doneSync);
+                }
             });
         } else {
             // use the regular processor and use the asynchronous routing engine to support it
-            getAsyncProcessor().process(exchange, EmptyAsyncCallback.get());
+            getAsyncProcessor().process(exchange, callback);
         }
     }
 

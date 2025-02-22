@@ -41,6 +41,7 @@ import org.apache.camel.support.PluginHelper;
 @XmlType(name = "serviceCallConfiguration")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Configurer
+@Deprecated(since = "3.19.0")
 public abstract class ServiceCallConfiguration extends IdentifiedType {
     @XmlElement(name = "properties")
     @Metadata(label = "advanced")
@@ -105,8 +106,7 @@ public abstract class ServiceCallConfiguration extends IdentifiedType {
         PropertyConfigurer configurer = PluginHelper.getConfigurerResolver(context)
                 .resolvePropertyConfigurer(target.getClass().getName(), context);
         // use reflection free configurer (if possible)
-        if (configurer instanceof ExtendedPropertyConfigurerGetter) {
-            ExtendedPropertyConfigurerGetter getter = (ExtendedPropertyConfigurerGetter) configurer;
+        if (configurer instanceof ExtendedPropertyConfigurerGetter getter) {
             Set<String> all = getter.getAllOptions(target).keySet();
             for (String name : all) {
                 Object value = getter.getOptionValue(target, name, true);

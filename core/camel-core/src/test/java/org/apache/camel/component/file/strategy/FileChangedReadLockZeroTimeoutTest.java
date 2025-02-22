@@ -16,45 +16,39 @@
  */
 package org.apache.camel.component.file.strategy;
 
-import java.nio.file.Files;
-
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 public class FileChangedReadLockZeroTimeoutTest extends ContextTestSupport {
 
     @Test
+    @Timeout(10)
     public void testChangedReadLockZeroTimeout() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedMessageCount(1);
         mock.expectedFileExists(testFile("out/hello1.txt"));
-
         template.sendBodyAndHeader(fileUri("in"), "Hello World", Exchange.FILE_NAME, "hello1.txt");
-
-        Thread.sleep(100);
-
-        Files.delete(testFile("in/hello1.txt"));
+        assertMockEndpointsSatisfied();
 
         mock.reset();
         oneExchangeDone.reset();
         mock.expectedMessageCount(1);
         mock.expectedFileExists(testFile("out/hello2.txt"));
-
         template.sendBodyAndHeader(fileUri("in"), "Hello Again World", Exchange.FILE_NAME, "hello2.txt");
-
         assertMockEndpointsSatisfied();
         oneExchangeDone.matchesWaitTime();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
-                from(fileUri("in?initialDelay=0&delay=10&readLock=changed&readLockCheckInterval=5000&readLockTimeout=0"))
+            public void configure() {
+                from(fileUri("in?initialDelay=0&delay=10&readLock=changed&readLockCheckInterval=50&readLockTimeout=0"))
                         .to(fileUri("out"), "mock:result");
             }
         };

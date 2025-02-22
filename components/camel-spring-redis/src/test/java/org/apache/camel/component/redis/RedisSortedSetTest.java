@@ -20,7 +20,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.camel.spi.Registry;
-import org.apache.camel.support.SimpleRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -28,6 +27,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,12 +44,10 @@ public class RedisSortedSetTest extends RedisTestSupport {
     private ZSetOperations<String, String> zSetOperations;
 
     @Override
-    protected Registry createCamelRegistry() throws Exception {
+    protected void bindToRegistry(Registry registry) throws Exception {
         when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
 
-        Registry registry = new SimpleRegistry();
         registry.bind("redisTemplate", redisTemplate);
-        return registry;
     }
 
     @Test
@@ -150,7 +148,7 @@ public class RedisSortedSetTest extends RedisTestSupport {
                 RedisConstants.END, 3);
 
         verify(zSetOperations).rangeWithScores("key", 1, 3);
-        assertEquals(null, result);
+        assertNull(result);
     }
 
     @Test
@@ -247,7 +245,7 @@ public class RedisSortedSetTest extends RedisTestSupport {
                 RedisConstants.END, 3);
 
         verify(zSetOperations).reverseRangeWithScores("key", 1, 3);
-        assertEquals(null, result);
+        assertNull(result);
     }
 
     @Test

@@ -28,16 +28,15 @@ public class JsonPathExpressionReifier extends SingleInputTypedExpressionReifier
 
     @Override
     protected Object[] createProperties() {
-        Object[] properties = new Object[9];
-        properties[0] = definition.getResultType();
-        properties[1] = parseBoolean(definition.getSuppressExceptions());
-        properties[2] = parseBoolean(definition.getAllowSimple());
-        properties[3] = parseBoolean(definition.getAllowEasyPredicate());
-        properties[4] = parseBoolean(definition.getWriteAsString());
-        properties[5] = parseBoolean(definition.getUnpackArray());
-        properties[6] = parseString(definition.getHeaderName());
+        Object[] properties = new Object[8];
+        properties[0] = asResultType();
+        properties[1] = parseString(definition.getSource());
+        properties[2] = parseBoolean(definition.getSuppressExceptions());
+        properties[3] = parseBoolean(definition.getAllowSimple());
+        properties[4] = parseBoolean(definition.getAllowEasyPredicate());
+        properties[5] = parseBoolean(definition.getWriteAsString());
+        properties[6] = parseBoolean(definition.getUnpackArray());
         properties[7] = parseString(definition.getOption());
-        properties[8] = parseString(definition.getPropertyName());
         return properties;
     }
 

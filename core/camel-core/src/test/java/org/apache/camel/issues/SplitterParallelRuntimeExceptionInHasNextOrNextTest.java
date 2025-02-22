@@ -26,6 +26,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SplitterParallelRuntimeExceptionInHasNextOrNextTest extends ContextTestSupport {
@@ -50,21 +51,21 @@ public class SplitterParallelRuntimeExceptionInHasNextOrNextTest extends Context
 
     private void execute(String from) throws InterruptedException {
         for (int i = 0; i < 10; i++) {
-            try {
-                template.sendBody(from, "some content");
-            } catch (Exception e) {
-                // expected due to runtime exception in hasNext method
-                assertTrue(e.getMessage().startsWith("Exception occurred"));
-            }
+
+            Exception e = assertThrows(Exception.class, () -> template.sendBody(from, "some content"),
+                    "expected due to runtime exception in hasNext method");
+
+            assertTrue(e.getMessage().startsWith("Exception occurred"));
+
             assertMockEndpointsSatisfied();
         }
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:errorInHasNext").split().method(SplitterImpl.class, "errorInHasNext").streaming()
                         .parallelProcessing(true).to("mock:split1");
 
@@ -91,8 +92,8 @@ public class SplitterParallelRuntimeExceptionInHasNextOrNextTest extends Context
     static class CustomIterator implements Iterator<String>, Closeable {
 
         private int index;
-        private InputStream request;
-        private boolean errorInHasNext;
+        private final InputStream request;
+        private final boolean errorInHasNext;
 
         CustomIterator(Exchange exchange, InputStream request, boolean errorInHasNext) {
             this.request = request;

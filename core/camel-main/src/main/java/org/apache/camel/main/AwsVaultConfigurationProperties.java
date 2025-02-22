@@ -23,7 +23,7 @@ import org.apache.camel.vault.AwsVaultConfiguration;
 /**
  * Configuration for access to AWS Secret.
  */
-@Configurer(bootstrap = true)
+@Configurer(extended = true)
 public class AwsVaultConfigurationProperties extends AwsVaultConfiguration implements BootstrapCloseable {
 
     private MainConfigurationProperties parent;
@@ -118,6 +118,40 @@ public class AwsVaultConfigurationProperties extends AwsVaultConfiguration imple
      */
     public AwsVaultConfigurationProperties withSecrets(String secrets) {
         setSecrets(secrets);
+        return this;
+    }
+
+    /**
+     * Whether to use AWS SQS for secrets updates notification, this will require setting up Eventbridge/Cloudtrail/SQS
+     * communication
+     */
+    public AwsVaultConfigurationProperties withUseSqsNotification(boolean useSqsNotification) {
+        setUseSqsNotification(useSqsNotification);
+        return this;
+    }
+
+    /**
+     * In case of usage of SQS notification this field will specified the Queue URL to use
+     */
+    public AwsVaultConfigurationProperties withSqsQueueName(String sqsQueueUrl) {
+        setSqsQueueUrl(sqsQueueUrl);
+        return this;
+    }
+
+    /**
+     * Set the need for overriding the endpoint. This option needs to be used in combination with the
+     * uriEndpointOverride option
+     */
+    public AwsVaultConfigurationProperties isOverrideEndpoint(boolean overrideEndpoint) {
+        setOverrideEndpoint(overrideEndpoint);
+        return this;
+    }
+
+    /**
+     * Set the overriding uri endpoint. This option needs to be used in combination with overrideEndpoint option
+     */
+    public AwsVaultConfigurationProperties withUriEndpointOverride(String uriEndpointOverride) {
+        setUriEndpointOverride(uriEndpointOverride);
         return this;
     }
 

@@ -16,19 +16,21 @@
  */
 package org.apache.camel.component.sjms2.consumer;
 
+import jakarta.jms.ConnectionFactory;
+
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.component.sjms2.support.Jms2TestSupport;
+import org.apache.camel.test.infra.artemis.services.ArtemisService;
+import org.apache.camel.test.infra.artemis.services.ArtemisServiceFactory;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class InOnlyTopicSharedConsumerTest extends Jms2TestSupport {
 
     private static final String TEST_DESTINATION_NAME = "sjms2:topic:in.only.topic.consumer.test";
-
-    @Override
-    protected boolean useJmx() {
-        return false;
-    }
+    @RegisterExtension
+    public static ArtemisService service = ArtemisServiceFactory.createTCPAllProtocolsService();
 
     @Test
     public void testSynchronous() throws Exception {
@@ -63,5 +65,9 @@ public class InOnlyTopicSharedConsumerTest extends Jms2TestSupport {
                         .to("log:test.log.1?showBody=true", "mock:result2");
             }
         };
+    }
+
+    protected ConnectionFactory getConnectionFactory() throws Exception {
+        return getConnectionFactory(service.serviceAddress());
     }
 }

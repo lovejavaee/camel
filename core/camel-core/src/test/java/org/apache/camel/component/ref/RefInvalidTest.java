@@ -24,8 +24,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class RefInvalidTest extends ContextTestSupport {
 
@@ -39,31 +38,29 @@ public class RefInvalidTest extends ContextTestSupport {
     }
 
     @Test
-    public void testInvalid() throws Exception {
-        try {
-            template.sendBody("ref:xxx", "Hello World");
-            fail("Should have thrown an exception");
-        } catch (ResolveEndpointFailedException e) {
-            assertEquals(
-                    "Failed to resolve endpoint: ref://xxx due to: No bean could be found in the registry for: xxx of type: org.apache.camel.Endpoint",
-                    e.getMessage());
-            NoSuchBeanException cause = assertIsInstanceOf(NoSuchBeanException.class, e.getCause());
-            assertEquals("xxx", cause.getName());
-        }
+    public void testInvalid() {
+        Exception ex = assertThrows(ResolveEndpointFailedException.class, () -> template.sendBody("ref:xxx", "Hello World"),
+                "Should have thrown an exception");
+
+        assertEquals(
+                "Failed to resolve endpoint: ref://xxx due to: No bean could be found in the registry for: xxx of type: org.apache.camel.Endpoint",
+                ex.getMessage());
+        NoSuchBeanException cause = assertIsInstanceOf(NoSuchBeanException.class, ex.getCause());
+        assertEquals("xxx", cause.getName());
     }
 
     @Override
-    protected CamelContext createCamelContext() throws Exception {
+    protected CamelContext createCamelContext() {
         CamelContext context = new DefaultCamelContext();
         context.getRegistry().bind("foo", context.getEndpoint("seda:foo"));
         return context;
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("ref:foo").routeId("foo").to("mock:result");
             }
         };

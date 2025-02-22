@@ -25,10 +25,13 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.support.SynchronizationAdapter;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class SedaWaitForTaskNewerOnCompletionTest extends ContextTestSupport {
 
     private static String done = "";
@@ -49,15 +52,15 @@ public class SedaWaitForTaskNewerOnCompletionTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 errorHandler(deadLetterChannel("mock:dead").maximumRedeliveries(3).redeliveryDelay(0));
 
                 from("direct:start").process(new Processor() {
                     @Override
-                    public void process(Exchange exchange) throws Exception {
+                    public void process(Exchange exchange) {
                         exchange.getExchangeExtension().addOnCompletion(new SynchronizationAdapter() {
                             @Override
                             public void onDone(Exchange exchange) {
@@ -68,14 +71,14 @@ public class SedaWaitForTaskNewerOnCompletionTest extends ContextTestSupport {
                     }
                 }).to("seda:foo?waitForTaskToComplete=Never").process(new Processor() {
                     @Override
-                    public void process(Exchange exchange) throws Exception {
+                    public void process(Exchange exchange) {
                         done = done + "B";
                     }
                 }).to("mock:result");
 
                 from("seda:foo").errorHandler(noErrorHandler()).delay(1000).process(new Processor() {
                     @Override
-                    public void process(Exchange exchange) throws Exception {
+                    public void process(Exchange exchange) {
                         done = done + "C";
                     }
                 }).throwException(new IllegalArgumentException("Forced"));

@@ -34,7 +34,7 @@ import org.apache.camel.util.StringHelper;
  * Execute commands on the underlying operating system.
  */
 @UriEndpoint(firstVersion = "2.3.0", scheme = "exec", title = "Exec", syntax = "exec:executable", producerOnly = true,
-             category = { Category.SYSTEM }, headersClass = ExecBinding.class)
+             remote = false, category = { Category.CORE }, headersClass = ExecBinding.class)
 public class ExecEndpoint extends DefaultEndpoint {
 
     /**
@@ -68,6 +68,11 @@ public class ExecEndpoint extends DefaultEndpoint {
         super(uri, component);
         this.timeout = NO_TIMEOUT;
         this.binding = new DefaultExecBinding();
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

@@ -16,11 +16,14 @@
  */
 package org.apache.camel.component.file;
 
+import java.util.UUID;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.util.FileUtil;
+import org.apache.camel.util.StringHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +32,7 @@ import org.junit.jupiter.api.Test;
  * will work on windows system.
  */
 public class FileRouteOnDosWithNoVolTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME = "hello" + UUID.randomUUID() + ".txt";
 
     private String path;
 
@@ -37,10 +41,8 @@ public class FileRouteOnDosWithNoVolTest extends ContextTestSupport {
     public void setUp() throws Exception {
         path = testDirectory("dosnovol").toAbsolutePath().toString();
         if (FileUtil.isWindows()) {
-            int dp = path.indexOf(":\\");
-            if (dp > 0) {
-                path = path.substring(dp + 1).replace('\\', '/');
-            }
+            path = StringHelper.after(path, ":\\", path)
+                    .replace('\\', '/');
         }
 
         super.setUp();
@@ -50,9 +52,9 @@ public class FileRouteOnDosWithNoVolTest extends ContextTestSupport {
     public void testRouteFileToFile() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedMessageCount(1);
-        mock.expectedFileExists(path + "/route/out/hello.txt");
+        mock.expectedFileExists(path + "/route/out/" + TEST_FILE_NAME);
 
-        template.sendBodyAndHeader("file://" + path + "/route/poller", "Hello World", Exchange.FILE_NAME, "hello.txt");
+        template.sendBodyAndHeader("file://" + path + "/route/poller", "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
 
         assertMockEndpointsSatisfied();
     }
@@ -62,7 +64,7 @@ public class FileRouteOnDosWithNoVolTest extends ContextTestSupport {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedMessageCount(1);
 
-        template.sendBodyAndHeader("file://" + path + "/from/poller", "Hello World", Exchange.FILE_NAME, "hello.txt");
+        template.sendBodyAndHeader("file://" + path + "/from/poller", "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
 
         assertMockEndpointsSatisfied();
     }
@@ -71,17 +73,17 @@ public class FileRouteOnDosWithNoVolTest extends ContextTestSupport {
     public void testRouteToFileOnly() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedMessageCount(1);
-        mock.expectedFileExists(path + "/to/out/hello.txt");
+        mock.expectedFileExists(path + "/to/out/" + TEST_FILE_NAME);
 
-        template.sendBodyAndHeader("direct:report", "Hello World", Exchange.FILE_NAME, "hello.txt");
+        template.sendBodyAndHeader("direct:report", "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 from("file://" + path + "/route/poller?initialDelay=0&delay=10").to("file://" + path + "/route/out",
                         "mock:result");
                 from("file://" + path + "/from/poller?initialDelay=0&delay=10").to("mock:result");

@@ -16,6 +16,10 @@
  */
 package org.apache.camel.model.language;
 
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
 import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlAttribute;
@@ -55,6 +59,16 @@ public class JsonPathExpression extends SingleInputTypedExpressionDefinition {
     public JsonPathExpression() {
     }
 
+    private JsonPathExpression(JsonPathExpression source) {
+        super(source);
+        this.suppressExceptions = source.suppressExceptions;
+        this.allowSimple = source.allowSimple;
+        this.allowEasyPredicate = source.allowEasyPredicate;
+        this.writeAsString = source.writeAsString;
+        this.unpackArray = source.unpackArray;
+        this.option = source.option;
+    }
+
     public JsonPathExpression(String expression) {
         super(expression);
     }
@@ -67,6 +81,11 @@ public class JsonPathExpression extends SingleInputTypedExpressionDefinition {
         this.writeAsString = builder.writeAsString;
         this.unpackArray = builder.unpackArray;
         this.option = builder.option;
+    }
+
+    @Override
+    public JsonPathExpression copyDefinition() {
+        return new JsonPathExpression(this);
     }
 
     public String getSuppressExceptions() {
@@ -241,9 +260,29 @@ public class JsonPathExpression extends SingleInputTypedExpressionDefinition {
             return this;
         }
 
+        /**
+         * To configure additional options on JSONPath.
+         */
+        public Builder option(Option... options) {
+            this.option = Arrays.stream(options).map(Objects::toString).collect(Collectors.joining(","));
+            return this;
+        }
+
         @Override
         public JsonPathExpression end() {
             return new JsonPathExpression(this);
         }
+    }
+
+    /**
+     * {@code Option} defines the possible json path options that can be used.
+     */
+    @XmlTransient
+    public enum Option {
+        DEFAULT_PATH_LEAF_TO_NULL,
+        ALWAYS_RETURN_LIST,
+        AS_PATH_LIST,
+        SUPPRESS_EXCEPTIONS,
+        REQUIRE_PROPERTIES
     }
 }

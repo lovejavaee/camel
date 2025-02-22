@@ -17,21 +17,22 @@
 package org.apache.camel.component.scheduler;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 @org.apache.camel.spi.annotations.Component("scheduler")
-public class SchedulerComponent extends DefaultComponent {
+public class SchedulerComponent extends HealthCheckComponent {
 
-    private final Map<String, ScheduledExecutorService> executors = new HashMap<>();
-    private final Map<String, AtomicInteger> refCounts = new HashMap<>();
+    private final Map<String, ScheduledExecutorServiceHolder> executors = new ConcurrentHashMap<>();
 
+    @Metadata
+    private boolean includeMetadata;
     @Metadata(defaultValue = "1", label = "scheduler")
     private int poolSize = 1;
 
@@ -41,9 +42,21 @@ public class SchedulerComponent extends DefaultComponent {
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
         SchedulerEndpoint answer = new SchedulerEndpoint(uri, this, remaining);
+        answer.setIncludeMetadata(isIncludeMetadata());
         answer.setPoolSize(getPoolSize());
         setProperties(answer, parameters);
         return answer;
+    }
+
+    public boolean isIncludeMetadata() {
+        return includeMetadata;
+    }
+
+    /**
+     * Whether to include metadata in the exchange such as fired time, timer name, timer count etc.
+     */
+    public void setIncludeMetadata(boolean includeMetadata) {
+        this.includeMetadata = includeMetadata;
     }
 
     public int getPoolSize() {
@@ -61,53 +74,46 @@ public class SchedulerComponent extends DefaultComponent {
 
     protected ScheduledExecutorService addConsumer(SchedulerConsumer consumer) {
         String name = consumer.getEndpoint().getName();
-        int poolSize = consumer.getEndpoint().getPoolSize();
-
-        ScheduledExecutorService answer;
-        synchronized (executors) {
-            answer = executors.get(name);
-            if (answer == null) {
-                answer = getCamelContext().getExecutorServiceManager().newScheduledThreadPool(this, "scheduler://" + name,
-                        poolSize);
-                executors.put(name, answer);
-                // store new reference counter
-                refCounts.put(name, new AtomicInteger(1));
-            } else {
-                // increase reference counter
-                AtomicInteger counter = refCounts.get(name);
-                if (counter != null) {
-                    counter.incrementAndGet();
-                }
+        return executors.compute(name, (k, v) -> {
+            if (v == null) {
+                int poolSize = consumer.getEndpoint().getPoolSize();
+                return new ScheduledExecutorServiceHolder(
+                        getCamelContext().getExecutorServiceManager().newScheduledThreadPool(this, "scheduler://" + name,
+                                poolSize));
             }
-        }
-        return answer;
+            v.refCount.incrementAndGet();
+            return v;
+        }).executorService;
     }
 
     protected void removeConsumer(SchedulerConsumer consumer) {
         String name = consumer.getEndpoint().getName();
 
-        synchronized (executors) {
-            // decrease reference counter
-            AtomicInteger counter = refCounts.get(name);
-            if (counter != null && counter.decrementAndGet() <= 0) {
-                refCounts.remove(name);
-                // remove scheduler as its no longer in use
-                ScheduledExecutorService scheduler = executors.remove(name);
-                if (scheduler != null) {
-                    getCamelContext().getExecutorServiceManager().shutdown(scheduler);
-                }
+        executors.computeIfPresent(name, (k, v) -> {
+            if (v.refCount.decrementAndGet() == 0) {
+                getCamelContext().getExecutorServiceManager().shutdown(v.executorService);
+                return null;
             }
-        }
+            return v;
+        });
     }
 
     @Override
     protected void doStop() throws Exception {
-        Collection<ScheduledExecutorService> collection = executors.values();
-        for (ScheduledExecutorService scheduler : collection) {
-            getCamelContext().getExecutorServiceManager().shutdown(scheduler);
+        Collection<ScheduledExecutorServiceHolder> collection = executors.values();
+        for (ScheduledExecutorServiceHolder holder : collection) {
+            getCamelContext().getExecutorServiceManager().shutdown(holder.executorService);
         }
         executors.clear();
-        refCounts.clear();
     }
 
+    private static class ScheduledExecutorServiceHolder {
+        private final ScheduledExecutorService executorService;
+        private final AtomicInteger refCount;
+
+        ScheduledExecutorServiceHolder(ScheduledExecutorService executorService) {
+            this.executorService = executorService;
+            this.refCount = new AtomicInteger(1);
+        }
+    }
 }

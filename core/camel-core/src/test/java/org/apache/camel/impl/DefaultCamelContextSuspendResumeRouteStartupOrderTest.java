@@ -16,14 +16,20 @@
  */
 package org.apache.camel.impl;
 
+import java.util.concurrent.TimeUnit;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class DefaultCamelContextSuspendResumeRouteStartupOrderTest extends ContextTestSupport {
 
     @Test
@@ -45,9 +51,10 @@ public class DefaultCamelContextSuspendResumeRouteStartupOrderTest extends Conte
         context.suspend();
 
         // need to give seda consumer thread time to idle
-        Thread.sleep(100);
+        Awaitility.await().atMost(100, TimeUnit.MILLISECONDS)
+                .pollDelay(10, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> template.sendBody("seda:foo", "B"));
 
-        template.sendBody("seda:foo", "B");
         mock.assertIsSatisfied(1000);
 
         assertTrue(context.isSuspended());
@@ -64,10 +71,10 @@ public class DefaultCamelContextSuspendResumeRouteStartupOrderTest extends Conte
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("seda:foo").routeId("C").startupOrder(3).to("log:foo").to("direct:bar");
 
                 from("direct:baz").routeId("A").startupOrder(1).to("log:baz").to("mock:result");

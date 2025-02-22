@@ -28,7 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class KafkaConsumerBatchSizeIT extends BaseEmbeddedKafkaTestSupport {
+public class KafkaConsumerBatchSizeIT extends BaseKafkaTestSupport {
 
     public static final String TOPIC = "test-batch";
 
@@ -64,7 +64,7 @@ public class KafkaConsumerBatchSizeIT extends BaseEmbeddedKafkaTestSupport {
     public void kafkaMessagesIsConsumedByCamel() throws Exception {
         MockEndpoint to = contextExtension.getMockEndpoint(KafkaTestUtil.MOCK_RESULT);
 
-        // First 2 must not be committed since batch size is 3
+        // The first 2 must not be committed since batch size is 3
         to.expectedBodiesReceivedInAnyOrder("m1", "m2");
         for (int k = 1; k <= 2; k++) {
             String msg = "m" + k;

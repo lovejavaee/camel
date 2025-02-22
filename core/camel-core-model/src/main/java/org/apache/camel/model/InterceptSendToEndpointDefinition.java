@@ -21,6 +21,7 @@ import java.util.List;
 import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlAttribute;
+import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlElementRef;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
@@ -43,12 +44,29 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
     @XmlAttribute
     @Metadata(label = "advanced")
     private String afterUri;
+    @Metadata(description = "To use an expression to only trigger intercepting sending to an endpoint in specific situations")
+    @XmlElement
+    @AsPredicate
+    private OnWhenDefinition onWhen;
 
     public InterceptSendToEndpointDefinition() {
     }
 
+    protected InterceptSendToEndpointDefinition(InterceptSendToEndpointDefinition source) {
+        super(source);
+        this.uri = source.uri;
+        this.skipSendToOriginalEndpoint = source.skipSendToOriginalEndpoint;
+        this.afterUri = source.afterUri;
+        this.onWhen = source.onWhen != null ? source.onWhen.copyDefinition() : null;
+    }
+
     public InterceptSendToEndpointDefinition(String uri) {
         this.uri = uri;
+    }
+
+    @Override
+    public InterceptSendToEndpointDefinition copyDefinition() {
+        return new InterceptSendToEndpointDefinition(this);
     }
 
     @Override
@@ -60,6 +78,14 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
     @Override
     public void setOutputs(List<ProcessorDefinition<?>> outputs) {
         super.setOutputs(outputs);
+    }
+
+    public OnWhenDefinition getOnWhen() {
+        return onWhen;
+    }
+
+    public void setOnWhen(OnWhenDefinition onWhen) {
+        this.onWhen = onWhen;
     }
 
     @Override
@@ -90,12 +116,23 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
     /**
      * Applies this interceptor only if the given predicate is true
      *
+     * @param      predicate the predicate
+     * @return               the builder
+     * @deprecated           use {@link #onWhen(Predicate)}
+     */
+    @Deprecated
+    public InterceptSendToEndpointDefinition when(@AsPredicate Predicate predicate) {
+        return onWhen(predicate);
+    }
+
+    /**
+     * Applies this interceptor only if the given predicate is true
+     *
      * @param  predicate the predicate
      * @return           the builder
      */
-    public InterceptSendToEndpointDefinition when(@AsPredicate Predicate predicate) {
-        WhenDefinition when = new WhenDefinition(predicate);
-        addOutput(when);
+    public InterceptSendToEndpointDefinition onWhen(@AsPredicate Predicate predicate) {
+        setOnWhen(new OnWhenDefinition(predicate));
         return this;
     }
 
@@ -123,41 +160,14 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
      * This method is <b>only</b> for handling some post configuration that is needed since this is an interceptor, and
      * we have to do a bit of magic logic to fixup to handle predicates with or without proceed/stop set as well.
      */
+    @Deprecated
     public void afterPropertiesSet() {
-        // okay the intercept endpoint works a bit differently than the regular
-        // interceptors
-        // so we must fix the route definition yet again
-
-        if (getOutputs().isEmpty()) {
-            // no outputs
-            return;
-        }
-
-        // if there is a when definition at first, then its a predicate for this
-        // interceptor
-        ProcessorDefinition<?> first = getOutputs().get(0);
-        if (first instanceof WhenDefinition && !(first instanceof WhenSkipSendToEndpointDefinition)) {
-            WhenDefinition when = (WhenDefinition) first;
-
-            // create a copy of when to use as replacement
-            WhenSkipSendToEndpointDefinition newWhen = new WhenSkipSendToEndpointDefinition();
-            newWhen.setExpression(when.getExpression());
-            newWhen.setId(when.getId());
-            newWhen.setInheritErrorHandler(when.isInheritErrorHandler());
-            newWhen.setParent(when.getParent());
-            newWhen.setDescription(when.getDescription());
-
-            // move this outputs to the when, expect the first one
-            // as the first one is the interceptor itself
-            for (int i = 1; i < outputs.size(); i++) {
-                ProcessorDefinition<?> out = outputs.get(i);
-                newWhen.addOutput(out);
-            }
-            // remove the moved from the original output, by just keeping the
-            // first one
-            clearOutput();
-            outputs.add(newWhen);
-        }
+        /**
+         * if (getOutputs().isEmpty()) { // no outputs return; } if (onWhen != null) { // change onWhen to when that
+         * also includes the outputs // so they are only triggered if the predicate matches at runtime WhenDefinition
+         * copy = new WhenDefinition(onWhen); copy.setParent(this); for (ProcessorDefinition<?> out : outputs) {
+         * copy.addOutput(out); } clearOutput(); outputs.add(copy); }
+         **/
     }
 
     public String getSkipSendToOriginalEndpoint() {

@@ -128,9 +128,7 @@ abstract class PropertiesValidationResult implements Serializable {
         if (deprecated == null) {
             deprecated = new LinkedHashSet<>();
         }
-        if (!deprecated.contains(name)) {
-            deprecated.add(name);
-        }
+        deprecated.add(name);
     }
 
     private String computeErrors(String value) {
@@ -303,7 +301,7 @@ abstract class PropertiesValidationResult implements Serializable {
     }
 
     static boolean isEmpty(String value) {
-        return value == null || value.isEmpty() || value.trim().isEmpty();
+        return value == null || value.isBlank();
     }
 
 }

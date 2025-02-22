@@ -63,12 +63,20 @@ public class XPathHeaderNameTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
-                from("direct:in").choice().when().xpath("/invoice/@orderType = 'premium'", "invoiceDetails").to("mock:premium")
-                        .when()
-                        .xpath("/invoice/@orderType = 'standard'", "invoiceDetails").to("mock:standard").otherwise()
+            public void configure() {
+
+                var premium = expression().xpath().expression("/invoice/@orderType = 'premium'").source("header:invoiceDetails")
+                        .end();
+                var standard = expression().xpath().expression("/invoice/@orderType = 'standard'")
+                        .source("header:invoiceDetails").end();
+
+                from("direct:in").choice().when(premium)
+                        .to("mock:premium")
+                        .when(standard)
+                        .to("mock:standard")
+                        .otherwise()
                         .to("mock:unknown").end();
             }
         };

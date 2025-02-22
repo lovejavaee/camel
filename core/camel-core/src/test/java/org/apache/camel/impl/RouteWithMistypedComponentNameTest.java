@@ -23,7 +23,7 @@ import org.apache.camel.TestSupport;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Testing for mistyped component name
@@ -31,40 +31,35 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class RouteWithMistypedComponentNameTest extends TestSupport {
 
     @Test
-    public void testNoSuchEndpoint() throws Exception {
+    public void testNoSuchEndpoint() {
         CamelContext context = new DefaultCamelContext();
-        try {
+        assertThrows(NoSuchEndpointException.class, () -> {
             context.addRoutes(new RouteBuilder() {
                 @Override
-                public void configure() throws Exception {
+                public void configure() {
                     from("direct:hello").to("mock:result");
 
                     // unknown component
                     endpoint("mistyped:hello");
                 }
             });
-            fail("Should have thrown a NoSuchEndpointException");
-        } catch (NoSuchEndpointException e) {
-            // expected
-        }
+        }, "Should have thrown a NoSuchEndpointException");
     }
 
     @Test
-    public void testNoSuchEndpointType() throws Exception {
+    public void testNoSuchEndpointType() {
         CamelContext context = new DefaultCamelContext();
-        try {
+
+        assertThrows(NoSuchEndpointException.class, () -> {
             context.addRoutes(new RouteBuilder() {
                 @Override
-                public void configure() throws Exception {
+                public void configure() {
                     from("direct:hello").to("mock:result");
 
                     // unknown component
                     endpoint("mistyped:hello", Endpoint.class);
                 }
             });
-            fail("Should have thrown a NoSuchEndpointException");
-        } catch (NoSuchEndpointException e) {
-            // expected
-        }
+        }, "Should have thrown a NoSuchEndpointException");
     }
 }

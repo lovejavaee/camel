@@ -40,9 +40,7 @@ public class SnmpTrapConsumer extends DefaultConsumer implements CommandResponde
 
     private static final Logger LOG = LoggerFactory.getLogger(SnmpTrapConsumer.class);
 
-    private SnmpEndpoint endpoint;
-    private Address listenGenericAddress;
-    private Snmp snmp;
+    private final SnmpEndpoint endpoint;
     private TransportMapping<? extends Address> transport;
 
     public SnmpTrapConsumer(SnmpEndpoint endpoint, Processor processor) {
@@ -56,30 +54,30 @@ public class SnmpTrapConsumer extends DefaultConsumer implements CommandResponde
 
         // load connection data only if the endpoint is enabled
         if (LOG.isInfoEnabled()) {
-            LOG.info("Starting trap consumer on {}", this.endpoint.getAddress());
+            LOG.info("Starting trap consumer on {}", this.endpoint.getServerAddress());
         }
 
-        this.listenGenericAddress = GenericAddress.parse(this.endpoint.getAddress());
+        Address listenGenericAddress = GenericAddress.parse(this.endpoint.getServerAddress());
 
         // either tcp or udp
         if ("tcp".equals(endpoint.getProtocol())) {
-            this.transport = new DefaultTcpTransportMapping((TcpAddress) this.listenGenericAddress);
+            this.transport = new DefaultTcpTransportMapping((TcpAddress) listenGenericAddress);
         } else if ("udp".equals(endpoint.getProtocol())) {
-            this.transport = new DefaultUdpTransportMapping((UdpAddress) this.listenGenericAddress);
+            this.transport = new DefaultUdpTransportMapping((UdpAddress) listenGenericAddress);
         } else {
             throw new IllegalArgumentException("Unknown protocol: " + endpoint.getProtocol());
         }
 
-        this.snmp = new Snmp(transport);
-        this.snmp.addCommandResponder(this);
+        Snmp snmp = new Snmp(transport);
+        snmp.addCommandResponder(this);
 
         // listen to the transport
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Starting trap consumer on {} using {} protocol", endpoint.getAddress(), endpoint.getProtocol());
+            LOG.debug("Starting trap consumer on {} using {} protocol", endpoint.getServerAddress(), endpoint.getProtocol());
         }
         this.transport.listen();
         if (LOG.isInfoEnabled()) {
-            LOG.info("Started trap consumer on {} using {} protocol", endpoint.getAddress(), endpoint.getProtocol());
+            LOG.info("Started trap consumer on {} using {} protocol", endpoint.getServerAddress(), endpoint.getProtocol());
         }
     }
 
@@ -88,10 +86,10 @@ public class SnmpTrapConsumer extends DefaultConsumer implements CommandResponde
         // stop listening to the transport
         if (this.transport != null && this.transport.isListening()) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Stopping trap consumer on {}", this.endpoint.getAddress());
+                LOG.debug("Stopping trap consumer on {}", this.endpoint.getServerAddress());
             }
             this.transport.close();
-            LOG.info("Stopped trap consumer on {}", this.endpoint.getAddress());
+            LOG.info("Stopped trap consumer on {}", this.endpoint.getServerAddress());
         }
 
         super.doStop();
@@ -112,7 +110,7 @@ public class SnmpTrapConsumer extends DefaultConsumer implements CommandResponde
                 pdu.setErrorStatus(0);
                 pdu.setType(PDU.RESPONSE);
                 StatusInformation statusInformation = new StatusInformation();
-                StateReference ref = event.getStateReference();
+                StateReference<?> ref = event.getStateReference();
                 try {
                     event.getMessageDispatcher().returnResponsePdu(event.getMessageProcessingModel(),
                             event.getSecurityModel(),
@@ -135,7 +133,7 @@ public class SnmpTrapConsumer extends DefaultConsumer implements CommandResponde
 
     public void processPDU(PDU pdu, CommandResponderEvent event) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Received trap event for {} : {}", this.endpoint.getAddress(), pdu);
+            LOG.debug("Received trap event for {} : {}", this.endpoint.getServerAddress(), pdu);
         }
         Exchange exchange = createExchange(pdu, event);
         try {

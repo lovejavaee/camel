@@ -55,13 +55,13 @@ abstract class KafkaHealthCheckTestSupport implements ConfigurableRoute, Configu
     protected org.apache.kafka.clients.producer.KafkaProducer<String, String> producer;
     @EndpointInject("mock:result")
     protected MockEndpoint to;
+    protected boolean serviceShutdown = false;
 
     @BeforeAll
     public static void beforeClass() {
         service.initialize();
 
-        LOG.info("### Embedded Kafka cluster broker list: {}", service.getBootstrapServers());
-        System.setProperty("bootstrapServers", service.getBootstrapServers());
+        KafkaTestUtil.setServiceProperties(service);
         System.setProperty("brokers", service.getBootstrapServers());
     }
 
@@ -74,9 +74,11 @@ abstract class KafkaHealthCheckTestSupport implements ConfigurableRoute, Configu
 
     @BeforeEach
     public void before() {
-        Properties props = KafkaTestUtil.getDefaultProperties(service);
-        producer = new org.apache.kafka.clients.producer.KafkaProducer<>(props);
-        MockConsumerInterceptor.recordsCaptured.clear();
+        if (!serviceShutdown) {
+            Properties props = KafkaTestUtil.getDefaultProperties(service);
+            producer = new org.apache.kafka.clients.producer.KafkaProducer<>(props);
+            MockConsumerInterceptor.recordsCaptured.clear();
+        }
     }
 
     @ContextFixture

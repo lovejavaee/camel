@@ -27,8 +27,8 @@ import org.apache.camel.support.console.AbstractDevConsole;
 import org.apache.camel.util.TimeUtils;
 import org.apache.camel.util.json.JsonObject;
 
-@DevConsole("jvm")
-@Configurer(bootstrap = true)
+@DevConsole(name = "jvm", displayName = "JVM", description = "Displays JVM information")
+@Configurer(extended = true)
 public class JvmDevConsole extends AbstractDevConsole {
 
     @Metadata(defaultValue = "true", description = "Show classpath information")

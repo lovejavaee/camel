@@ -38,7 +38,7 @@ import org.apache.camel.util.ObjectHelper;
 @XmlRootElement(name = "loadBalancerConfiguration")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Configurer
-@Deprecated
+@Deprecated(since = "3.19.0")
 public class ServiceCallServiceLoadBalancerConfiguration extends ServiceCallConfiguration
         implements ServiceLoadBalancerFactory {
     @XmlTransient
@@ -100,32 +100,30 @@ public class ServiceCallServiceLoadBalancerConfiguration extends ServiceCallConf
             try {
                 // Then use Service factory.
                 type = camelContext.getCamelContextExtension()
-                        .getFactoryFinder(ServiceCallDefinitionConstants.RESOURCE_PATH).findClass(factoryKey).orElse(null);
+                        .getFactoryFinder(ServiceCallDefinitionConstants.RESOURCE_PATH).findClass(factoryKey).orElseThrow();
             } catch (Exception e) {
                 throw new NoFactoryAvailableException(ServiceCallDefinitionConstants.RESOURCE_PATH + factoryKey, e);
             }
 
-            if (type != null) {
-                if (ServiceLoadBalancerFactory.class.isAssignableFrom(type)) {
-                    factory = (ServiceLoadBalancerFactory) camelContext.getInjector().newInstance(type, false);
-                } else {
-                    throw new IllegalArgumentException(
-                            "Resolving LoadBalancer: " + factoryKey
-                                                       + " detected type conflict: Not a LoadBalancerFactory implementation. Found: "
-                                                       + type.getName());
-                }
+            if (ServiceLoadBalancerFactory.class.isAssignableFrom(type)) {
+                factory = (ServiceLoadBalancerFactory) camelContext.getInjector().newInstance(type, false);
+            } else {
+                throw new IllegalArgumentException(
+                        "Resolving LoadBalancer: " + factoryKey
+                                                   + " detected type conflict: Not a LoadBalancerFactory implementation. Found: "
+                                                   + type.getName());
             }
 
             try {
                 Map<String, Object> parameters = getConfiguredOptions(camelContext, this);
 
                 parameters.replaceAll((k, v) -> {
-                    if (v instanceof String) {
+                    if (v instanceof String str) {
                         try {
-                            v = camelContext.resolvePropertyPlaceholders((String) v);
+                            v = camelContext.resolvePropertyPlaceholders(str);
                         } catch (Exception e) {
                             throw new IllegalArgumentException(
-                                    String.format("Exception while resolving %s (%s)", k, v.toString()), e);
+                                    String.format("Exception while resolving %s (%s)", k, v), e);
                         }
                     }
 

@@ -18,18 +18,23 @@ package org.apache.camel.impl.console;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
+import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Route;
 import org.apache.camel.api.management.ManagedCamelContext;
 import org.apache.camel.api.management.mbean.ManagedProcessorMBean;
 import org.apache.camel.api.management.mbean.ManagedRouteMBean;
 import org.apache.camel.spi.annotations.DevConsole;
+import org.apache.camel.support.ExceptionHelper;
+import org.apache.camel.support.LoggerHelper;
 import org.apache.camel.support.PatternHelper;
 import org.apache.camel.support.console.AbstractDevConsole;
 import org.apache.camel.util.StringHelper;
@@ -37,9 +42,13 @@ import org.apache.camel.util.TimeUtils;
 import org.apache.camel.util.json.JsonArray;
 import org.apache.camel.util.json.JsonObject;
 import org.apache.camel.util.json.Jsoner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@DevConsole("route")
+@DevConsole(name = "route", description = "Route information")
 public class RouteDevConsole extends AbstractDevConsole {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RouteDevConsole.class);
 
     /**
      * Filters the routes matching by route id, route uri, and source location
@@ -56,24 +65,55 @@ public class RouteDevConsole extends AbstractDevConsole {
      */
     public static final String PROCESSORS = "processors";
 
+    /**
+     * Action to perform such as start,stop,suspend,resume on one or more routes
+     */
+    public static final String ACTION = "action";
+
     public RouteDevConsole() {
         super("camel", "route", "Route", "Route information");
     }
 
     @Override
     protected String doCallText(Map<String, Object> options) {
+        String action = (String) options.get(ACTION);
+        String filter = (String) options.get(FILTER);
+        if (action != null) {
+            doAction(getCamelContext(), action, filter);
+            return "";
+        }
+
         final boolean processors = "true".equals(options.getOrDefault(PROCESSORS, "false"));
         final StringBuilder sb = new StringBuilder();
         Function<ManagedRouteMBean, Object> task = mrb -> {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append("\n");
             }
             sb.append(String.format("    Id: %s", mrb.getRouteId()));
+            if (mrb.getNodePrefixId() != null) {
+                sb.append(String.format("    Node Prefix Id: %s", mrb.getNodePrefixId()));
+            }
             sb.append(String.format("\n    From: %s", mrb.getEndpointUri()));
+            sb.append(String.format("\n    Remote: %s", mrb.isRemoteEndpoint()));
             if (mrb.getSourceLocation() != null) {
                 sb.append(String.format("\n    Source: %s", mrb.getSourceLocation()));
             }
             sb.append(String.format("\n    State: %s", mrb.getState()));
+            if (mrb.getLastError() != null) {
+                String phase = StringHelper.capitalize(mrb.getLastError().getPhase().name().toLowerCase());
+                String ago = TimeUtils.printSince(mrb.getLastError().getDate().getTime());
+                sb.append(String.format("\n    Error Ago: %s", ago));
+                sb.append(String.format("\n    Error Phase: %s", phase));
+                Throwable cause = mrb.getLastError().getException();
+                if (cause != null) {
+                    sb.append(String.format("\n    Error Message: %s", cause.getMessage()));
+
+                    final String stackTrace = ExceptionHelper.stackTraceToString(cause);
+                    sb.append("\n\n");
+                    sb.append(stackTrace);
+                    sb.append("\n\n");
+                }
+            }
             sb.append(String.format("\n    Uptime: %s", mrb.getUptime()));
             String coverage = calculateRouteCoverage(mrb, true);
             if (coverage != null) {
@@ -92,6 +132,12 @@ public class RouteDevConsole extends AbstractDevConsole {
             sb.append(String.format("\n    Total: %s", mrb.getExchangesTotal()));
             sb.append(String.format("\n    Failed: %s", mrb.getExchangesFailed()));
             sb.append(String.format("\n    Inflight: %s", mrb.getExchangesInflight()));
+            long idle = mrb.getIdleSince();
+            if (idle > 0) {
+                sb.append(String.format("\n    Idle Since: %s", TimeUtils.printDuration(idle)));
+            } else {
+                sb.append(String.format("\n    Idle Since: %s", ""));
+            }
             sb.append(String.format("\n    Mean Time: %s", TimeUtils.printDuration(mrb.getMeanProcessingTime(), true)));
             sb.append(String.format("\n    Max Time: %s", TimeUtils.printDuration(mrb.getMaxProcessingTime(), true)));
             sb.append(String.format("\n    Min Time: %s", TimeUtils.printDuration(mrb.getMinProcessingTime(), true)));
@@ -148,6 +194,9 @@ public class RouteDevConsole extends AbstractDevConsole {
         for (ManagedProcessorMBean mp : mps) {
             sb.append("\n");
             sb.append(String.format("\n        Id: %s", mp.getProcessorId()));
+            if (mp.getNodePrefixId() != null) {
+                sb.append(String.format("\n        Node Prefix Id: %s", mp.getNodePrefixId()));
+            }
             sb.append(String.format("\n        Processor: %s", mp.getProcessorName()));
             sb.append(String.format("\n        Level: %d", mp.getLevel()));
             if (mp.getSourceLocation() != null) {
@@ -160,12 +209,19 @@ public class RouteDevConsole extends AbstractDevConsole {
             sb.append(String.format("\n        Total: %s", mp.getExchangesTotal()));
             sb.append(String.format("\n        Failed: %s", mp.getExchangesFailed()));
             sb.append(String.format("\n        Inflight: %s", mp.getExchangesInflight()));
+            long idle = mp.getIdleSince();
+            if (idle > 0) {
+                sb.append(String.format("\n        Idle Since: %s", TimeUtils.printDuration(idle)));
+            } else {
+                sb.append(String.format("\n        Idle Since: %s", ""));
+            }
             sb.append(String.format("\n        Mean Time: %s", TimeUtils.printDuration(mp.getMeanProcessingTime(), true)));
             sb.append(String.format("\n        Max Time: %s", TimeUtils.printDuration(mp.getMaxProcessingTime(), true)));
             sb.append(String.format("\n        Min Time: %s", TimeUtils.printDuration(mp.getMinProcessingTime(), true)));
             if (mp.getExchangesTotal() > 0) {
-                sb.append(String.format("\n    Last Time: %s", TimeUtils.printDuration(mp.getLastProcessingTime(), true)));
-                sb.append(String.format("\n    Delta Time: %s", TimeUtils.printDuration(mp.getDeltaProcessingTime(), true)));
+                sb.append(String.format("\n        Last Time: %s", TimeUtils.printDuration(mp.getLastProcessingTime(), true)));
+                sb.append(
+                        String.format("\n        Delta Time: %s", TimeUtils.printDuration(mp.getDeltaProcessingTime(), true)));
             }
             Date last = mp.getLastExchangeCompletedTimestamp();
             if (last != null) {
@@ -182,6 +238,13 @@ public class RouteDevConsole extends AbstractDevConsole {
 
     @Override
     protected JsonObject doCallJson(Map<String, Object> options) {
+        String action = (String) options.get(ACTION);
+        String filter = (String) options.get(FILTER);
+        if (action != null) {
+            doAction(getCamelContext(), action, filter);
+            return new JsonObject();
+        }
+
         final boolean processors = "true".equals(options.getOrDefault(PROCESSORS, "false"));
         final JsonObject root = new JsonObject();
         final List<JsonObject> list = new ArrayList<>();
@@ -189,12 +252,31 @@ public class RouteDevConsole extends AbstractDevConsole {
             JsonObject jo = new JsonObject();
             list.add(jo);
             jo.put("routeId", mrb.getRouteId());
+            if (mrb.getNodePrefixId() != null) {
+                jo.put("nodePrefixId", mrb.getNodePrefixId());
+            }
             jo.put("from", mrb.getEndpointUri());
+            jo.put("remote", mrb.isRemoteEndpoint());
             if (mrb.getSourceLocation() != null) {
                 jo.put("source", mrb.getSourceLocation());
             }
             jo.put("state", mrb.getState());
             jo.put("uptime", mrb.getUptime());
+            if (mrb.getLastError() != null) {
+                String phase = StringHelper.capitalize(mrb.getLastError().getPhase().name().toLowerCase());
+                JsonObject eo = new JsonObject();
+                eo.put("phase", phase);
+                eo.put("timestamp", mrb.getLastError().getDate().getTime());
+                Throwable cause = mrb.getLastError().getException();
+                if (cause != null) {
+                    eo.put("message", cause.getMessage());
+                    JsonArray arr2 = new JsonArray();
+                    final String trace = ExceptionHelper.stackTraceToString(cause);
+                    eo.put("stackTrace", arr2);
+                    Collections.addAll(arr2, trace.split("\n"));
+                }
+                jo.put("lastError", eo);
+            }
             JsonObject stats = new JsonObject();
             String coverage = calculateRouteCoverage(mrb, false);
             if (coverage != null) {
@@ -212,6 +294,7 @@ public class RouteDevConsole extends AbstractDevConsole {
             if (!thp.isEmpty()) {
                 stats.put("exchangesThroughput", thp);
             }
+            stats.put("idleSince", mrb.getIdleSince());
             stats.put("exchangesTotal", mrb.getExchangesTotal());
             stats.put("exchangesFailed", mrb.getExchangesFailed());
             stats.put("exchangesInflight", mrb.getExchangesInflight());
@@ -224,18 +307,15 @@ public class RouteDevConsole extends AbstractDevConsole {
             }
             Date last = mrb.getLastExchangeCreatedTimestamp();
             if (last != null) {
-                String ago = TimeUtils.printSince(last.getTime());
-                stats.put("sinceLastCreatedExchange", ago);
+                stats.put("lastCreatedExchangeTimestamp", last.getTime());
             }
             last = mrb.getLastExchangeCompletedTimestamp();
             if (last != null) {
-                String ago = TimeUtils.printSince(last.getTime());
-                stats.put("sinceLastCompletedExchange", ago);
+                stats.put("lastCompletedExchangeTimestamp", last.getTime());
             }
             last = mrb.getLastExchangeFailureTimestamp();
             if (last != null) {
-                String ago = TimeUtils.printSince(last.getTime());
-                stats.put("sinceLastFailedExchange", ago);
+                stats.put("lastFailedExchangeTimestamp", last.getTime());
             }
             jo.put("statistics", stats);
             if (processors) {
@@ -260,22 +340,20 @@ public class RouteDevConsole extends AbstractDevConsole {
             return;
         }
 
-        // sort by index
-        List<ManagedProcessorMBean> mps = new ArrayList<>();
-        for (String id : ids) {
-            ManagedProcessorMBean mp = mcc.getManagedProcessor(id);
-            if (mp != null) {
-                mps.add(mp);
-            }
-        }
-        // sort processors by index
-        mps.sort(Comparator.comparingInt(ManagedProcessorMBean::getIndex));
+        List<ManagedProcessorMBean> mps = ids.stream().map(mcc::getManagedProcessor)
+                .filter(Objects::nonNull)
+                // sort processors by index
+                .sorted(Comparator.comparingInt(ManagedProcessorMBean::getIndex))
+                .toList();
 
         for (ManagedProcessorMBean mp : mps) {
             JsonObject jo = new JsonObject();
             arr.add(jo);
 
             jo.put("id", mp.getProcessorId());
+            if (mp.getNodePrefixId() != null) {
+                jo.put("nodePrefixId", mp.getNodePrefixId());
+            }
             if (mp.getSourceLocation() != null) {
                 String loc = mp.getSourceLocation();
                 if (mp.getSourceLineNumber() != null) {
@@ -297,29 +375,37 @@ public class RouteDevConsole extends AbstractDevConsole {
             }
             jo.put("processor", mp.getProcessorName());
             jo.put("level", mp.getLevel());
-            JsonObject stats = new JsonObject();
-            stats.put("exchangesTotal", mp.getExchangesTotal());
-            stats.put("exchangesFailed", mp.getExchangesFailed());
-            stats.put("exchangesInflight", mp.getExchangesInflight());
-            stats.put("meanProcessingTime", mp.getMeanProcessingTime());
-            stats.put("maxProcessingTime", mp.getMaxProcessingTime());
-            stats.put("minProcessingTime", mp.getMinProcessingTime());
-            if (mp.getExchangesTotal() > 0) {
-                stats.put("lastProcessingTime", mp.getLastProcessingTime());
-                stats.put("deltaProcessingTime", mp.getDeltaProcessingTime());
-            }
-            Date last = mp.getLastExchangeCompletedTimestamp();
-            if (last != null) {
-                String ago = TimeUtils.printSince(last.getTime());
-                stats.put("sinceLastCompletedExchange", ago);
-            }
-            last = mp.getLastExchangeFailureTimestamp();
-            if (last != null) {
-                String ago = TimeUtils.printSince(last.getTime());
-                stats.put("sinceLastFailedExchange", ago);
-            }
+            final JsonObject stats = getStatsObject(mp);
             jo.put("statistics", stats);
         }
+    }
+
+    private static JsonObject getStatsObject(ManagedProcessorMBean mp) {
+        JsonObject stats = new JsonObject();
+        stats.put("idleSince", mp.getIdleSince());
+        stats.put("exchangesTotal", mp.getExchangesTotal());
+        stats.put("exchangesFailed", mp.getExchangesFailed());
+        stats.put("exchangesInflight", mp.getExchangesInflight());
+        stats.put("meanProcessingTime", mp.getMeanProcessingTime());
+        stats.put("maxProcessingTime", mp.getMaxProcessingTime());
+        stats.put("minProcessingTime", mp.getMinProcessingTime());
+        if (mp.getExchangesTotal() > 0) {
+            stats.put("lastProcessingTime", mp.getLastProcessingTime());
+            stats.put("deltaProcessingTime", mp.getDeltaProcessingTime());
+        }
+        Date last = mp.getLastExchangeCreatedTimestamp();
+        if (last != null) {
+            stats.put("lastCreatedExchangeTimestamp", last.getTime());
+        }
+        last = mp.getLastExchangeCompletedTimestamp();
+        if (last != null) {
+            stats.put("lastCompletedExchangeTimestamp", last.getTime());
+        }
+        last = mp.getLastExchangeFailureTimestamp();
+        if (last != null) {
+            stats.put("lastFailedExchangeTimestamp", last.getTime());
+        }
+        return stats;
     }
 
     protected void doCall(Map<String, Object> options, Function<ManagedRouteMBean, Object> task) {
@@ -335,6 +421,7 @@ public class RouteDevConsole extends AbstractDevConsole {
             routes.sort((o1, o2) -> o1.getRouteId().compareToIgnoreCase(o2.getRouteId()));
             routes.stream()
                     .map(route -> mcc.getManagedRoute(route.getRouteId()))
+                    .filter(Objects::nonNull)
                     .filter(r -> accept(r, filter))
                     .filter(r -> accept(r, subPath))
                     .sorted(RouteDevConsole::sort)
@@ -348,14 +435,15 @@ public class RouteDevConsole extends AbstractDevConsole {
             return true;
         }
 
+        String onlyName = LoggerHelper.sourceNameOnly(mrb.getSourceLocation());
         return PatternHelper.matchPattern(mrb.getRouteId(), filter)
                 || PatternHelper.matchPattern(mrb.getEndpointUri(), filter)
-                || PatternHelper.matchPattern(mrb.getSourceLocationShort(), filter);
+                || PatternHelper.matchPattern(mrb.getSourceLocationShort(), filter)
+                || PatternHelper.matchPattern(onlyName, filter);
     }
 
     private static int sort(ManagedRouteMBean o1, ManagedRouteMBean o2) {
-        // sort by id
-        return o1.getRouteId().compareTo(o2.getRouteId());
+        return o1.getRouteId().compareToIgnoreCase(o2.getRouteId());
     }
 
     private String getLoad1(ManagedRouteMBean mrb) {
@@ -411,7 +499,7 @@ public class RouteDevConsole extends AbstractDevConsole {
         if (percent) {
             double p;
             if (total > 0) {
-                p = (covered / total) * 100;
+                p = ((double) covered / total) * 100;
             } else {
                 p = 0;
             }
@@ -419,6 +507,56 @@ public class RouteDevConsole extends AbstractDevConsole {
             return covered + "/" + total + " (" + f + "%)";
         } else {
             return covered + "/" + total;
+        }
+    }
+
+    protected void doAction(CamelContext camelContext, String command, String filter) {
+        if (filter == null) {
+            filter = "*";
+        }
+        String[] patterns = filter.split(",");
+        // find matching IDs
+        List<String> ids = camelContext.getRoutes()
+                .stream().map(Route::getRouteId)
+                .filter(routeId -> {
+                    for (String p : patterns) {
+                        if (PatternHelper.matchPattern(routeId, p)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                })
+                .toList();
+        for (String id : ids) {
+            try {
+                if ("start".equals(command)) {
+                    if ("*".equals(id)) {
+                        camelContext.getRouteController().startAllRoutes();
+                    } else {
+                        camelContext.getRouteController().startRoute(id);
+                    }
+                } else if ("stop".equals(command)) {
+                    if ("*".equals(id)) {
+                        camelContext.getRouteController().stopAllRoutes();
+                    } else {
+                        camelContext.getRouteController().stopRoute(id);
+                    }
+                } else if ("suspend".equals(command)) {
+                    if ("*".equals(id)) {
+                        camelContext.suspend();
+                    } else {
+                        camelContext.getRouteController().suspendRoute(id);
+                    }
+                } else if ("resume".equals(command)) {
+                    if ("*".equals(id)) {
+                        camelContext.resume();
+                    } else {
+                        camelContext.getRouteController().resumeRoute(id);
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Error {} route: {} due to: {}. This exception is ignored.", command, id, e.getMessage(), e);
+            }
         }
     }
 

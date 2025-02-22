@@ -16,11 +16,14 @@
  */
 package org.apache.camel.component.aws.cloudtrail;
 
+import java.util.Map;
+
 import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.component.aws.cloudtrail.client.CloudtrailClientFactory;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.ScheduledPollEndpoint;
@@ -32,8 +35,8 @@ import software.amazon.awssdk.services.cloudtrail.CloudTrailClient;
  */
 @UriEndpoint(firstVersion = "3.19.0", scheme = "aws-cloudtrail", title = "AWS Cloudtrail", syntax = "aws-cloudtrail:label",
              consumerOnly = true,
-             category = { Category.CLOUD, Category.EVENTBUS }, headersClass = CloudtrailConstants.class)
-public class CloudtrailEndpoint extends ScheduledPollEndpoint {
+             category = { Category.CLOUD, Category.MANAGEMENT, Category.MONITORING }, headersClass = CloudtrailConstants.class)
+public class CloudtrailEndpoint extends ScheduledPollEndpoint implements EndpointServiceLocation {
 
     @UriParam
     private CloudtrailConfiguration configuration;
@@ -76,11 +79,41 @@ public class CloudtrailEndpoint extends ScheduledPollEndpoint {
         return consumer;
     }
 
+    @Override
+    public CloudtrailComponent getComponent() {
+        return (CloudtrailComponent) super.getComponent();
+    }
+
     public CloudTrailClient getClient() {
         return cloudTrailClient;
     }
 
     public CloudtrailConfiguration getConfiguration() {
         return configuration;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (ObjectHelper.isNotEmpty(configuration.getRegion())) {
+                return configuration.getRegion();
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "cloudtrail";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (configuration.getEventSource() != null) {
+            return Map.of("source", configuration.getEventSource());
+        }
+        return null;
     }
 }

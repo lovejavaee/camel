@@ -22,8 +22,6 @@ import org.apache.camel.support.jsse.SSLContextParameters;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -45,22 +43,17 @@ public class HttpsTwoDifferentSslContextParametersGetTest extends BaseHttpsTest 
     @BindToRegistry("sslContextParameters2")
     private SSLContextParameters sslContextParameters2 = new SSLContextParameters();
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext()).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void cleanupResources() {
         if (localServer != null) {
             localServer.stop();
         }
@@ -75,7 +68,7 @@ public class HttpsTwoDifferentSslContextParametersGetTest extends BaseHttpsTest 
     public void httpsTwoDifferentSSLContextNotSupported() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:foo")
                         .to("https://localhost:" + localServer.getLocalPort()
                             + "/mail?x509HostnameVerifier=x509HostnameVerifier&sslContextParameters=#sslContextParameters");

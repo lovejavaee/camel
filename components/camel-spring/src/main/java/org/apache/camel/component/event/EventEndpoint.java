@@ -38,7 +38,7 @@ import static org.apache.camel.RuntimeCamelException.wrapRuntimeCamelException;
  * Listen for Spring Application Events.
  */
 @UriEndpoint(firstVersion = "1.4.0", scheme = "spring-event", title = "Spring Event", syntax = "spring-event:name",
-             category = { Category.SPRING, Category.EVENTBUS })
+             remote = false, category = { Category.MESSAGING })
 public class EventEndpoint extends DefaultEndpoint implements ApplicationContextAware {
     private LoadBalancer loadBalancer;
     private ApplicationContext applicationContext;
@@ -50,6 +50,11 @@ public class EventEndpoint extends DefaultEndpoint implements ApplicationContext
         super(endpointUri, component);
         this.applicationContext = component.getApplicationContext();
         this.name = name;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override
@@ -116,14 +121,24 @@ public class EventEndpoint extends DefaultEndpoint implements ApplicationContext
 
     // Implementation methods
     // -------------------------------------------------------------------------
-    public synchronized void consumerStarted(EventConsumer consumer) {
-        getComponent().consumerStarted(this);
-        getLoadBalancer().addProcessor(consumer.getAsyncProcessor());
+    public void consumerStarted(EventConsumer consumer) {
+        lock.lock();
+        try {
+            getComponent().consumerStarted(this);
+            getLoadBalancer().addProcessor(consumer.getAsyncProcessor());
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized void consumerStopped(EventConsumer consumer) {
-        getComponent().consumerStopped(this);
-        getLoadBalancer().removeProcessor(consumer.getAsyncProcessor());
+    public void consumerStopped(EventConsumer consumer) {
+        lock.lock();
+        try {
+            getComponent().consumerStopped(this);
+            getLoadBalancer().removeProcessor(consumer.getAsyncProcessor());
+        } finally {
+            lock.unlock();
+        }
     }
 
     protected LoadBalancer createLoadBalancer() {

@@ -23,10 +23,10 @@ import org.apache.camel.Predicate;
 import org.apache.camel.spi.Language;
 
 /**
- * Legacy error handler for XML DSL in camel-spring-xml/camel-blueprint
+ * Legacy error handler for XML DSL in camel-spring-xml
  */
 @XmlTransient
-@Deprecated
+@Deprecated(since = "3.17.0")
 public class DeadLetterChannelConfiguration extends DefaultErrorHandlerConfiguration implements DeadLetterChannelProperties {
 
     // has no additional configurations

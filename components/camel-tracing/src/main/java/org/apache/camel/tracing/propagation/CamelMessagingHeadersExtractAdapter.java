@@ -17,32 +17,32 @@
 package org.apache.camel.tracing.propagation;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.camel.tracing.ExtractAdapter;
+import org.apache.camel.util.CaseInsensitiveMap;
 
 public final class CamelMessagingHeadersExtractAdapter implements ExtractAdapter {
 
-    private final Map<String, String> map = new HashMap<>();
+    private final Map<String, Object> map = new CaseInsensitiveMap();
     private final boolean jmsEncoding;
 
     public CamelMessagingHeadersExtractAdapter(final Map<String, Object> map, boolean jmsEncoding) {
         // Extract string valued map entries
         this.jmsEncoding = jmsEncoding;
         map.entrySet().stream().filter(e -> e.getValue() instanceof String || e.getValue() instanceof byte[]).forEach(e -> {
-            if (e.getValue() instanceof byte[]) {
-                this.map.put(decodeDash(e.getKey()), new String((byte[]) e.getValue(), StandardCharsets.UTF_8));
+            if (e.getValue() instanceof byte[] bytes) {
+                this.map.put(decodeDash(e.getKey()), new String(bytes, StandardCharsets.UTF_8));
             } else {
-                this.map.put(decodeDash(e.getKey()), (String) e.getValue());
+                this.map.put(decodeDash(e.getKey()), e.getValue());
             }
         });
     }
 
     @Override
-    public Iterator<Map.Entry<String, String>> iterator() {
+    public Iterator<Map.Entry<String, Object>> iterator() {
         return map.entrySet().iterator();
     }
 

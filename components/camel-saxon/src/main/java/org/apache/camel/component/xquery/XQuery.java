@@ -34,6 +34,7 @@ import org.apache.camel.support.language.NamespacePrefix;
 @Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER })
 @LanguageAnnotation(language = "xquery", factory = XQueryAnnotationExpressionFactory.class)
 public @interface XQuery {
+
     String value();
 
     boolean stripsAllWhiteSpace() default true;
@@ -49,14 +50,10 @@ public @interface XQuery {
     Class<?> resultType() default Object.class;
 
     /**
-     * @return The name of the header we want to apply the XQuery expression to. If this is empty then the Xquery
-     *         expression will be applied to the value of the exchange property or the body instead.
+     * Source to use, instead of message body. You can prefix with variable:, header:, or property: to specify kind of
+     * source. Otherwise, the source is assumed to be a variable. Use empty or null to use default source, which is the
+     * message body.
      */
-    String headerName() default "";
+    String source() default "";
 
-    /**
-     * @return The name of the property we want to apply the XQuery expression to. If this is empty then the Xquery
-     *         expression will be applied to the body instead.
-     */
-    String propertyName() default "";
 }

@@ -42,7 +42,7 @@ public class ManagedProcessor extends ManagedPerformanceCounter implements Manag
     private final ProcessorDefinition<?> definition;
     private final String id;
     private final int nodeLevel;
-    private String stepId;
+    private final String stepId;
     private Route route;
     private String sourceLocation;
 
@@ -53,8 +53,8 @@ public class ManagedProcessor extends ManagedPerformanceCounter implements Manag
         this.nodeLevel = ProcessorDefinitionHelper.getNodeLevel(definition);
         this.id = definition.idOrCreate(context.getCamelContextExtension().getContextPlugin(NodeIdFactory.class));
         StepDefinition step;
-        if (definition instanceof StepDefinition) {
-            step = (StepDefinition) definition;
+        if (definition instanceof StepDefinition stepDefinition) {
+            step = stepDefinition;
         } else {
             step = ProcessorDefinitionHelper.findFirstParentOfType(StepDefinition.class, definition, true);
         }
@@ -137,8 +137,8 @@ public class ManagedProcessor extends ManagedPerformanceCounter implements Manag
     @Override
     public String getState() {
         // must use String type to be sure remote JMX can read the attribute without requiring Camel classes.
-        if (processor instanceof StatefulService) {
-            ServiceStatus status = ((StatefulService) processor).getStatus();
+        if (processor instanceof StatefulService statefulService) {
+            ServiceStatus status = statefulService.getStatus();
             return status.name();
         }
 
@@ -160,8 +160,16 @@ public class ManagedProcessor extends ManagedPerformanceCounter implements Manag
     public String getRouteId() {
         if (route != null) {
             return route.getId();
-        } else if (processor instanceof RouteIdAware) {
-            return ((RouteIdAware) processor).getRouteId();
+        } else if (processor instanceof RouteIdAware routeIdAware) {
+            return routeIdAware.getRouteId();
+        }
+        return null;
+    }
+
+    @Override
+    public String getNodePrefixId() {
+        if (route != null) {
+            return route.getNodePrefixId();
         }
         return null;
     }

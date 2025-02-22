@@ -41,11 +41,9 @@ public class AggregationStrategyWithFilenameHeaderTest extends CamelTestSupport 
     private static final List<String> FILE_NAMES = Arrays.asList("foo", "bar");
     private static final String TEST_DIR = "target/out_AggregationStrategyWithFilenameHeaderTest";
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void deleteTestDirs() {
         deleteDirectory(TEST_DIR);
-        super.setUp();
     }
 
     @Test

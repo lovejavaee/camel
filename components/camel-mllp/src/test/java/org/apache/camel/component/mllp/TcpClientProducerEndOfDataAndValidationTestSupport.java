@@ -112,7 +112,7 @@ public abstract class TcpClientProducerEndOfDataAndValidationTestSupport extends
         DefaultCamelContext context = (DefaultCamelContext) super.createCamelContext();
 
         context.setUseMDCLogging(true);
-        context.setName(this.getClass().getSimpleName());
+        context.getCamelContextExtension().setName(this.getClass().getSimpleName());
 
         return context;
     }
@@ -177,10 +177,8 @@ public abstract class TcpClientProducerEndOfDataAndValidationTestSupport extends
     }
 
     @Override
-    public void tearDown() throws Exception {
+    public void doPostTearDown() throws InterruptedException {
         MockEndpoint.assertIsSatisfied(context, 5, TimeUnit.SECONDS);
-
-        super.tearDown();
     }
 
     @Test

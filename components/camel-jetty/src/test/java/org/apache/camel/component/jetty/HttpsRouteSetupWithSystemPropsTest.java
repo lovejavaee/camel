@@ -21,17 +21,17 @@ import java.net.URL;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.parallel.ResourceLock;
 
 import static org.apache.camel.component.jetty.BaseJettyTest.SSL_SYSPROPS;
 
+@Isolated
 @ResourceLock(SSL_SYSPROPS)
 public class HttpsRouteSetupWithSystemPropsTest extends HttpsRouteTest {
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         // ensure jsse clients can validate the self signed dummy localhost
         // cert,
         // use the server keystore as the trust store for these tests
@@ -45,8 +45,6 @@ public class HttpsRouteSetupWithSystemPropsTest extends HttpsRouteTest {
         setSystemProp("org.eclipse.jetty.ssl.password", pwd);
         setSystemProp("jdk.tls.client.protocols", "TLSv1.3");
         // END SNIPPET: e1
-
-        super.setUp();
     }
 
     @Override

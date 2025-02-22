@@ -29,6 +29,8 @@ import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.camel.cluster.CamelClusterMember;
 import org.apache.camel.support.cluster.AbstractCamelClusterView;
@@ -38,6 +40,7 @@ import org.slf4j.LoggerFactory;
 public class FileLockClusterView extends AbstractCamelClusterView {
     private static final Logger LOGGER = LoggerFactory.getLogger(FileLockClusterView.class);
 
+    private static final Lock LOCK = new ReentrantLock();
     private final ClusterMember localMember;
     private final Path path;
     private RandomAccessFile lockFile;
@@ -76,7 +79,7 @@ public class FileLockClusterView extends AbstractCamelClusterView {
         if (lockFile != null) {
             closeInternal();
 
-            fireLeadershipChangedEvent(Optional.empty());
+            fireLeadershipChangedEvent((CamelClusterMember) null);
         }
 
         if (!Files.exists(path.getParent())) {
@@ -117,7 +120,7 @@ public class FileLockClusterView extends AbstractCamelClusterView {
         if (lockFile != null) {
             try {
                 lockFile.close();
-            } catch (Throwable ignore) {
+            } catch (Exception ignore) {
                 // Ignore
             }
             lockFile = null;
@@ -134,10 +137,11 @@ public class FileLockClusterView extends AbstractCamelClusterView {
                     return;
                 }
 
-                synchronized (FileLockClusterView.this) {
+                LOCK.lock();
+                try {
                     if (lock != null) {
                         LOGGER.info("Lock on file {} lost (lock={})", path, lock);
-                        fireLeadershipChangedEvent(Optional.empty());
+                        fireLeadershipChangedEvent((CamelClusterMember) null);
                     }
 
                     LOGGER.debug("Try to acquire a lock on {}", path);
@@ -148,10 +152,12 @@ public class FileLockClusterView extends AbstractCamelClusterView {
 
                     if (lock != null) {
                         LOGGER.info("Lock on file {} acquired (lock={})", path, lock);
-                        fireLeadershipChangedEvent(Optional.of(localMember));
+                        fireLeadershipChangedEvent(localMember);
                     } else {
                         LOGGER.debug("Lock on file {} not acquired ", path);
                     }
+                } finally {
+                    LOCK.unlock();
                 }
             } catch (OverlappingFileLockException e) {
                 reason = new IOException(e);
@@ -169,8 +175,11 @@ public class FileLockClusterView extends AbstractCamelClusterView {
     private final class ClusterMember implements CamelClusterMember {
         @Override
         public boolean isLeader() {
-            synchronized (FileLockClusterView.this) {
+            LOCK.lock();
+            try {
                 return lock != null && lock.isValid();
+            } finally {
+                LOCK.unlock();
             }
         }
 

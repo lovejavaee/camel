@@ -104,8 +104,15 @@ public class ClusteredJdbcAggregationRepository extends JdbcAggregationRepositor
         // The default totalParameterIndex is 3 for ID, Exchange and version. Depending
         // on logic this will be increased.
         int totalParameterIndex = 3;
-        StringBuilder queryBuilder = new StringBuilder().append("INSERT INTO ").append(repositoryName).append('(')
-                .append(EXCHANGE).append(", ").append(ID).append(", ").append(VERSION);
+        StringBuilder queryBuilder = new StringBuilder(256)
+                .append("INSERT INTO ")
+                .append(repositoryName)
+                .append('(')
+                .append(EXCHANGE)
+                .append(", ")
+                .append(ID)
+                .append(", ")
+                .append(VERSION);
 
         if (isStoreBodyAsText()) {
             queryBuilder.append(", ").append(BODY);
@@ -136,7 +143,7 @@ public class ClusteredJdbcAggregationRepository extends JdbcAggregationRepositor
             final CamelContext camelContext, final String key, final Exchange exchange,
             final String sql, final Long version, final boolean completed)
             throws Exception {
-        final byte[] data = codec.marshallExchange(exchange, allowSerializedHeaders);
+        final byte[] data = jdbcCamelCodec.marshallExchange(exchange, isAllowSerializedHeaders());
         Integer insertCount = super.jdbcTemplate.execute(sql,
                 new AbstractLobCreatingPreparedStatementCallback(getLobHandler()) {
                     @Override

@@ -24,8 +24,6 @@ import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.io.entity.StringEntity;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,10 +37,10 @@ public class HttpProducerTwoParametersWithSameKeyTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/myapp", (request, response, context) -> {
@@ -56,14 +54,10 @@ public class HttpProducerTwoParametersWithSameKeyTest extends BaseHttpTest {
                     response.setCode(HttpStatus.SC_OK);
                 }).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -71,7 +65,7 @@ public class HttpProducerTwoParametersWithSameKeyTest extends BaseHttpTest {
     }
 
     @Test
-    public void testTwoParametersWithSameKey() throws Exception {
+    public void testTwoParametersWithSameKey() {
         String endpointUri = "http://localhost:" + localServer.getLocalPort()
                              + "/myapp?from=me&to=foo&to=bar";
 

@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import javax.xml.stream.XMLEventReader;
 import javax.xml.stream.XMLEventWriter;
@@ -39,9 +40,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class StaxConverterTest extends ContextTestSupport {
 
-    private static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
+    private static final Charset ISO_8859_1 = StandardCharsets.ISO_8859_1;
 
-    private static final Charset UTF_8 = Charset.forName("UTF-8");
+    private static final Charset UTF_8 = StandardCharsets.UTF_8;
 
     private static final String TEST_XML = "<test>Test Message with umlaut \u00E4\u00F6\u00FC</test>"; // umlauts
                                                                                                       // have
@@ -109,7 +110,7 @@ public class StaxConverterTest extends ContextTestSupport {
         }
         assertNotNull(output);
 
-        String result = new String(output.toByteArray(), UTF_8.name());
+        String result = output.toString(UTF_8);
         // normalize the auotation mark
         if (result.indexOf('\'') > 0) {
             result = result.replace('\'', '"');
@@ -168,7 +169,7 @@ public class StaxConverterTest extends ContextTestSupport {
         }
         assertNotNull(output);
 
-        String result = new String(output.toByteArray(), UTF_8.name());
+        String result = output.toString(UTF_8);
 
         assertEquals(TEST_XML, result);
     }
@@ -221,7 +222,7 @@ public class StaxConverterTest extends ContextTestSupport {
             in = context.getTypeConverter().mandatoryConvertTo(InputStream.class, xreader);
 
             // verify
-            InputStream expected = new ByteArrayInputStream(TEST_XML_7000.getBytes("utf-8"));
+            InputStream expected = new ByteArrayInputStream(TEST_XML_7000.getBytes(StandardCharsets.UTF_8));
             byte[] tmp1 = new byte[512];
             byte[] tmp2 = new byte[512];
             for (;;) {

@@ -81,8 +81,7 @@ public final class ClassUtil {
      * type otherwise it return the casted {@link Class} of the type argument.
      * </p>
      *
-     * @param  type class or parametrized type
-     * @return
+     * @param type class or parametrized type
      */
     public static Class<?> getClass(Type type) {
         return getClazz(type);
@@ -138,16 +137,13 @@ public final class ClassUtil {
      * @return      class type for given type
      */
     public static Class<?> getClazz(Type type) {
-        if (type instanceof ParameterizedType) {
-            ParameterizedType pt = (ParameterizedType) type;
+        if (type instanceof ParameterizedType pt) {
             return (Class<?>) pt.getRawType();
         } else if (type instanceof Class) {
             return (Class<?>) type;
-        } else if (type instanceof GenericArrayType) {
-            GenericArrayType arrayType = (GenericArrayType) type;
+        } else if (type instanceof GenericArrayType arrayType) {
             return Array.newInstance(getClazz(arrayType.getGenericComponentType()), 0).getClass();
-        } else if (type instanceof WildcardType) {
-            WildcardType wildcardType = (WildcardType) type;
+        } else if (type instanceof WildcardType wildcardType) {
             Type[] bounds = wildcardType.getUpperBounds();
             if (bounds.length > 1) {
                 throw new IllegalArgumentException(
@@ -157,8 +153,7 @@ public final class ClassUtil {
             } else {
                 return getClass(bounds[0]);
             }
-        } else if (type instanceof TypeVariable) {
-            TypeVariable<?> typeVariable = (TypeVariable<?>) type;
+        } else if (type instanceof TypeVariable<?> typeVariable) {
             if (typeVariable.getBounds().length > 1) {
                 throw new IllegalArgumentException("Illegal use of type variable with more than one bound: " + typeVariable);
             } else {
@@ -175,8 +170,8 @@ public final class ClassUtil {
     }
 
     public static boolean isRawClassEquals(Type ipType, Type apiType) {
-        Class ipClass = getRawPrimitiveType(ipType);
-        Class apiClass = getRawPrimitiveType(apiType);
+        Class<?> ipClass = getRawPrimitiveType(ipType);
+        Class<?> apiClass = getRawPrimitiveType(apiType);
 
         if (ipClass == null || apiClass == null) {
             // we found some illegal generics
@@ -186,12 +181,12 @@ public final class ClassUtil {
         return ipClass.equals(apiClass);
     }
 
-    private static Class getRawPrimitiveType(Type type) {
-        if (type instanceof Class) {
-            if (((Class) type).isPrimitive()) {
-                return getPrimitiveWrapper((Class) type);
+    private static Class<?> getRawPrimitiveType(Type type) {
+        if (type instanceof Class<?> clazz) {
+            if (clazz.isPrimitive()) {
+                return getPrimitiveWrapper(clazz);
             }
-            return (Class) type;
+            return clazz;
         }
 
         if (type instanceof ParameterizedType) {
@@ -211,7 +206,7 @@ public final class ClassUtil {
     public static boolean hasAnnotation(String fqAnnotationName, Class<?> cl) {
         return Stream.of(cl.getAnnotations())
                 .map(annotation -> annotation.annotationType().getName())
-                .filter(fqAnnotationName::equals)
-                .findFirst().isPresent();
+                .anyMatch(fqAnnotationName::equals);
     }
+
 }

@@ -21,14 +21,17 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.cloud.ServiceDefinition;
 import org.apache.camel.cloud.ServiceFilter;
 
+/**
+ * @deprecated since 4.7
+ */
+@Deprecated(since = "4.7")
 public class BlacklistServiceFilter implements ServiceFilter {
-    private List<ServiceDefinition> services;
+    private final List<ServiceDefinition> services;
 
     public BlacklistServiceFilter() {
         this.services = new ArrayList<>();
@@ -86,8 +89,7 @@ public class BlacklistServiceFilter implements ServiceFilter {
     @Override
     public List<ServiceDefinition> apply(Exchange exchange, List<ServiceDefinition> services) {
         return services.stream().filter(
-                s -> this.services.stream().noneMatch(b -> b.matches(s))).collect(
-                        Collectors.toList());
+                s -> this.services.stream().noneMatch(b -> b.matches(s))).toList();
     }
 
     List<ServiceDefinition> getBlacklistedServices() {

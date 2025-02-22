@@ -28,13 +28,17 @@ import com.github.freva.asciitable.HorizontalAlign;
 import com.github.freva.asciitable.OverflowBehaviour;
 import org.apache.camel.dsl.jbang.core.commands.CamelJBangMain;
 import org.apache.camel.dsl.jbang.core.common.ProcessHelper;
+import org.apache.camel.dsl.jbang.core.common.VersionHelper;
 import org.apache.camel.util.TimeUtils;
 import org.apache.camel.util.json.JsonObject;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
+import static org.apache.camel.dsl.jbang.core.common.CamelCommandHelper.extractState;
+
 @Command(name = "context",
-         description = "Top status of Camel integrations")
+         description = "Top status of Camel integrations",
+         sortOptions = false, showDefaultValues = true)
 public class CamelContextTop extends ProcessWatchCommand {
 
     public static class PidNameMemAgeCompletionCandidates implements Iterable<String> {
@@ -86,7 +90,8 @@ public class CamelContextTop extends ProcessWatchCommand {
                         row.ago = TimeUtils.printSince(row.uptime);
                         JsonObject runtime = (JsonObject) root.get("runtime");
                         row.platform = extractPlatform(ph, runtime);
-                        row.platformVersion = runtime != null ? runtime.getString("platformVersion") : null;
+                        row.platformVersion = extractPlatformVersion(row.platform,
+                                runtime != null ? runtime.getString("platformVersion") : null);
                         row.javaVersion = runtime != null ? runtime.getString("javaVersion") : null;
                         row.state = context.getInteger("phase");
                         row.camelVersion = context.getString("version");
@@ -139,7 +144,7 @@ public class CamelContextTop extends ProcessWatchCommand {
         rows.sort(this::sortRow);
 
         if (!rows.isEmpty()) {
-            System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+            printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                     new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                     new Column().header("NAME").dataAlign(HorizontalAlign.LEFT).maxWidth(30, OverflowBehaviour.ELLIPSIS_RIGHT)
                             .with(r -> r.name),
@@ -170,6 +175,15 @@ public class CamelContextTop extends ProcessWatchCommand {
             }
         }
         return answer;
+    }
+
+    private String extractPlatformVersion(String platform, String platformVersion) {
+        if (platformVersion == null) {
+            if ("JBang".equals(platform)) {
+                platformVersion = VersionHelper.getJBangVersion();
+            }
+        }
+        return platformVersion;
     }
 
     protected int sortRow(Row o1, Row o2) {

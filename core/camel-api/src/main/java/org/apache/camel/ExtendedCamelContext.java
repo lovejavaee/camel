@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 
 import org.apache.camel.catalog.RuntimeCamelCatalog;
 import org.apache.camel.spi.BootstrapCloseable;
+import org.apache.camel.spi.EndpointServiceRegistry;
 import org.apache.camel.spi.EndpointStrategy;
 import org.apache.camel.spi.EndpointUriFactory;
 import org.apache.camel.spi.ExchangeFactory;
@@ -34,7 +35,6 @@ import org.apache.camel.spi.LifecycleStrategy;
 import org.apache.camel.spi.LogListener;
 import org.apache.camel.spi.ManagementMBeanAssembler;
 import org.apache.camel.spi.NormalizedEndpointUri;
-import org.apache.camel.spi.PluginManager;
 import org.apache.camel.spi.ProcessorExchangeFactory;
 import org.apache.camel.spi.ReactiveExecutor;
 import org.apache.camel.spi.Registry;
@@ -72,6 +72,18 @@ public interface ExtendedCamelContext {
     }
 
     /**
+     * Sets the profile Camel should run as (dev,test,prod).
+     */
+    void setProfile(String profile);
+
+    /**
+     * The profile Camel should run as (dev,test,prod). Returns null if no profile has been set.
+     */
+    default String getProfile() {
+        return null;
+    }
+
+    /**
      * Sets the registry Camel should use for looking up beans by name or type.
      * <p/>
      * This operation is mostly only used by different Camel runtimes such as camel-spring, camel-cdi, camel-spring-boot
@@ -80,6 +92,13 @@ public interface ExtendedCamelContext {
      * @param registry the registry such as DefaultRegistry or
      */
     void setRegistry(Registry registry);
+
+    /**
+     * Sets the assembler to assemble a {@link javax.management.modelmbean.RequiredModelMBean}
+     *
+     * @param managementMBeanAssembler the assembler to use
+     */
+    void setManagementMBeanAssembler(ManagementMBeanAssembler managementMBeanAssembler);
 
     default Registry getRegistry() {
         return null;
@@ -99,13 +118,49 @@ public interface ExtendedCamelContext {
      * This can be useful to know by {@link LifecycleStrategy} or the likes, in case they need to react differently.
      * <p/>
      * As the startup procedure of {@link CamelContext} is slightly different when using plain Java versus
-     * camel-spring-xml or camel-blueprint, then we need to know when spring/blueprint are setting up the routes, which
-     * can happen after the {@link CamelContext} itself is in started state, due the asynchronous event nature of
-     * especially blueprint.
+     * camel-spring-xml, then we need to know when spring is setting up the routes, which can happen after the
+     * {@link CamelContext} itself is in started state.
      *
      * @return <tt>true</tt> if current thread is setting up route(s), or <tt>false</tt> if not.
+     * @see    #setupRoutes(boolean)
      */
     boolean isSetupRoutes();
+
+    /**
+     * Method to signal to {@link CamelContext} that the process to create routes is in progress.
+     *
+     * @param routeId the current id of the route being created
+     * @see           #getCreateRoute()
+     */
+    void createRoute(String routeId);
+
+    /**
+     * Indicates whether current thread is creating a route as part of starting Camel.
+     * <p/>
+     * This can be useful to know by {@link LifecycleStrategy} or the likes, in case they need to react differently.
+     *
+     * @return the route id currently being created/started, or <tt>null</tt> if not.
+     * @see    #createRoute(String)
+     */
+    String getCreateRoute();
+
+    /**
+     * Method to signal to {@link CamelContext} that creation of a given processor is in progress.
+     *
+     * @param processorId the current id of the processor being created
+     * @see               #getCreateProcessor()
+     */
+    void createProcessor(String processorId);
+
+    /**
+     * Indicates whether current thread is creating a processor as part of starting Camel.
+     * <p/>
+     * This can be useful to know by {@link LifecycleStrategy} or the likes, in case they need to react differently.
+     *
+     * @return the current id of the processor being created
+     * @see    #createProcessor(String)
+     */
+    String getCreateProcessor();
 
     /**
      * Registers a {@link org.apache.camel.spi.EndpointStrategy callback} to allow you to do custom logic when an
@@ -268,6 +323,11 @@ public interface ExtendedCamelContext {
     FactoryFinder getDefaultFactoryFinder();
 
     /**
+     * Sets the default FactoryFinder which will be used for the loading the factory class from META-INF
+     */
+    void setDefaultFactoryFinder(FactoryFinder factoryFinder);
+
+    /**
      * Gets the bootstrap FactoryFinder which will be used for the loading the factory class from META-INF. This
      * bootstrap factory finder is only intended to be used during bootstrap (starting) CamelContext.
      *
@@ -354,6 +414,16 @@ public interface ExtendedCamelContext {
     void setReactiveExecutor(ReactiveExecutor reactiveExecutor);
 
     /**
+     * Gets the {@link EndpointServiceRegistry} to use.
+     */
+    EndpointServiceRegistry getEndpointServiceRegistry();
+
+    /**
+     * Sets a custom {@link EndpointServiceRegistry} to be used.
+     */
+    void setEndpointServiceRegistry(EndpointServiceRegistry endpointServiceRegistry);
+
+    /**
      * Whether exchange event notification is applicable (possible). This API is used internally in Camel as
      * optimization.
      *
@@ -384,7 +454,7 @@ public interface ExtendedCamelContext {
     /**
      * Gets the {@link RuntimeCamelCatalog} if available on the classpath.
      */
-    @Deprecated
+    @Deprecated(since = "4.0.0")
     default RuntimeCamelCatalog getRuntimeCamelCatalog() {
         return getContextPlugin(RuntimeCamelCatalog.class);
     }
@@ -415,25 +485,6 @@ public interface ExtendedCamelContext {
     Processor createErrorHandler(Route route, Processor processor) throws Exception;
 
     /**
-     * Whether to run in lightweight mode which triggers some optimizations and memory reduction. Danger this causes
-     * Camel to be less dynamic such as adding new route after Camel is started would not be possible.
-     */
-    boolean isLightweight();
-
-    /**
-     * Whether to run in lightweight mode which triggers some optimizations and memory reduction. Danger this causes
-     * Camel to be less dynamic such as adding new route after Camel is started would not be possible.
-     */
-    void setLightweight(boolean lightweight);
-
-    /**
-     * Danger!!! This will dispose the route model from the {@link CamelContext} which is used for lightweight mode.
-     * This means afterwards no new routes can be dynamically added. Any operations on the
-     * org.apache.camel.model.ModelCamelContext will return null or be a noop operation.
-     */
-    void disposeModel();
-
-    /**
      * Used during unit-testing where it is possible to specify a set of routes to exclude from discovery
      */
     String getTestExcludeRoutes();
@@ -453,16 +504,18 @@ public interface ExtendedCamelContext {
     String resolvePropertyPlaceholders(String text, boolean keepUnresolvedOptional);
 
     /**
-     * Package name to use as base (offset) for classpath scanning of custom {@link CamelConfiguration},
-     * {@link Configuration}, and {@link TypeConverter}.
+     * Package name to use as base (offset) for classpath scanning of RouteBuilder,
+     * {@link org.apache.camel.TypeConverter}, {@link CamelConfiguration} classes, and also classes annotated with
+     * {@link org.apache.camel.Converter}, or {@link org.apache.camel.BindToRegistry}.
      *
-     * @return the base package name (can bre null if not configured)
+     * @return the base package name (can be null if not configured)
      */
     String getBasePackageScan();
 
     /**
-     * Package name to use as base (offset) for classpath scanning of custom {@link CamelConfiguration},
-     * {@link Configuration}, and {@link TypeConverter}.
+     * Package name to use as base (offset) for classpath scanning of RouteBuilder,
+     * {@link org.apache.camel.TypeConverter}, {@link CamelConfiguration} classes, and also classes annotated with
+     * {@link org.apache.camel.Converter}, or {@link org.apache.camel.BindToRegistry}.
      *
      * @param basePackageScan the base package name
      */
@@ -473,14 +526,6 @@ public interface ExtendedCamelContext {
      * provides the phase ordinal value.
      */
     byte getStatusPhase();
-
-    /**
-     * Gets access to the internal plugin manager
-     *
-     * @return the internal plugin manager
-     */
-    @Deprecated
-    PluginManager getPluginManager();
 
     /**
      * Gets a plugin of the given type.

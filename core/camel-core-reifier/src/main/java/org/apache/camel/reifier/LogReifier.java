@@ -16,8 +16,6 @@
  */
 package org.apache.camel.reifier;
 
-import java.util.Map;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.Expression;
 import org.apache.camel.LoggingLevel;
@@ -50,10 +48,18 @@ public class LogReifier extends ProcessorReifier<LogDefinition> {
         StringHelper.notEmpty(definition.getMessage(), "message", this);
         String msg = parseString(definition.getMessage());
 
+        // use a custom language
+        String lan = parseString(definition.getLogLanguage());
+        if (lan == null) {
+            lan = camelContext.getGlobalOption(Exchange.LOG_EIP_LANGUAGE);
+        }
+
         // use simple language for the message string to give it more power
         Expression exp = null;
-        if (LanguageSupport.hasSimpleFunction(msg)) {
+        if (lan == null && LanguageSupport.hasSimpleFunction(msg)) {
             exp = camelContext.resolveLanguage("simple").createExpression(msg);
+        } else if (lan != null) {
+            exp = camelContext.resolveLanguage(lan).createExpression(msg);
         }
 
         // get logger explicitly set in the definition
@@ -65,17 +71,8 @@ public class LogReifier extends ProcessorReifier<LogDefinition> {
         }
 
         if (logger == null) {
-            // first - try to lookup single instance in the registry, just like
-            // LogComponent
-            Map<String, Logger> availableLoggers = findByTypeWithName(Logger.class);
-            if (availableLoggers.size() == 1) {
-                logger = availableLoggers.values().iterator().next();
-                LOG.debug("Using custom Logger: {}", logger);
-            } else if (availableLoggers.size() > 1) {
-                // we should log about this somewhere...
-                LOG.debug("More than one {} instance found in the registry. Falling back to create logger by name.",
-                        Logger.class.getName());
-            }
+            // first - try to lookup single instance in the registry, just like LogComponent
+            logger = findSingleByType(Logger.class);
         }
 
         if (logger == null) {
@@ -83,11 +80,32 @@ public class LogReifier extends ProcessorReifier<LogDefinition> {
             if (name == null) {
                 name = camelContext.getGlobalOption(Exchange.LOG_EIP_NAME);
                 if (name != null) {
-                    LOG.debug("Using logName from CamelContext properties: {}", name);
+                    LOG.debug("Using logName from CamelContext global option: {}", name);
                 }
             }
+            // token based names (dynamic)
+            if (name != null) {
+                name = StringHelper.replaceFirst(name, "${class}", LogProcessor.class.getName());
+                name = StringHelper.replaceFirst(name, "${contextId}", camelContext.getName());
+                name = StringHelper.replaceFirst(name, "${routeId}", route.getRouteId());
+                name = StringHelper.replaceFirst(name, "${groupId}", route.getGroup());
+                name = StringHelper.replaceFirst(name, "${nodeId}", definition.getId());
+                name = StringHelper.replaceFirst(name, "${nodePrefixId}", definition.getNodePrefixId());
+                if (camelContext.isSourceLocationEnabled()) {
+                    String source = getLineNumberLoggerName(definition);
+                    name = StringHelper.replaceFirst(name, "${source}", source);
+                    name = StringHelper.replaceFirst(name, "${source.name}", StringHelper.before(source, ":", source));
+                    name = StringHelper.replaceFirst(name, "${source.line}", StringHelper.after(source, ":", ""));
+                }
+            }
+            // fallback to defaults
             if (name == null) {
-                name = getLineNumberLoggerName(definition);
+                if (camelContext.isSourceLocationEnabled()) {
+                    name = getLineNumberLoggerName(definition);
+                    if (name != null) {
+                        LOG.debug("LogName is not configured, using source location as logName: {}", name);
+                    }
+                }
                 if (name == null) {
                     name = route.getRouteId();
                     LOG.debug("LogName is not configured, using route id as logName: {}", name);

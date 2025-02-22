@@ -19,11 +19,13 @@ package org.apache.camel.component.arangodb.integration;
 import java.util.Map;
 
 import com.arangodb.entity.BaseDocument;
-import com.arangodb.velocypack.VPackSlice;
+import com.arangodb.util.RawJson;
+import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.camel.test.infra.core.annotations.ContextFixture;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperties;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import static org.apache.camel.component.arangodb.ArangoDbConstants.RESULT_CLASS_TYPE;
@@ -31,17 +33,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisabledIfSystemProperty(named = "ci.env.name", matches = "apache.org",
-                          disabledReason = "Apache CI nodes are too resource constrained for this test")
-public class ArangoCollectionFindByKeyIT extends BaseCollection {
+@DisabledIfSystemProperties({
+        @DisabledIfSystemProperty(named = "ci.env.name", matches = "apache.org",
+                                  disabledReason = "Apache CI nodes are too resource constrained for this test"),
+        @DisabledIfSystemProperty(named = "arangodb.tests.disable", matches = "true",
+                                  disabledReason = "Manually disabled tests")
+})
+public class ArangoCollectionFindByKeyIT extends BaseArangoDb {
 
     private BaseDocument myObject;
 
-    @BeforeEach
-    @Override
-    public void beforeEach() {
-        arangoDatabase.createCollection(COLLECTION_NAME);
-        collection = arangoDatabase.collection(COLLECTION_NAME);
+    @ContextFixture
+    public void createCamelContext(CamelContext ctx) {
+        super.createCamelContext(ctx);
 
         myObject = new BaseDocument();
         myObject.setKey("myKey");
@@ -111,32 +115,17 @@ public class ArangoCollectionFindByKeyIT extends BaseCollection {
     }
 
     @Test
-    public void getVpackSliceByKey() {
-        Exchange result = template.request("direct:findDocByKey", exchange -> {
-            exchange.getMessage().setBody(myObject.getKey());
-            exchange.getMessage().setHeader(RESULT_CLASS_TYPE, VPackSlice.class);
-        });
-
-        assertTrue(result.getMessage().getBody() instanceof VPackSlice);
-        VPackSlice docResult = (VPackSlice) result.getMessage().getBody();
-        assertNotNull(docResult);
-        assertNotNull(docResult.get("foo"));
-        assertTrue(docResult.get("foo").isString());
-        assertEquals("bar", docResult.get("foo").getAsString());
-    }
-
-    @Test
     public void getJsonByKey() {
         Exchange result = template.request("direct:findDocByKey", exchange -> {
             exchange.getMessage().setBody(myObject.getKey());
-            exchange.getMessage().setHeader(RESULT_CLASS_TYPE, String.class);
+            exchange.getMessage().setHeader(RESULT_CLASS_TYPE, RawJson.class);
         });
 
-        assertTrue(result.getMessage().getBody() instanceof String);
-        String docResult = (String) result.getMessage().getBody();
+        assertTrue(result.getMessage().getBody() instanceof RawJson);
+        RawJson docResult = (RawJson) result.getMessage().getBody();
         assertNotNull(docResult);
-        assertTrue(docResult.contains("foo"));
-        assertTrue(docResult.contains("bar"));
+        assertTrue(docResult.get().contains("foo"));
+        assertTrue(docResult.get().contains("bar"));
     }
 
 }

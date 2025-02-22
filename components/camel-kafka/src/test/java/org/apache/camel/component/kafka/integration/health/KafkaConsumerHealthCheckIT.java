@@ -30,10 +30,6 @@ import org.apache.camel.component.kafka.MockConsumerInterceptor;
 import org.apache.camel.component.kafka.integration.common.KafkaTestUtil;
 import org.apache.camel.health.HealthCheck;
 import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.test.infra.core.CamelContextExtension;
-import org.apache.camel.test.infra.core.DefaultCamelContextExtension;
-import org.apache.camel.test.infra.kafka.services.KafkaService;
-import org.apache.camel.test.infra.kafka.services.KafkaServiceFactory;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -42,34 +38,35 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 @Timeout(30)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@Tags({ @Tag("health") })
+@EnabledOnOs(value = { OS.LINUX, OS.MAC, OS.FREEBSD, OS.OPENBSD, OS.WINDOWS },
+             architectures = { "amd64", "aarch64", "s390x" },
+             disabledReason = "This test does not run reliably on ppc64le")
 public class KafkaConsumerHealthCheckIT extends KafkaHealthCheckTestSupport {
     public static final String TOPIC = "test-health";
     public static final String SKIPPED_HEADER_KEY = "CamelSkippedHeader";
     public static final String PROPAGATED_CUSTOM_HEADER = "PropagatedCustomHeader";
     public static final byte[] PROPAGATED_HEADER_VALUE = "propagated header value".getBytes();
 
-    @Order(1)
-    @RegisterExtension
-    public static KafkaService service = KafkaServiceFactory.createService();
-    @Order(2)
-    @RegisterExtension
-    public static CamelContextExtension contextExtension = new DefaultCamelContextExtension();
     protected static AdminClient kafkaAdminClient;
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaConsumerHealthCheckIT.class);
@@ -157,6 +154,7 @@ public class KafkaConsumerHealthCheckIT extends KafkaHealthCheckTestSupport {
         CamelContext context = contextExtension.getContext();
         // and shutdown Kafka which will make readiness report as DOWN
         service.shutdown();
+        serviceShutdown = true;
 
         // health-check liveness should be UP
         final Collection<HealthCheck.Result> res = HealthCheckHelper.invokeLiveness(context);
@@ -168,21 +166,24 @@ public class KafkaConsumerHealthCheckIT extends KafkaHealthCheckTestSupport {
     @Test
     @DisplayName("Tests that readiness reports down when it's actually down")
     public void testReadinessWhenDown() {
-        // but health-check readiness should NOT be ready
-        await().atMost(20, TimeUnit.SECONDS).untilAsserted(this::readinessCheck);
-    }
-
-    private void readinessCheck() {
         CamelContext context = contextExtension.getContext();
+        // and shutdown Kafka which will make readiness report as DOWN
+        service.shutdown();
+        serviceShutdown = true;
 
-        Collection<HealthCheck.Result> res2 = HealthCheckHelper.invoke(context);
-        Optional<HealthCheck.Result> down
-                = res2.stream().filter(r -> r.getState().equals(HealthCheck.State.DOWN)).findFirst();
-        Assertions.assertTrue(down.isPresent());
-        String msg = down.get().getMessage().get();
-        Assertions.assertTrue(msg.contains("KafkaConsumer is not ready"));
-        Map<String, Object> map = down.get().getDetails();
-        Assertions.assertEquals(TOPIC, map.get("topic"));
-        Assertions.assertEquals("test-health-it", map.get("route.id"));
+        // health-check readiness should be DOWN
+        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
+            Collection<HealthCheck.Result> res2 = HealthCheckHelper.invokeReadiness(context);
+            Assertions.assertTrue(res2.size() > 0);
+            Optional<HealthCheck.Result> down
+                    = res2.stream().filter(r -> r.getState().equals(HealthCheck.State.DOWN)).findFirst();
+            Assertions.assertTrue(down.isPresent());
+            String msg = down.get().getMessage().get();
+            Assertions.assertTrue(msg.contains("KafkaConsumer is not ready"));
+            Map<String, Object> map = down.get().getDetails();
+            Assertions.assertEquals(TOPIC, map.get("topic"));
+            Assertions.assertEquals("test-health-it", map.get("route.id"));
+        });
     }
+
 }

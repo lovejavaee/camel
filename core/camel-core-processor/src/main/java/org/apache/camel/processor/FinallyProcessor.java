@@ -22,6 +22,7 @@ import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Processor;
 import org.apache.camel.Traceable;
 import org.apache.camel.spi.IdAware;
+import org.apache.camel.spi.InterceptableProcessor;
 import org.apache.camel.spi.RouteIdAware;
 import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.processor.DelegateAsyncProcessor;
@@ -31,7 +32,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Processor to handle do finally supporting asynchronous routing engine
  */
-public class FinallyProcessor extends DelegateAsyncProcessor implements Traceable, IdAware, RouteIdAware {
+public class FinallyProcessor extends DelegateAsyncProcessor
+        implements Traceable, IdAware, RouteIdAware, InterceptableProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(FinallyProcessor.class);
 
@@ -49,11 +51,17 @@ public class FinallyProcessor extends DelegateAsyncProcessor implements Traceabl
             // store the caught exception as a property
             exchange.setException(null);
             exchange.setProperty(ExchangePropertyKey.EXCEPTION_CAUGHT, exception);
-        }
 
-        // store the last to endpoint as the failure endpoint
-        if (exchange.getProperty(ExchangePropertyKey.FAILURE_ENDPOINT) == null) {
-            exchange.setProperty(ExchangePropertyKey.FAILURE_ENDPOINT, exchange.getProperty(ExchangePropertyKey.TO_ENDPOINT));
+            // store the last to endpoint as the failure endpoint
+            if (exchange.getProperty(ExchangePropertyKey.FAILURE_ENDPOINT) == null) {
+                exchange.setProperty(ExchangePropertyKey.FAILURE_ENDPOINT,
+                        exchange.getProperty(ExchangePropertyKey.TO_ENDPOINT));
+            }
+            // and store the route id so we know in which route we failed
+            String routeId = ExchangeHelper.getAtRouteId(exchange);
+            if (routeId != null) {
+                exchange.setProperty(ExchangePropertyKey.FAILURE_ROUTE_ID, routeId);
+            }
         }
 
         // continue processing
@@ -90,6 +98,11 @@ public class FinallyProcessor extends DelegateAsyncProcessor implements Traceabl
         this.routeId = routeId;
     }
 
+    @Override
+    public boolean canIntercept() {
+        return false;
+    }
+
     private static final class FinallyAsyncCallback implements AsyncCallback {
 
         private final Exchange exchange;
@@ -107,6 +120,7 @@ public class FinallyProcessor extends DelegateAsyncProcessor implements Traceabl
             try {
                 if (exception == null) {
                     exchange.removeProperty(ExchangePropertyKey.FAILURE_ENDPOINT);
+                    exchange.removeProperty(ExchangePropertyKey.FAILURE_ROUTE_ID);
                 } else {
                     // set exception back on exchange
                     exchange.setException(exception);

@@ -23,6 +23,8 @@ import jakarta.xml.bind.annotation.XmlType;
 
 import org.apache.camel.spi.DataFormat;
 import org.apache.camel.spi.Metadata;
+import org.apache.camel.spi.Resource;
+import org.apache.camel.spi.ResourceAware;
 
 /**
  * Represents a Camel data format
@@ -30,19 +32,29 @@ import org.apache.camel.spi.Metadata;
 @Metadata(label = "dataformat,transformation")
 @XmlType(name = "dataFormat")
 @XmlAccessorType(XmlAccessType.FIELD)
-@SuppressWarnings("rawtypes")
-public class DataFormatDefinition extends IdentifiedType {
+public class DataFormatDefinition extends IdentifiedType implements CopyableDefinition<DataFormatDefinition>, ResourceAware {
 
     @XmlTransient
     private DataFormat dataFormat;
     @XmlTransient
     private String dataFormatName;
+    @XmlTransient
+    private Resource resource;
 
     public DataFormatDefinition() {
     }
 
+    public DataFormatDefinition(DataFormatDefinition source) {
+        this.dataFormat = source.dataFormat;
+        this.dataFormatName = source.dataFormatName;
+    }
+
     public DataFormatDefinition(DataFormat dataFormat) {
         this.dataFormat = dataFormat;
+    }
+
+    public DataFormatDefinition copyDefinition() {
+        throw new UnsupportedOperationException("Should be implemented in child classes");
     }
 
     protected DataFormatDefinition(String dataFormatName) {
@@ -63,6 +75,16 @@ public class DataFormatDefinition extends IdentifiedType {
 
     public void setDataFormat(DataFormat dataFormat) {
         this.dataFormat = dataFormat;
+    }
+
+    @Override
+    public Resource getResource() {
+        return resource;
+    }
+
+    @Override
+    public void setResource(Resource resource) {
+        this.resource = resource;
     }
 
     public String getShortName() {

@@ -29,13 +29,14 @@ import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
-import org.apache.camel.component.cloudevents.CloudEvent;
-import org.apache.camel.component.cloudevents.CloudEvents;
+import org.apache.camel.cloudevents.CloudEvent;
+import org.apache.camel.cloudevents.CloudEvents;
 import org.apache.camel.component.knative.ce.CloudEventProcessor;
 import org.apache.camel.component.knative.ce.CloudEventProcessors;
 import org.apache.camel.component.knative.spi.Knative;
 import org.apache.camel.component.knative.spi.KnativeResource;
 import org.apache.camel.component.knative.spi.KnativeTransportConfiguration;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
@@ -54,6 +55,9 @@ import org.slf4j.LoggerFactory;
              syntax = "knative:type/typeId",
              title = "Knative",
              category = Category.CLOUD)
+@Metadata(annotations = {
+        "protocol=http",
+})
 public class KnativeEndpoint extends DefaultEndpoint {
 
     private static final Logger LOG = LoggerFactory.getLogger(KnativeEndpoint.class);
@@ -87,10 +91,12 @@ public class KnativeEndpoint extends DefaultEndpoint {
 
     @Override
     public Producer createProducer() throws Exception {
-        final KnativeResource service = lookupServiceDefinition(Knative.EndpointKind.sink);
+        KnativeResource service = lookupServiceDefinition(Knative.EndpointKind.sink);
+
         final Processor ceProcessor = cloudEventProcessor.producer(this, service);
         final Producer producer
-                = getComponent().getProducerFactory().createProducer(this, createTransportConfiguration(service), service);
+                = getComponent().getOrCreateProducerFactory().createProducer(this, createTransportConfiguration(service),
+                        service);
 
         PropertyBindingSupport.build()
                 .withCamelContext(getCamelContext())
@@ -106,6 +112,7 @@ public class KnativeEndpoint extends DefaultEndpoint {
     @Override
     public Consumer createConsumer(Processor processor) throws Exception {
         KnativeResource service = lookupServiceDefinition(Knative.EndpointKind.source);
+
         Processor ceProcessor = cloudEventProcessor.consumer(this, service);
         Processor replyProcessor
                 = configuration.isReplyWithCloudEvent() ? cloudEventProcessor.producer(this, service) : null;
@@ -121,8 +128,11 @@ public class KnativeEndpoint extends DefaultEndpoint {
                 = PluginHelper.getProcessorFactory(camelContext).createProcessor(camelContext, "Pipeline",
                         new Object[] { list });
 
-        Consumer consumer = getComponent().getConsumerFactory().createConsumer(this,
+        Consumer consumer = getComponent().getOrCreateConsumerFactory().createConsumer(this,
                 createTransportConfiguration(service), service, pipeline);
+
+        // signal that this path is exposed for knative
+        String path = service.getPath();
 
         PropertyBindingSupport.build()
                 .withCamelContext(camelContext)
@@ -133,13 +143,7 @@ public class KnativeEndpoint extends DefaultEndpoint {
                 .bind();
 
         configureConsumer(consumer);
-
         return consumer;
-    }
-
-    @Override
-    public boolean isSingleton() {
-        return true;
     }
 
     public Knative.Type getType() {
@@ -224,7 +228,7 @@ public class KnativeEndpoint extends DefaultEndpoint {
         }
 
         //
-        // For event type endpoints se need to add a filter to filter out events received
+        // For event type endpoints we need to add a filter to filter out events received
         // based on the given type.
         //
         if (resource.getType() == Knative.Type.event && ObjectHelper.isNotEmpty(configuration.getTypeId())) {

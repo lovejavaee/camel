@@ -19,6 +19,7 @@ package org.apache.camel.component.azure.key.vault;
 import com.azure.core.util.polling.SyncPoller;
 import com.azure.security.keyvault.secrets.models.DeletedSecret;
 import com.azure.security.keyvault.secrets.models.KeyVaultSecret;
+import com.azure.security.keyvault.secrets.models.SecretProperties;
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.InvalidPayloadException;
@@ -27,6 +28,9 @@ import org.apache.camel.support.DefaultProducer;
 import org.apache.camel.util.ObjectHelper;
 
 public class KeyVaultProducer extends DefaultProducer {
+
+    public static final String MISSING_SECRET_NAME = "Secret Name must be specified for createSecret Operation";
+
     public KeyVaultProducer(final Endpoint endpoint) {
         super(endpoint);
     }
@@ -44,6 +48,9 @@ public class KeyVaultProducer extends DefaultProducer {
             case deleteSecret:
                 deleteSecret(exchange);
                 break;
+            case updateSecretProperties:
+                updateSecretProperties(exchange);
+                break;
             case purgeDeletedSecret:
                 purgeDeletedSecret(exchange);
                 break;
@@ -55,7 +62,7 @@ public class KeyVaultProducer extends DefaultProducer {
     private void createSecret(Exchange exchange) throws InvalidPayloadException {
         final String secretName = exchange.getMessage().getHeader(KeyVaultConstants.SECRET_NAME, String.class);
         if (ObjectHelper.isEmpty(secretName)) {
-            throw new IllegalArgumentException("Secret Name must be specified for createSecret Operation");
+            throw new IllegalArgumentException(MISSING_SECRET_NAME);
         }
         KeyVaultSecret p = getEndpoint().getSecretClient()
                 .setSecret(new KeyVaultSecret(secretName, exchange.getMessage().getMandatoryBody(String.class)));
@@ -66,7 +73,7 @@ public class KeyVaultProducer extends DefaultProducer {
     private void getSecret(Exchange exchange) {
         final String secretName = exchange.getMessage().getHeader(KeyVaultConstants.SECRET_NAME, String.class);
         if (ObjectHelper.isEmpty(secretName)) {
-            throw new IllegalArgumentException("Secret Name must be specified for createSecret Operation");
+            throw new IllegalArgumentException(MISSING_SECRET_NAME);
         }
         KeyVaultSecret p = getEndpoint().getSecretClient()
                 .getSecret(secretName);
@@ -74,10 +81,22 @@ public class KeyVaultProducer extends DefaultProducer {
         message.setBody(p.getValue());
     }
 
+    private void updateSecretProperties(Exchange exchange) {
+        final SecretProperties secretProperties
+                = exchange.getMessage().getHeader(KeyVaultConstants.SECRET_PROPERTIES, SecretProperties.class);
+        if (ObjectHelper.isEmpty(secretProperties)) {
+            throw new IllegalArgumentException(MISSING_SECRET_NAME);
+        }
+        SecretProperties p = getEndpoint().getSecretClient()
+                .updateSecretProperties(secretProperties);
+        Message message = getMessageForResponse(exchange);
+        message.setBody(p);
+    }
+
     private void deleteSecret(Exchange exchange) {
         final String secretName = exchange.getMessage().getHeader(KeyVaultConstants.SECRET_NAME, String.class);
         if (ObjectHelper.isEmpty(secretName)) {
-            throw new IllegalArgumentException("Secret Name must be specified for createSecret Operation");
+            throw new IllegalArgumentException(MISSING_SECRET_NAME);
         }
         SyncPoller<DeletedSecret, Void> p = getEndpoint().getSecretClient()
                 .beginDeleteSecret(secretName);
@@ -89,7 +108,7 @@ public class KeyVaultProducer extends DefaultProducer {
     private void purgeDeletedSecret(Exchange exchange) {
         final String secretName = exchange.getMessage().getHeader(KeyVaultConstants.SECRET_NAME, String.class);
         if (ObjectHelper.isEmpty(secretName)) {
-            throw new IllegalArgumentException("Secret Name must be specified for createSecret Operation");
+            throw new IllegalArgumentException(MISSING_SECRET_NAME);
         }
         getEndpoint().getSecretClient()
                 .purgeDeletedSecret(secretName);

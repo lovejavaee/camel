@@ -5,6 +5,7 @@
 :description: Perform operations on Kubernetes Deployments and get notified on Deployment changes.
 :since: 2.20
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: Kubernetes
@@ -34,19 +35,23 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Supported producer operation
+== Usage
 
-- listDeployments
-- listDeploymentsByLabels
-- getDeployment
-- createDeployment
-- updateDeployment
-- deleteDeployment
-- scaleDeployment
+=== Supported producer operation
 
-== Kubernetes Deployments Producer Examples
+- `listDeployments`
+- `listDeploymentsByLabels`
+- `getDeployment`
+- `createDeployment`
+- `updateDeployment`
+- `deleteDeployment`
+- `scaleDeployment`
 
-- listDeployments: this operation list the deployments on a kubernetes cluster
+== Examples
+
+=== Kubernetes Deployments Producer Examples
+
+- `listDeployments`: this operation lists the deployments on a kubernetes cluster
 
 [source,java]
 --------------------------------------------------------------------------------
@@ -55,9 +60,9 @@ from("direct:list").
     to("mock:result");
 --------------------------------------------------------------------------------
 
-This operation return a List of Deployment from your cluster
+This operation returns a List of Deployment from your cluster
 
-- listDeploymentsByLabels:  this operation list the deployments by labels on a kubernetes cluster
+- `listDeploymentsByLabels`:  this operation lists the deployments by labels on a kubernetes cluster
 
 [source,java]
 --------------------------------------------------------------------------------
@@ -74,25 +79,32 @@ from("direct:listByLabels").process(new Processor() {
     to("mock:result");
 --------------------------------------------------------------------------------
 
-This operation return a List of Deployments from your cluster, using a label selector (with key1 and key2, with value value1 and value2)
+This operation returns a List of Deployments from your cluster, using a label selector (with key1 and key2, with value value1 and value2)
 
-== Kubernetes Deployments Consumer Example
+=== Kubernetes Deployments Consumer Example
 
 [source,java]
 --------------------------------------------------------------------------------
-fromF("kubernetes-deployments://%s?oauthToken=%s&namespace=default&resourceName=test", host, authToken).process(new KubernertesProcessor()).to("mock:result");
-    public class KubernertesProcessor implements Processor {
+fromF("kubernetes-deployments://%s?oauthToken=%s", host, authToken)
+    .process(new KubernetesProcessor()).to("mock:result");
+
+    public class KubernetesProcessor implements Processor {
         @Override
         public void process(Exchange exchange) throws Exception {
             Message in = exchange.getIn();
             Deployment dp = exchange.getIn().getBody(Deployment.class);
-            log.info("Got event with configmap name: " + dp.getMetadata().getName() + " and action " + in.getHeader(KubernetesConstants.KUBERNETES_EVENT_ACTION));
+            log.info("Got event with deployment name: " + dp.getMetadata().getName() + " and action " + in.getHeader(KubernetesConstants.KUBERNETES_EVENT_ACTION));
         }
     }
 --------------------------------------------------------------------------------
 
-This consumer will return a list of events on the namespace default for the deployment test.
+This consumer returns a message per event received for all Deployments from all namespaces in the cluster.
 
+You can narrow the scope of the consumer using the following query parameter combinations:
 
+- `labelKey` + `labelValue` - Watch Deployments with the specified label in any namespace.
+- `namespace` - Watch all Deployments in the specified namespace.
+- `namespace` + `resourceName` - Watch the Deployment with the specified name in the given namespace.
+- `namespace` + `labelKey` + `labelValue` - Watch Deployments with the specified label in the given namespace.
 
 include::spring-boot:partial$starter.adoc[]

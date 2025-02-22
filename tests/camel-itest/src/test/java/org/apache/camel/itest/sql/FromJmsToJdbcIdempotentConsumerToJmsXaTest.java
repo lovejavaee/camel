@@ -19,7 +19,6 @@ package org.apache.camel.itest.sql;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-import org.apache.camel.itest.ITestSupport;
 import org.apache.camel.itest.utils.extensions.JmsServiceExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,19 +38,13 @@ public class FromJmsToJdbcIdempotentConsumerToJmsXaTest extends FromJmsToJdbcIde
     @RegisterExtension
     public static JmsServiceExtension jmsServiceExtension = JmsServiceExtension.createExtension();
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void cleanupDirectories() {
         deleteDirectory("target/testdb");
-
-        super.setUp();
     }
 
-    @Override
     @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void shutdownDatabase() {
         // shutdown the embedded Derby database so that the next test becomes a clean initial state
         try {
             DriverManager.getConnection("jdbc:derby:target/testdb;shutdown=true");
@@ -69,7 +62,6 @@ public class FromJmsToJdbcIdempotentConsumerToJmsXaTest extends FromJmsToJdbcIde
 
     @Override
     protected AbstractApplicationContext createApplicationContext() {
-        ITestSupport.getPort1();
         return new ClassPathXmlApplicationContext("org/apache/camel/itest/sql/FromJmsToJdbcIdempotentConsumerToJmsXaTest.xml");
     }
 }

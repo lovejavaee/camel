@@ -20,12 +20,12 @@ import org.apache.camel.ContextTestSupport;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SedaDefaultUnboundedQueueSizeTest extends ContextTestSupport {
 
     @Test
-    public void testSedaDefaultUnboundedQueueSize() throws Exception {
+    public void testSedaDefaultUnboundedQueueSize() {
         SedaEndpoint seda = context.getEndpoint("seda:foo", SedaEndpoint.class);
         assertEquals(0, seda.getQueue().size());
 
@@ -37,7 +37,7 @@ public class SedaDefaultUnboundedQueueSizeTest extends ContextTestSupport {
     }
 
     @Test
-    public void testSedaDefaultBoundedQueueSize() throws Exception {
+    public void testSedaDefaultBoundedQueueSize() {
         SedaEndpoint seda = context.getEndpoint("seda:foo?size=500", SedaEndpoint.class);
         assertEquals(0, seda.getQueue().size());
 
@@ -48,12 +48,9 @@ public class SedaDefaultUnboundedQueueSizeTest extends ContextTestSupport {
         assertEquals(500, seda.getQueue().size());
 
         // sending one more hit the limit
-        try {
-            template.sendBody("seda:foo", "Message overflow");
-            fail("Should thrown an exception");
-        } catch (Exception e) {
-            assertIsInstanceOf(IllegalStateException.class, e.getCause());
-        }
+        Exception e = assertThrows(Exception.class, () -> template.sendBody("seda:foo", "Message overflow"),
+                "Should thrown an exception");
+        assertIsInstanceOf(IllegalStateException.class, e.getCause());
     }
 
 }

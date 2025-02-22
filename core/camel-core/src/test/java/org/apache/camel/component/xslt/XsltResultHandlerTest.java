@@ -39,8 +39,8 @@ public class XsltResultHandlerTest extends TestSupport {
 
         XsltEndpoint endpoint = null;
         for (Endpoint ep : context.getEndpoints()) {
-            if (ep instanceof XsltEndpoint) {
-                endpoint = (XsltEndpoint) ep;
+            if (ep instanceof XsltEndpoint xsltEndpoint) {
+                endpoint = xsltEndpoint;
                 break;
             }
         }
@@ -51,9 +51,9 @@ public class XsltResultHandlerTest extends TestSupport {
         assertEquals(factory, endpoint.getXslt().getResultHandlerFactory());
     }
 
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .to("xslt:org/apache/camel/component/xslt/example.xsl?output=bytes&resultHandlerFactory=#factory");
             }

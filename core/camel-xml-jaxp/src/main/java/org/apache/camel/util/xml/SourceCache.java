@@ -18,22 +18,31 @@ package org.apache.camel.util.xml;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serial;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.StreamCache;
 import org.apache.camel.util.IOHelper;
 
 /**
- * {@link org.apache.camel.StreamCache} implementation for {@link StringSource}s
+ * {@link org.apache.camel.StreamCache} implementation for {@link StringSource}s.
+ * <p/>
+ * <b>Important:</b> All the classes from the Camel release that implements {@link StreamCache} is NOT intended for end
+ * users to create as instances, but they are part of Camels
+ * <a href="https://camel.apache.org/manual/stream-caching.html">stream-caching</a> functionality.
  */
 public final class SourceCache extends StringSource implements StreamCache {
 
-    private static final long serialVersionUID = 1L;
+    private static final @Serial long serialVersionUID = 1L;
     private final int length;
 
     public SourceCache(String data) {
         super(data);
         this.length = data.length();
+    }
+
+    public SourceCache() {
+        throw new IllegalStateException();
     }
 
     @Override

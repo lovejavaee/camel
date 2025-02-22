@@ -16,22 +16,29 @@
  */
 package org.apache.camel.component.sjms.consumer;
 
+import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePattern;
 import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.component.sjms.support.JmsTestSupport;
+import org.apache.camel.component.sjms.support.JmsCommonTestSupport;
+import org.apache.camel.test.infra.artemis.services.ArtemisService;
+import org.apache.camel.test.infra.artemis.services.ArtemisServiceFactory;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class InOutConsumerQueueAsyncTest extends JmsTestSupport {
+public class InOutConsumerQueueAsyncTest extends JmsCommonTestSupport {
+
+    @RegisterExtension
+    public static ArtemisService service = ArtemisServiceFactory.createVMService();
 
     @Test
     public void testAsync() throws Exception {
         getMockEndpoint("mock:result").expectedBodiesReceived("Hello World", "Hello Camel");
 
-        template.sendBody("sjms:start", "Hello Camel");
-        template.sendBody("sjms:start", "Hello World");
+        template.sendBody("sjms:start.queue.InOutConsumerQueueAsyncTest", "Hello Camel");
+        template.sendBody("sjms:start.queue.InOutConsumerQueueAsyncTest", "Hello World");
 
         MockEndpoint.assertIsSatisfied(context);
     }
@@ -40,14 +47,14 @@ public class InOutConsumerQueueAsyncTest extends JmsTestSupport {
     protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             public void configure() {
-                from("sjms:queue:start?asyncConsumer=true")
+                from("sjms:queue:start.queue.InOutConsumerQueueAsyncTest?asyncConsumer=true")
                         .log("Requesting ${body} with thread ${threadName}")
                         .to(ExchangePattern.InOut,
-                                "sjms:queue:in.out.queue?replyToConcurrentConsumers=2&replyTo=in.out.queue.response")
+                                "sjms:queue:in.out.queue.InOutConsumerQueueAsyncTest?replyToConcurrentConsumers=2&replyTo=in.out.queue.response")
                         .log("Result ${body} with thread ${threadName}")
                         .to("mock:result");
 
-                from("sjms:queue:in.out.queue?concurrentConsumers=2").to("log:before")
+                from("sjms:queue:in.out.queue.InOutConsumerQueueAsyncTest?concurrentConsumers=2").to("log:before")
                         .log("Replying ${body} with thread ${threadName}")
                         .process(new Processor() {
                             public void process(Exchange exchange) throws Exception {
@@ -61,4 +68,13 @@ public class InOutConsumerQueueAsyncTest extends JmsTestSupport {
         };
     }
 
+    @Override
+    protected String getBrokerUri() {
+        return service.serviceAddress();
+    }
+
+    @Override
+    protected void setupFactoryExternal(ActiveMQConnectionFactory factory) {
+        setupFactoryExternal(factory, service);
+    }
 }

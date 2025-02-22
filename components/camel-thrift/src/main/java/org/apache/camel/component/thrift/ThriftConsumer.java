@@ -64,6 +64,11 @@ public class ThriftConsumer extends DefaultConsumer {
         this.configuration = configuration;
     }
 
+    @Override
+    public boolean isHostedService() {
+        return true;
+    }
+
     public ThriftConfiguration getConfiguration() {
         return configuration;
     }
@@ -105,7 +110,7 @@ public class ThriftConsumer extends DefaultConsumer {
         Object serverImplementationInstance;
         Object serverProcessor;
         ProxyFactory serviceProxy = new ProxyFactory();
-        MethodHandler methodHandler = new ThriftMethodHandler(endpoint, this);
+        MethodHandler methodHandler = new ThriftMethodHandler(this);
 
         try {
             Class serverInterface = ThriftUtils.getServerInterface(endpoint.getServicePackage(), endpoint.getServiceName(),

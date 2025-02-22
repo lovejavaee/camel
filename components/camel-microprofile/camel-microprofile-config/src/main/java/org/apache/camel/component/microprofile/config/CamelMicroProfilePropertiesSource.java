@@ -16,25 +16,20 @@
  */
 package org.apache.camel.component.microprofile.config;
 
-import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.function.Predicate;
 
 import org.apache.camel.spi.LoadablePropertiesSource;
 import org.apache.camel.spi.annotations.JdkService;
-import org.eclipse.microprofile.config.Config;
+import org.apache.camel.util.OrderedProperties;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * The microprofile-config component is used for bridging the Eclipse MicroProfile Config with Camels properties
- * component. This allows to use configuration management from MicroProfile with Camel.
+ * The microprofile-config component is used for bridging the Eclipse MicroProfile Config with the Properties Component.
+ * This allows using configuration management from MicroProfile with Camel.
  */
 @JdkService("properties-source-factory")
 public class CamelMicroProfilePropertiesSource implements LoadablePropertiesSource {
-
-    private static final Logger LOG = LoggerFactory.getLogger(CamelMicroProfilePropertiesSource.class);
 
     @Override
     public String getName() {
@@ -48,34 +43,18 @@ public class CamelMicroProfilePropertiesSource implements LoadablePropertiesSour
 
     @Override
     public Properties loadProperties() {
-        final Properties answer = new Properties();
-        final Config config = ConfigProvider.getConfig();
-        for (String name : config.getPropertyNames()) {
-            try {
-                answer.put(name, config.getValue(name, String.class));
-            } catch (NoSuchElementException e) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Failed to resolve property {} due to {}", name, e.getMessage());
-                }
-            }
-        }
-
-        return answer;
+        return loadProperties(s -> true);
     }
 
     @Override
     public Properties loadProperties(Predicate<String> filter) {
-        final Properties answer = new Properties();
-        final Config config = ConfigProvider.getConfig();
+        Properties answer = new OrderedProperties();
 
-        for (String name : config.getPropertyNames()) {
+        for (String name : ConfigProvider.getConfig().getPropertyNames()) {
             if (filter.test(name)) {
-                try {
-                    config.getOptionalValue(name, String.class).ifPresent(value -> answer.put(name, value));
-                } catch (NoSuchElementException e) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Failed to resolve property {} due to {}", name, e.getMessage());
-                    }
+                var value = getProperty(name);
+                if (value != null) {
+                    answer.put(name, getProperty(name));
                 }
             }
         }
@@ -92,4 +71,5 @@ public class CamelMicroProfilePropertiesSource implements LoadablePropertiesSour
     public String toString() {
         return "camel-microprofile-config";
     }
+
 }

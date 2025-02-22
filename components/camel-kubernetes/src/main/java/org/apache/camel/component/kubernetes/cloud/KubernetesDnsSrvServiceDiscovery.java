@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Discovers where services are running on which servers in Kubernetes.
  */
+@Deprecated
 public class KubernetesDnsSrvServiceDiscovery extends KubernetesServiceDiscovery {
     private static final Logger LOGGER;
     private static final String[] ATTRIBUTE_IDS;
@@ -100,8 +101,8 @@ public class KubernetesDnsSrvServiceDiscovery extends KubernetesServiceDiscovery
                 List<ServiceDefinition> servers = new LinkedList<>();
 
                 while (resolved.hasMore()) {
-                    String record = (String) resolved.next();
-                    String[] items = record.split(" ", -1);
+                    String recordObj = (String) resolved.next();
+                    String[] items = recordObj.split(" ", -1);
                     String host = items[3].trim();
                     String port = items[2].trim();
 

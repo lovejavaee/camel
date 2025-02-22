@@ -31,18 +31,22 @@ import org.apache.camel.Consumer;
 import org.apache.camel.MultipleConsumersSupport;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.HeaderFilterStrategy;
 import org.apache.camel.spi.HeaderFilterStrategyAware;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.DefaultEndpoint;
+import org.apache.camel.support.ResourceHelper;
+import org.apache.camel.util.ObjectHelper;
 
 /**
  * Send and receive messages from <a href="http://nats.io/">NATS</a> messaging system.
  */
 @UriEndpoint(firstVersion = "2.17.0", scheme = "nats", title = "Nats", syntax = "nats:topic", category = { Category.MESSAGING },
              headersClass = NatsConstants.class)
-public class NatsEndpoint extends DefaultEndpoint implements MultipleConsumersSupport, HeaderFilterStrategyAware {
+public class NatsEndpoint extends DefaultEndpoint
+        implements MultipleConsumersSupport, HeaderFilterStrategyAware, EndpointServiceLocation {
 
     @UriParam
     private NatsConfiguration configuration;
@@ -69,6 +73,16 @@ public class NatsEndpoint extends DefaultEndpoint implements MultipleConsumersSu
         return true;
     }
 
+    @Override
+    public String getServiceUrl() {
+        return getConfiguration().getServers();
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "nats";
+    }
+
     public ExecutorService createExecutor() {
         return getCamelContext().getExecutorServiceManager().newFixedThreadPool(this,
                 "NatsTopic[" + configuration.getTopic() + "]", configuration.getPoolSize());
@@ -84,6 +98,11 @@ public class NatsEndpoint extends DefaultEndpoint implements MultipleConsumersSu
         if (getConfiguration().getSslContextParameters() != null && getConfiguration().isSecure()) {
             SSLContext sslCtx = getConfiguration().getSslContextParameters().createSSLContext(getCamelContext());
             builder.sslContext(sslCtx);
+        }
+        if (ObjectHelper.isNotEmpty(getConfiguration().getCredentialsFilePath())) {
+            builder.authHandler(Nats.staticCredentials(
+                    ResourceHelper.resolveResource(getCamelContext(), getConfiguration().getCredentialsFilePath())
+                            .getInputStream().readAllBytes()));
         }
         Options options = builder.build();
         return Nats.connect(options);

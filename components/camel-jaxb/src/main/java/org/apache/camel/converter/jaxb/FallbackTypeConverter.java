@@ -28,6 +28,8 @@ import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBElement;
@@ -63,6 +65,7 @@ public class FallbackTypeConverter {
 
     private static final Logger LOG = LoggerFactory.getLogger(FallbackTypeConverter.class);
 
+    private final Lock lock = new ReentrantLock();
     private final Map<AnnotatedElement, JAXBContext> contexts = new HashMap<>();
     private final StaxConverter staxConverter = new StaxConverter();
     private boolean defaultPrettyPrint = true;
@@ -94,27 +97,10 @@ public class FallbackTypeConverter {
 
     @Converter(fallback = true)
     public Object convertTo(Class<?> type, Exchange exchange, Object value, TypeConverterRegistry registry) {
-
-        boolean prettyPrint = defaultPrettyPrint;
-        String property = exchange != null ? exchange.getContext().getGlobalOption(PRETTY_PRINT) : null;
-        if (property != null) {
-            if (property.equalsIgnoreCase("false")) {
-                prettyPrint = false;
-            } else {
-                prettyPrint = true;
-            }
-        }
+        final boolean prettyPrint = isPrettyPrint(exchange);
 
         // configure object factory
-        boolean objectFactory = defaultObjectFactory;
-        property = exchange != null ? exchange.getContext().getGlobalOption(OBJECT_FACTORY) : null;
-        if (property != null) {
-            if (property.equalsIgnoreCase("false")) {
-                objectFactory = false;
-            } else {
-                objectFactory = true;
-            }
-        }
+        final boolean objectFactory = isObjectFactory(exchange);
 
         TypeConverter converter = null;
         if (registry instanceof TypeConverter) {
@@ -147,8 +133,28 @@ public class FallbackTypeConverter {
         return null;
     }
 
+    private boolean isPrettyPrint(Exchange exchange) {
+        final String property = exchange != null ? exchange.getContext().getGlobalOption(PRETTY_PRINT) : null;
+        if (property != null) {
+            return Boolean.parseBoolean(property);
+        }
+        return defaultPrettyPrint;
+    }
+
+    private boolean isObjectFactory(Exchange exchange) {
+        final String property = exchange != null ? exchange.getContext().getGlobalOption(OBJECT_FACTORY) : null;
+        if (property != null) {
+            return Boolean.parseBoolean(property);
+        }
+        return defaultObjectFactory;
+    }
+
     private <T> boolean hasXmlRootElement(Class<T> type) {
-        return type.getAnnotation(XmlRootElement.class) != null;
+        boolean answer = type.getAnnotation(XmlRootElement.class) != null;
+        if (!answer && LOG.isTraceEnabled()) {
+            LOG.trace("Class {} is not annotated with @{}", type.getName(), XmlRootElement.class.getName());
+        }
+        return answer;
     }
 
     protected <T> boolean isJaxbType(Class<T> type, Exchange exchange, boolean objectFactory) {
@@ -163,7 +169,7 @@ public class FallbackTypeConverter {
         if (type.isAssignableFrom(o.getClass())) {
             return type.cast(o);
         } else {
-            return type.cast(((JAXBElement) o).getValue());
+            return type.cast(((JAXBElement<?>) o).getValue());
         }
     }
 
@@ -175,6 +181,14 @@ public class FallbackTypeConverter {
 
         if (value == null) {
             throw new IllegalArgumentException("Cannot convert from null value to JAXBSource");
+        }
+
+        // Check if the object is a JAXBElement of the correct type
+        if (value instanceof JAXBElement) {
+            JAXBElement<?> jaxbElement = (JAXBElement<?>) value;
+            if (type.isAssignableFrom(jaxbElement.getDeclaredType())) {
+                return castJaxbType(jaxbElement, type);
+            }
         }
 
         Unmarshaller unmarshaller = getUnmarshaller(type);
@@ -307,19 +321,24 @@ public class FallbackTypeConverter {
         return exchange != null && exchange.getProperty(Exchange.FILTER_NON_XML_CHARS, Boolean.FALSE, Boolean.class);
     }
 
-    protected synchronized <T> JAXBContext createContext(Class<T> type) throws JAXBException {
+    protected <T> JAXBContext createContext(Class<T> type) throws JAXBException {
         AnnotatedElement ae = hasXmlRootElement(type) ? type : type.getPackage();
-        JAXBContext context = contexts.get(ae);
-        if (context == null) {
-            if (hasXmlRootElement(type)) {
-                context = JAXBContext.newInstance(type);
-                contexts.put(type, context);
-            } else {
-                context = JAXBContext.newInstance(type.getPackage().getName());
-                contexts.put(type.getPackage(), context);
+        lock.lock();
+        try {
+            JAXBContext context = contexts.get(ae);
+            if (context == null) {
+                if (hasXmlRootElement(type)) {
+                    context = JAXBContext.newInstance(type);
+                    contexts.put(type, context);
+                } else {
+                    context = JAXBContext.newInstance(type.getPackage().getName());
+                    contexts.put(type.getPackage(), context);
+                }
             }
+            return context;
+        } finally {
+            lock.unlock();
         }
-        return context;
     }
 
     protected <T> Unmarshaller getUnmarshaller(Class<T> type) throws JAXBException {

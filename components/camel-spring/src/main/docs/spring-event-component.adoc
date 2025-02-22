@@ -5,6 +5,7 @@
 :description: Listen for Spring Application Events.
 :since: 1.4
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: Spring
@@ -19,7 +20,7 @@ The Spring Event component provides access to the Spring
 `ApplicationEvent` objects to a Spring `ApplicationContext` or to
 consume them. You can then use
 xref:eips:enterprise-integration-patterns.adoc[Enterprise Integration
-Patterns] to process them such as xref:eips:filter-eip.adoc[Message
+Patterns] to process them, such as xref:eips:filter-eip.adoc[Message
 Filter].
 
 == URI format
@@ -28,8 +29,9 @@ Filter].
 spring-event://default[?options]
 --------------------------------
 
-Note, at the moment there are no options for this component. That can
-easily change in future releases, so please check back.
+[NOTE]
+At the moment, there are no options for this component.
+That may change in future releases, so please check back.
 
 
 // component-configure options: START

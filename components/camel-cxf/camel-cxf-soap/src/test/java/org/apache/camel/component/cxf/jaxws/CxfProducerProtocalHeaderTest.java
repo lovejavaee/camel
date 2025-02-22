@@ -26,12 +26,10 @@ import org.apache.camel.component.cxf.common.message.CxfConstants;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfProducerProtocalHeaderTest extends CamelTestSupport {
     private static int port = AvailablePortFinder.getNextAvailable();
     private static final String RESPONSE = "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">"
@@ -43,7 +41,7 @@ public class CxfProducerProtocalHeaderTest extends CamelTestSupport {
     protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             public void configure() {
-                from("jetty:http://localhost:" + port + "/CxfProducerProtocalHeaderTest/user")
+                from("undertow:http://localhost:" + port + "/CxfProducerProtocalHeaderTest/user")
                         .process(new Processor() {
 
                             public void process(Exchange exchange) throws Exception {

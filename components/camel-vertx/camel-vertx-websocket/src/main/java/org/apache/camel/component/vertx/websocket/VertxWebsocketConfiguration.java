@@ -17,6 +17,7 @@
 package org.apache.camel.component.vertx.websocket;
 
 import java.net.URI;
+import java.util.Map;
 
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpServerOptions;
@@ -68,6 +69,8 @@ public class VertxWebsocketConfiguration {
     private boolean allowOriginHeader = true;
     @UriParam(label = "producer,consumer")
     private String originHeaderUrl;
+    @UriParam(label = "producer,consumer", prefix = "handshake.", multiValue = true)
+    private Map<String, Object> handshakeHeaders;
 
     /**
      * The WebSocket URI address to use.
@@ -189,6 +192,8 @@ public class VertxWebsocketConfiguration {
      * To send to all websocket subscribers. Can be used to configure at the endpoint level, instead of providing the
      * {@code VertxWebsocketConstants.SEND_TO_ALL} header on the message. Note that when using this option, the host
      * name specified for the vertx-websocket producer URI must match one used for an existing vertx-websocket consumer.
+     * Note that this option only applies when producing messages to endpoints hosted by the vertx-websocket consumer
+     * and not to an externally hosted WebSocket.
      */
     public void setSendToAll(boolean sendToAll) {
         this.sendToAll = sendToAll;
@@ -274,5 +279,17 @@ public class VertxWebsocketConfiguration {
      */
     public void setOriginHeaderUrl(String originHeaderUrl) {
         this.originHeaderUrl = originHeaderUrl;
+    }
+
+    public Map<String, Object> getHandshakeHeaders() {
+        return handshakeHeaders;
+    }
+
+    /**
+     * Headers to send in the HTTP handshake request. When the endpoint is a consumer, it only works when it consumes a
+     * remote host as a client (i.e. consumeAsClient is true).
+     */
+    public void setHandshakeHeaders(final Map<String, Object> handshakeHeaders) {
+        this.handshakeHeaders = handshakeHeaders;
     }
 }

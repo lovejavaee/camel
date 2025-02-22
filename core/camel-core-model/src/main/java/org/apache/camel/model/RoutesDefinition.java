@@ -37,10 +37,12 @@ import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.Resource;
 import org.apache.camel.spi.ResourceAware;
 import org.apache.camel.support.OrderedComparator;
-import org.apache.camel.support.PatternHelper;
 import org.apache.camel.util.OrderedLocationProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.camel.model.RouteDefinitionHelper.getRouteConfigurationDefinitionConsumer;
+import static org.apache.camel.model.RouteDefinitionHelper.routesByIdOrPattern;
 
 /**
  * A series of Camel routes
@@ -88,7 +90,7 @@ public class RoutesDefinition extends OptionalIdentifiedDefinition<RoutesDefinit
 
     @Override
     public String getLabel() {
-        return "Route " + getId();
+        return "Routes " + getId();
     }
 
     // Properties
@@ -197,6 +199,20 @@ public class RoutesDefinition extends OptionalIdentifiedDefinition<RoutesDefinit
     }
 
     /**
+     * Creates an input to the route, and uses a variable to store a copy of the received message body (only body, not
+     * headers). This is handy for easy access to the received message body via variables.
+     *
+     * @param  uri             the from uri
+     * @param  variableReceive the name of the variable
+     * @return                 the builder
+     */
+    public RouteDefinition fromV(@AsEndpointUri String uri, String variableReceive) {
+        RouteDefinition route = createRoute();
+        route.fromV(uri, variableReceive);
+        return route(route);
+    }
+
+    /**
      * Creates a new route from the given endpoint
      *
      * @param  endpoint the from endpoint
@@ -208,9 +224,29 @@ public class RoutesDefinition extends OptionalIdentifiedDefinition<RoutesDefinit
         return route(route);
     }
 
+    /**
+     * Creates a new route from the given endpoint
+     *
+     * @param  endpoint the from endpoint
+     * @return          the builder
+     */
     public RouteDefinition from(EndpointConsumerBuilder endpoint) {
         RouteDefinition route = createRoute();
         route.from(endpoint);
+        return route(route);
+    }
+
+    /**
+     * Creates an input to the route, and uses a variable to store a copy of the received message body (only body, not
+     * headers). This is handy for easy access to the received message body via variables.
+     *
+     * @param  endpoint        the from endpoint
+     * @param  variableReceive the name of the variable
+     * @return                 the builder
+     */
+    public RouteDefinition fromV(EndpointConsumerBuilder endpoint, String variableReceive) {
+        RouteDefinition route = createRoute();
+        route.fromV(endpoint, variableReceive);
         return route(route);
     }
 
@@ -280,31 +316,8 @@ public class RoutesDefinition extends OptionalIdentifiedDefinition<RoutesDefinit
                 for (String id : ids) {
                     // sort according to ordered
                     globalConfigurations.stream().sorted(OrderedComparator.get())
-                            .filter(g -> {
-                                if (route.getRouteConfigurationId() != null) {
-                                    // if the route has a route configuration assigned then use pattern matching
-                                    return PatternHelper.matchPattern(g.getId(), id);
-                                } else {
-                                    // global configurations have no id assigned or is a wildcard
-                                    return g.getId() == null || g.getId().equals(id);
-                                }
-                            })
-                            .forEach(g -> {
-                                // there can only be one global error handler, so override previous, meaning
-                                // that we will pick the last in the sort (take precedence)
-                                if (g.getErrorHandler() != null) {
-                                    gcErrorHandler.set(g.getErrorHandler());
-                                }
-
-                                String aid = g.getId() == null ? "<default>" : g.getId();
-                                // remember the id that was used on the route
-                                route.addAppliedRouteConfigurationId(aid);
-                                oe.addAll(g.getOnExceptions());
-                                icp.addAll(g.getIntercepts());
-                                ifrom.addAll(g.getInterceptFroms());
-                                ito.addAll(g.getInterceptSendTos());
-                                oc.addAll(g.getOnCompletions());
-                            });
+                            .filter(routesByIdOrPattern(route, id))
+                            .forEach(getRouteConfigurationDefinitionConsumer(route, gcErrorHandler, oe, icp, ifrom, ito, oc));
                 }
 
                 // set error handler before prepare

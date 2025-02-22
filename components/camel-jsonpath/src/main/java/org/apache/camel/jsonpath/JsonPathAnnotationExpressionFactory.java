@@ -21,9 +21,9 @@ import java.lang.annotation.Annotation;
 import com.jayway.jsonpath.Option;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Expression;
+import org.apache.camel.support.builder.ExpressionBuilder;
 import org.apache.camel.support.language.DefaultAnnotationExpressionFactory;
 import org.apache.camel.support.language.LanguageAnnotation;
-import org.apache.camel.util.ObjectHelper;
 
 public class JsonPathAnnotationExpressionFactory extends DefaultAnnotationExpressionFactory {
 
@@ -48,14 +48,13 @@ public class JsonPathAnnotationExpressionFactory extends DefaultAnnotationExpres
 
             answer.setSuppressExceptions(jsonPathAnnotation.suppressExceptions());
             answer.setAllowSimple(jsonPathAnnotation.allowSimple());
-            if (ObjectHelper.isNotEmpty(jsonPathAnnotation.headerName())) {
-                answer.setHeaderName(jsonPathAnnotation.headerName());
-            }
-            if (ObjectHelper.isNotEmpty(jsonPathAnnotation.propertyName())) {
-                answer.setPropertyName(jsonPathAnnotation.propertyName());
-            }
             Option[] options = jsonPathAnnotation.options();
             answer.setOptions(options);
+
+            String source = getSource(annotation);
+            if (source != null) {
+                answer.setSource(ExpressionBuilder.singleInputExpression(source));
+            }
         }
 
         answer.init(camelContext);
@@ -65,4 +64,18 @@ public class JsonPathAnnotationExpressionFactory extends DefaultAnnotationExpres
     private Class<?> getResultType(Annotation annotation) {
         return (Class<?>) getAnnotationObjectValue(annotation, "resultType");
     }
+
+    protected String getSource(Annotation annotation) {
+        String answer = null;
+        try {
+            answer = (String) getAnnotationObjectValue(annotation, "source");
+        } catch (Exception e) {
+            // Do Nothing
+        }
+        if (answer != null && answer.isBlank()) {
+            return null;
+        }
+        return answer;
+    }
+
 }

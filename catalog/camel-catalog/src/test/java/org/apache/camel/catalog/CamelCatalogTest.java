@@ -24,17 +24,23 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.camel.tooling.model.ArtifactModel;
 import org.apache.camel.tooling.model.ComponentModel;
 import org.apache.camel.tooling.model.DataFormatModel;
+import org.apache.camel.tooling.model.Kind;
 import org.apache.camel.tooling.model.LanguageModel;
+import org.apache.camel.tooling.model.PojoBeanModel;
 import org.apache.camel.tooling.model.ReleaseModel;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +56,14 @@ public class CamelCatalogTest {
     static CamelCatalog catalog;
 
     private static final Logger LOG = LoggerFactory.getLogger(CamelCatalogTest.class);
+
+    private static Stream<Arguments> properties() {
+        return Stream.of(
+                Arguments.of("netty-http:http://localhost:8080/foo/bar?disconnect=true&keepAlive=false", "localhost", "8080"),
+                Arguments.of("netty-http:http://{{myhost}}:{{myport}}/foo/bar?disconnect=true&keepAlive=false", "{{myhost}}",
+                        "{{myport}}"),
+                Arguments.of("netty-http:http://localhost:8080/foo/bar?disconnect=true&keepAlive=false", "localhost", "8080"));
+    }
 
     @BeforeAll
     public static void createCamelCatalog() {
@@ -84,7 +98,7 @@ public class CamelCatalogTest {
         assertTrue(names.contains("log"));
         assertTrue(names.contains("docker"));
         assertTrue(names.contains("jms"));
-        // TODO: camel4 assertTrue(names.contains("activemq"));
+        assertTrue(names.contains("activemq"));
         assertTrue(names.contains("zookeeper-master"));
     }
 
@@ -125,6 +139,29 @@ public class CamelCatalogTest {
         assertTrue(names.contains("file"));
         assertTrue(names.contains("xtokenize"));
         assertTrue(names.contains("hl7terser"));
+    }
+
+    @Test
+    public void testFindTransformerNames() {
+        List<String> names = catalog.findTransformerNames();
+
+        assertTrue(names.contains("application-cloudevents+json"));
+        assertTrue(names.contains("application-x-java-object"));
+        assertTrue(names.contains("aws-cloudtrail-application-cloudevents"));
+        assertTrue(names.contains("azure-storage-queue-application-cloudevents"));
+        assertTrue(names.contains("http-application-cloudevents"));
+    }
+
+    @Test
+    public void testFindDevConsoleNames() {
+        List<String> names = catalog.findDevConsoleNames();
+
+        assertTrue(names.contains("aws2-s3"));
+        assertTrue(names.contains("aws-secrets"));
+        assertTrue(names.contains("gc"));
+        assertTrue(names.contains("inflight"));
+        assertTrue(names.contains("platform-http"));
+        assertTrue(names.contains("variables"));
     }
 
     @Test
@@ -401,16 +438,17 @@ public class CamelCatalogTest {
         assertEquals("5", map.get("repeatCount"));
     }
 
-    @Test
-    public void testEndpointPropertiesNettyHttp() throws Exception {
+    @ParameterizedTest
+    @MethodSource("properties")
+    public void testEndpointPropertiesNettyHttp(String endpoint, String host, String port) throws Exception {
         Map<String, String> map
-                = catalog.endpointProperties("netty-http:http://localhost:8080/foo/bar?disconnect=true&keepAlive=false");
+                = catalog.endpointProperties(endpoint);
         assertNotNull(map);
         assertEquals(6, map.size());
 
         assertEquals("http", map.get("protocol"));
-        assertEquals("localhost", map.get("host"));
-        assertEquals("8080", map.get("port"));
+        assertEquals(host, map.get("host"));
+        assertEquals(port, map.get("port"));
         assertEquals("foo/bar", map.get("path"));
         assertEquals("true", map.get("disconnect"));
         assertEquals("false", map.get("keepAlive"));
@@ -425,36 +463,6 @@ public class CamelCatalogTest {
 
         assertEquals("http", map.get("protocol"));
         assertEquals("localhost", map.get("host"));
-        assertEquals("foo/bar", map.get("path"));
-        assertEquals("true", map.get("disconnect"));
-        assertEquals("false", map.get("keepAlive"));
-    }
-
-    @Test
-    public void testEndpointPropertiesNettyHttpPlaceholder() throws Exception {
-        Map<String, String> map
-                = catalog.endpointProperties("netty-http:http://{{myhost}}:{{myport}}/foo/bar?disconnect=true&keepAlive=false");
-        assertNotNull(map);
-        assertEquals(6, map.size());
-
-        assertEquals("http", map.get("protocol"));
-        assertEquals("{{myhost}}", map.get("host"));
-        assertEquals("{{myport}}", map.get("port"));
-        assertEquals("foo/bar", map.get("path"));
-        assertEquals("true", map.get("disconnect"));
-        assertEquals("false", map.get("keepAlive"));
-    }
-
-    @Test
-    public void testEndpointPropertiesNettyHttpWithDoubleSlash() throws Exception {
-        Map<String, String> map
-                = catalog.endpointProperties("netty-http:http://localhost:8080/foo/bar?disconnect=true&keepAlive=false");
-        assertNotNull(map);
-        assertEquals(6, map.size());
-
-        assertEquals("http", map.get("protocol"));
-        assertEquals("localhost", map.get("host"));
-        assertEquals("8080", map.get("port"));
         assertEquals("foo/bar", map.get("path"));
         assertEquals("true", map.get("disconnect"));
         assertEquals("false", map.get("keepAlive"));
@@ -869,6 +877,28 @@ public class CamelCatalogTest {
     }
 
     @Test
+    public void testListTransformersAsJson() throws Exception {
+        String json = catalog.listTransformersAsJson();
+        assertNotNull(json);
+
+        // validate we can parse the json
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode tree = mapper.readTree(json);
+        assertNotNull(tree);
+    }
+
+    @Test
+    public void testListDevConsolesAsJson() throws Exception {
+        String json = catalog.listDevConsolesAsJson();
+        assertNotNull(json);
+
+        // validate we can parse the json
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode tree = mapper.readTree(json);
+        assertNotNull(tree);
+    }
+
+    @Test
     public void testListModelsAsJson() throws Exception {
         String json = catalog.listModelsAsJson();
         assertNotNull(json);
@@ -1089,6 +1119,28 @@ public class CamelCatalogTest {
         assertFalse(result.isSuccess());
         assertEquals("$.store.book[?(@.price ^^^ 10)]", result.getText());
         assertEquals("Expected character: )", result.getError());
+
+        // just to call via a configuration option
+        result = catalog.validateLanguageExpression(null, "jsonpath?unpackArray=true", "$.store.book[?(@.price < 10)]");
+        assertTrue(result.isSuccess());
+        assertEquals("$.store.book[?(@.price < 10)]", result.getText());
+    }
+
+    @Test
+    public void testValidateGroovyLanguage() {
+        LanguageValidationResult result = catalog.validateLanguageExpression(null, "groovy", "4 * 3");
+        assertTrue(result.isSuccess());
+        assertEquals("4 * 3", result.getText());
+
+        var code = """
+                var a = 123;
+                println a */ 2;
+                """;
+        result = catalog.validateLanguageExpression(null, "groovy", code);
+        assertFalse(result.isSuccess());
+        assertEquals(code, result.getText());
+        assertEquals(23, result.getIndex());
+        assertEquals("Unexpected input: '*' @ line 2, column 11.", result.getShortError());
     }
 
     @Test
@@ -1520,7 +1572,7 @@ public class CamelCatalogTest {
 
         am = catalog.modelFromMavenGAV("org.apache.camel", "camel-jms", null);
         Assertions.assertInstanceOf(ComponentModel.class, am);
-        Assertions.assertEquals("Sent and receive messages to/from a JMS Queue or Topic.", am.getDescription());
+        Assertions.assertEquals("Send and receive messages to/from JMS message brokers.", am.getDescription());
     }
 
     @Test
@@ -1560,9 +1612,28 @@ public class CamelCatalogTest {
         Assertions.assertNotNull(rel);
         Assertions.assertEquals("2.13.2", rel.getVersion());
         Assertions.assertEquals("2022-12-16", rel.getDate());
-        Assertions.assertEquals("2023-03-26", rel.getEol());
+        Assertions.assertEquals("2023-07-06", rel.getEol());
         Assertions.assertEquals("lts", rel.getKind());
         Assertions.assertEquals("11", rel.getJdk());
+    }
+
+    @Test
+    public void testFindPojoBeanNames() {
+        List<String> names = catalog.findBeansNames();
+
+        assertTrue(names.contains("GroupedBodyAggregationStrategy"));
+        assertTrue(names.contains("ZipAggregationStrategy"));
+    }
+
+    @Test
+    public void testPojoBeanModel() {
+        PojoBeanModel model = catalog.pojoBeanModel("ZipAggregationStrategy");
+        assertNotNull(model);
+
+        assertEquals(Kind.bean, model.getKind());
+        assertEquals("ZipAggregationStrategy", model.getName());
+        assertEquals("org.apache.camel.processor.aggregate.zipfile.ZipAggregationStrategy", model.getJavaType());
+        assertEquals(7, model.getOptions().size());
     }
 
 }

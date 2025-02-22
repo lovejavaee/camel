@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.Security;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.net.ssl.KeyManager;
@@ -57,7 +58,7 @@ public class SSLContextParameters extends BaseSSLContextParameters {
 
     /**
      * The optional secure random configuration options to use for constructing the {@link SecureRandom} used in the
-     * creation of an {@link SSLContext].
+     * creation of an {@link SSLContext}.
      */
     private SecureRandomParameters secureRandom;
 
@@ -84,9 +85,9 @@ public class SSLContextParameters extends BaseSSLContextParameters {
 
     /**
      * The optional protocol for the secure sockets created by the {@link SSLContext} represented by this instance's
-     * configuration. See Appendix A in the
-     * <a href="http://download.oracle.com/javase/6/docs/technotes/guides//security/jsse/JSSERefGuide.html#AppA" >Java
-     * Secure Socket Extension Reference Guide</a> for information about standard protocol names.
+     * configuration.
+     *
+     * See https://docs.oracle.com/en/java/javase/17/docs/specs/security/standard-names.html
      */
     private String secureSocketProtocol;
 
@@ -195,9 +196,9 @@ public class SSLContextParameters extends BaseSSLContextParameters {
 
     /**
      * Sets the optional protocol for the secure sockets created by the {@link SSLContext} represented by this
-     * instance's configuration. Defaults to TLS. See Appendix A in the
-     * <a href= "http://download.oracle.com/javase/6/docs/technotes/guides//security/jsse/JSSERefGuide.html#AppA" >Java
-     * Secure Socket Extension Reference Guide</a> for information about standard protocol names.
+     * instance's configuration. Defaults to TLS.
+     *
+     * See https://docs.oracle.com/en/java/javase/17/docs/specs/security/standard-names.html
      *
      * @param secureSocketProtocol the name of the protocol or {@code null} to use the default (TLS)
      */
@@ -263,7 +264,7 @@ public class SSLContextParameters extends BaseSSLContextParameters {
         LOG.trace("Creating SSLContext from SSLContextParameters [{}].", this);
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Available Security providers: {}.", Security.getProviders());
+            LOG.debug("Available Security providers: {}.", Arrays.toString(Security.getProviders()));
         }
 
         KeyManager[] keyManagers = this.keyManagers == null ? null : this.keyManagers.createKeyManagers();
@@ -280,11 +281,11 @@ public class SSLContextParameters extends BaseSSLContextParameters {
 
         if (this.getCertAlias() != null && keyManagers != null) {
             for (int idx = 0; idx < keyManagers.length; idx++) {
-                if (keyManagers[idx] instanceof X509KeyManager) {
+                if (keyManagers[idx] instanceof X509KeyManager x509KeyManager) {
                     try {
                         keyManagers[idx] = new AliasedX509ExtendedKeyManager(
                                 this.parsePropertyValue(this.getCertAlias()),
-                                (X509KeyManager) keyManagers[idx]);
+                                x509KeyManager);
                     } catch (Exception e) {
                         throw new GeneralSecurityException(e);
                     }

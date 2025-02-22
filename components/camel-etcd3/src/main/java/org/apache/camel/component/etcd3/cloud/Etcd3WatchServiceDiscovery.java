@@ -39,6 +39,7 @@ import static org.apache.camel.component.etcd3.Etcd3Helper.toPathPrefix;
  * An implementation of a {@link Etcd3ServiceDiscovery} that retrieves all the service definitions from etcd at first
  * call, then refresh the list when a change has been detected.
  */
+@Deprecated
 public class Etcd3WatchServiceDiscovery extends Etcd3ServiceDiscovery
         implements Watch.Listener {
 
@@ -75,10 +76,6 @@ public class Etcd3WatchServiceDiscovery extends Etcd3ServiceDiscovery
      * The current watcher used to watch the changes of the service definitions.
      */
     private final AtomicReference<Watch.Watcher> watcher = new AtomicReference<>();
-    /**
-     * The mutex used to prevent concurrent load of the list of service definitions.
-     */
-    private final Object mutex = new Object();
 
     /**
      * Construct a {@code Etcd3WatchServiceDiscovery} with the given configuration.
@@ -97,7 +94,9 @@ public class Etcd3WatchServiceDiscovery extends Etcd3ServiceDiscovery
     @Override
     protected void doStop() throws Exception {
         try {
-            client.close();
+            if (client != null) {
+                client.close();
+            }
         } finally {
             super.doStop();
         }
@@ -107,12 +106,15 @@ public class Etcd3WatchServiceDiscovery extends Etcd3ServiceDiscovery
     public List<ServiceDefinition> getServices(String name) {
         List<ServiceDefinition> servers = allServices;
         if (servers == null) {
-            synchronized (mutex) {
+            lock.lock();
+            try {
                 servers = allServices;
                 if (servers == null) {
                     servers = reloadServices();
                     doWatch();
                 }
+            } finally {
+                lock.unlock();
             }
         }
 

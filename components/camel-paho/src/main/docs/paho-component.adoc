@@ -5,6 +5,7 @@
 :description: Communicate with MQTT message brokers using Eclipse Paho MQTT Client.
 :since: 2.16
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: paho
@@ -13,9 +14,9 @@
 
 *{component-header}*
 
-Paho component provides connector for the MQTT messaging protocol using
-the https://eclipse.org/paho/[Eclipse Paho] library. Paho is one of the
-most popular MQTT libraries, so if you would like to integrate it with
+Paho component provides a connector for the https://en.wikipedia.org/wiki/MQTT[MQTT] messaging protocol using
+the https://eclipse.org/paho/[Eclipse Paho] library.
+Paho is one of the most popular MQTT libraries, so if you would like to integrate it with
 your Java project - Camel Paho connector is a way to go.
 
 Maven users will need to add the following dependency to their `pom.xml`
@@ -33,12 +34,11 @@ for this component:
 
 == URI format
 
-[source]
 ----
 paho:topic[?options]
 ----
 
-Where *topic* is the name of the topic.
+Where `topic` is the name of the topic.
 
 
 // component-configure options: START
@@ -57,10 +57,11 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
+== Usage
 
-== Default payload type
+=== Default payload type
 
-By default, Camel Paho component operates on the binary payloads
+By default, the Camel Paho component operates on the binary payloads
 extracted out of (or put into) the MQTT message:
 
 [source,java]
@@ -73,10 +74,8 @@ byte[] payload = "message".getBytes();
 producerTemplate.sendBody("paho:topic", payload);
 ----
 
-But of course Camel build-in xref:manual::type-converter.adoc[type conversion
-API] can perform the automatic data type transformations for you. In the
-example below Camel automatically converts binary payload into `String`
-(and conversely):
+Of course, Camel build-in xref:manual::type-converter.adoc[type conversion API] can perform the automatic data type transformations for you.
+In the example below Camel automatically converts binary payload into `String` (and conversely):
 
 [source,java]
 ----
@@ -89,9 +88,9 @@ producerTemplate.sendBody("paho:topic", payload);
 ----
 
 
-== Samples
+== Examples
 
-For example the following snippet reads messages from the MQTT broker
+For example, the following snippet reads messages from the MQTT broker
 installed on the same host as the Camel router:
 
 [source,java]
@@ -100,7 +99,7 @@ from("paho:some/queue")
     .to("mock:test");
 ----
 
-While the snippet below sends message to the MQTT broker:
+While the snippet below sends a message to the MQTT broker:
 
 [source,java]
 ----
@@ -108,7 +107,7 @@ from("direct:test")
     .to("paho:some/target/queue");
 ----
 
-For example this is how to read messages from the remote MQTT broker: 
+For example, this is how to read messages from the remote MQTT broker:
 
 [source,java]
 ----

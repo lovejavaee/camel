@@ -18,10 +18,16 @@ package org.apache.camel.maven;
 
 import java.io.File;
 
+import javax.inject.Inject;
+
+import org.apache.maven.artifact.factory.ArtifactFactory;
+import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
+import org.apache.maven.artifact.resolver.ArtifactResolver;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.MavenProjectBuilder;
 
 @Mojo(name = "dev", defaultPhase = LifecyclePhase.PREPARE_PACKAGE,
       requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
@@ -33,10 +39,14 @@ public class DevMojo extends RunMojo {
     @Parameter(property = "camel.routesDirectory")
     private String routesDirectory;
 
+    @Inject
+    public DevMojo(ArtifactResolver artifactResolver, ArtifactFactory artifactFactory, ArtifactMetadataSource metadataSource,
+                   MavenProjectBuilder projectBuilder) {
+        super(artifactResolver, artifactFactory, metadataSource, projectBuilder);
+    }
+
     /**
      * Enable routes reloading
-     *
-     * @throws Exception
      */
     @Override
     protected void beforeBootstrapCamel() throws Exception {
@@ -49,9 +59,11 @@ public class DevMojo extends RunMojo {
             dir = "src/main/resources";
         }
 
-        // use absolute path for dir
+        // use the absolute path for dir
         dir = new File(dir).getAbsolutePath();
 
+        // use dev profile by default
+        System.setProperty("camel.main.profile", profile == null ? "dev" : profile);
         System.setProperty("camel.main.routesReloadEnabled", "true");
         System.setProperty("camel.main.routesReloadDirectory", dir);
         System.setProperty("camel.main.routesReloadDirectoryRecursive", "true");

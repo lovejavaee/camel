@@ -28,10 +28,10 @@ import org.apache.camel.component.fhir.FhirJsonDataFormat;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.hl7.fhir.r4.model.Patient;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -44,9 +44,7 @@ public class FhirJsonDataformatErrorHandlerTest extends CamelTestSupport {
     private final FhirContext fhirContext = FhirContext.forR4();
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() {
         mockEndpoint = resolveMandatoryEndpoint("mock:result", MockEndpoint.class);
     }
 
@@ -71,7 +69,7 @@ public class FhirJsonDataformatErrorHandlerTest extends CamelTestSupport {
         Exchange exchange = mockEndpoint.getExchanges().get(0);
         Patient patient = (Patient) exchange.getIn().getBody();
         assertEquals(1, patient.getExtension().size());
-        assertEquals(null, patient.getExtension().get(0).getUrl());
+        assertNull(patient.getExtension().get(0).getUrl());
         assertEquals("2011-01-02T11:13:15", patient.getExtension().get(0).getValueAsPrimitive().getValueAsString());
     }
 

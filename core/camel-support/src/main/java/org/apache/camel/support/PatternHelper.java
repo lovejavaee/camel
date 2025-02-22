@@ -16,7 +16,10 @@
  */
 package org.apache.camel.support;
 
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -30,6 +33,8 @@ public final class PatternHelper {
     /**
      * Matches the name with the given pattern (case insensitive).
      * <p/>
+     * Only a single pattern is supported, use {@link #matchPatterns(String, String[])} to match multiple patterns.
+     * <p/>
      * The match rules are applied in this order:
      * <ul>
      * <li>exact match, returns true</li>
@@ -41,6 +46,7 @@ public final class PatternHelper {
      * @param  name    the name
      * @param  pattern a pattern to match
      * @return         <tt>true</tt> if match, <tt>false</tt> otherwise.
+     * @see            #matchPatterns(String, String[])
      */
     public static boolean matchPattern(String name, String pattern) {
         if (name == null || pattern == null) {
@@ -116,7 +122,7 @@ public final class PatternHelper {
      * @param  pattern a pattern to match
      * @return         <tt>true</tt> if match, <tt>false</tt> otherwise.
      */
-    private static boolean matchRegex(String name, String pattern) {
+    public static boolean matchRegex(String name, String pattern) {
         // match by regular expression
         try {
             Pattern compiled = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE);
@@ -135,5 +141,32 @@ public final class PatternHelper {
             }
         }
         return false;
+    }
+
+    /**
+     * Given a map, creates a set of all keys matching a pattern (except if explicitly excluded). This is usually used
+     * to collect matching keys and properties for removal
+     *
+     * @param  map             A map
+     * @param  pattern         The pattern to test
+     * @param  excludePatterns An exclusion pattern that prevents a matching key to be added to the returned set
+     * @return                 A {@link java.util.Set Set} instance with all the matching keys
+     */
+    public static Set<String> matchingSet(Map<String, Object> map, String pattern, String[] excludePatterns) {
+        Set<String> toBeRemoved = null;
+        // must use a set to store the keys to remove as we cannot walk using entrySet and remove at the same time
+        // due concurrent modification error
+        for (String key : map.keySet()) {
+            if (PatternHelper.matchPattern(key, pattern)) {
+                if (excludePatterns != null && PatternHelper.isExcludePatternMatch(key, excludePatterns)) {
+                    continue;
+                }
+                if (toBeRemoved == null) {
+                    toBeRemoved = new HashSet<>();
+                }
+                toBeRemoved.add(key);
+            }
+        }
+        return toBeRemoved;
     }
 }

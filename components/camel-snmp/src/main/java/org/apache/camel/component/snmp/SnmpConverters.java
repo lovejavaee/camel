@@ -57,7 +57,7 @@ public final class SnmpConverters {
                 StringTokenizer strTok = new StringTokenizer(s, ",");
                 while (strTok.hasMoreTokens()) {
                     String tok = strTok.nextToken();
-                    if (tok != null && tok.trim().length() > 0) {
+                    if (tok != null && !tok.isBlank()) {
                         list.add(new OID(tok.trim()));
                     } else {
                         // empty token - skip
@@ -98,7 +98,7 @@ public final class SnmpConverters {
 
         // prepare the header
         if (pdu.getType() == PDU.V1TRAP) {
-            sb.append("<" + SNMP_TAG + " messageType=\"v1\">");
+            sb.append("<").append(SNMP_TAG).append(" messageType=\"v1\">");
         } else {
             sb.append(SNMP_TAG_OPEN);
         }

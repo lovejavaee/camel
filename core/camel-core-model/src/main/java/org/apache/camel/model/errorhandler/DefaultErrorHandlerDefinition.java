@@ -59,6 +59,18 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
     @XmlTransient
     private Predicate retryWhilePredicate;
 
+    // commonly used should be first
+    @XmlElement
+    private RedeliveryPolicyDefinition redeliveryPolicy;
+    @XmlAttribute
+    @Metadata(javaType = "java.lang.Boolean")
+    private String useOriginalMessage;
+    @XmlAttribute
+    @Metadata(javaType = "java.lang.Boolean")
+    private String useOriginalBody;
+    @XmlAttribute
+    @Metadata(label = "advanced", javaType = "org.apache.camel.processor.errorhandler.RedeliveryPolicy")
+    private String redeliveryPolicyRef;
     @XmlAttribute
     @Metadata(label = "advanced")
     private String loggerRef;
@@ -69,12 +81,6 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
     @XmlAttribute
     @Metadata(label = "advanced")
     private String logName;
-    @XmlAttribute
-    @Metadata(label = "advanced", javaType = "java.lang.Boolean")
-    private String useOriginalMessage;
-    @XmlAttribute
-    @Metadata(label = "advanced", javaType = "java.lang.Boolean")
-    private String useOriginalBody;
     @XmlAttribute
     @Metadata(label = "advanced", javaType = "org.apache.camel.Processor")
     private String onRedeliveryRef;
@@ -88,13 +94,37 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
     @Metadata(label = "advanced", javaType = "org.apache.camel.Processor")
     private String retryWhileRef;
     @XmlAttribute
-    @Metadata(label = "advanced", javaType = "org.apache.camel.processor.errorhandler.RedeliveryPolicy")
-    private String redeliveryPolicyRef;
-    @XmlAttribute
     @Metadata(label = "advanced", javaType = "java.util.concurrent.ScheduledExecutorService")
     private String executorServiceRef;
-    @XmlElement
-    private RedeliveryPolicyDefinition redeliveryPolicy;
+
+    public DefaultErrorHandlerDefinition() {
+    }
+
+    protected DefaultErrorHandlerDefinition(DefaultErrorHandlerDefinition source) {
+        this.loggerBean = source.loggerBean;
+        this.onRedeliveryProcessor = source.onRedeliveryProcessor;
+        this.onPrepareFailureProcessor = source.onPrepareFailureProcessor;
+        this.onExceptionOccurredProcessor = source.onExceptionOccurredProcessor;
+        this.executorServiceBean = source.executorServiceBean;
+        this.retryWhilePredicate = source.retryWhilePredicate;
+        this.redeliveryPolicy = source.redeliveryPolicy;
+        this.useOriginalMessage = source.useOriginalMessage;
+        this.useOriginalBody = source.useOriginalBody;
+        this.redeliveryPolicyRef = source.redeliveryPolicyRef;
+        this.loggerRef = source.loggerRef;
+        this.level = source.level;
+        this.logName = source.logName;
+        this.onRedeliveryRef = source.onRedeliveryRef;
+        this.onExceptionOccurredRef = source.onExceptionOccurredRef;
+        this.onPrepareFailureRef = source.onPrepareFailureRef;
+        this.retryWhileRef = source.retryWhileRef;
+        this.executorServiceRef = source.executorServiceRef;
+    }
+
+    @Override
+    public DefaultErrorHandlerDefinition copyDefinition() {
+        return new DefaultErrorHandlerDefinition(this);
+    }
 
     @Override
     public boolean supportTransacted() {
@@ -126,7 +156,7 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
         other.setRetryWhileRef(getRetryWhileRef());
         other.setUseOriginalBody(getUseOriginalBody());
         other.setUseOriginalMessage(getUseOriginalMessage());
-        if (getRedeliveryPolicy() != null) {
+        if (hasRedeliveryPolicy()) {
             other.setRedeliveryPolicy(getRedeliveryPolicy().copy());
         }
     }
@@ -159,7 +189,7 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
     }
 
     /**
-     * Logging level to use when using the logging error handler type.
+     * Logging level to use by error handler
      */
     public void setLevel(String level) {
         this.level = level;
@@ -170,7 +200,7 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
     }
 
     /**
-     * Name of the logger to use for the logging error handler
+     * Name of the logger to use by the error handler
      */
     public void setLogName(String logName) {
         this.logName = logName;
@@ -199,9 +229,12 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
      * original message body and headers as they are. You cannot enable both useOriginalMessage and useOriginalBody.
      * <p/>
      * The original input message is defensively copied, and the copied message body is converted to
-     * {@link org.apache.camel.StreamCache} if possible, to ensure the body can be read when the original message is
-     * being used later. If the body is not converted to {@link org.apache.camel.StreamCache} then the body will not be
-     * able to re-read when accessed later.
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
      * <p/>
      * <b>Important:</b> The original input means the input message that are bounded by the current
      * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
@@ -241,9 +274,12 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
      * original message body and headers as they are. You cannot enable both useOriginalMessage and useOriginalBody.
      * <p/>
      * The original input message is defensively copied, and the copied message body is converted to
-     * {@link org.apache.camel.StreamCache} if possible, to ensure the body can be read when the original message is
-     * being used later. If the body is not converted to {@link org.apache.camel.StreamCache} then the body will not be
-     * able to re-read when accessed later.
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
      * <p/>
      * <b>Important:</b> The original input means the input message that are bounded by the current
      * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
@@ -403,6 +439,10 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
             redeliveryPolicy = createRedeliveryPolicy();
         }
         return redeliveryPolicy;
+    }
+
+    public boolean hasRedeliveryPolicy() {
+        return redeliveryPolicy != null;
     }
 
     /**
@@ -693,9 +733,12 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
      * original message body and headers as they are. You cannot enable both useOriginalMessage and useOriginalBody.
      * <p/>
      * The original input message is defensively copied, and the copied message body is converted to
-     * {@link org.apache.camel.StreamCache} if possible, to ensure the body can be read when the original message is
-     * being used later. If the body is not converted to {@link org.apache.camel.StreamCache} then the body will not be
-     * able to re-read when accessed later.
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
      * <p/>
      * <b>Important:</b> The original input means the input message that are bounded by the current
      * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
@@ -806,6 +849,17 @@ public class DefaultErrorHandlerDefinition extends BaseErrorHandlerDefinition {
      */
     public DefaultErrorHandlerDefinition onExceptionOccurredRef(String onExceptionOccurredRef) {
         setOnExceptionOccurredRef(onExceptionOccurredRef);
+        return this;
+    }
+
+    /**
+     * Sets a reference to a {@link RedeliveryPolicy} to be used for redelivery settings.
+     *
+     * @param  redeliveryPolicyRef the redelivrey policy reference
+     * @return                     the builder
+     */
+    public DefaultErrorHandlerDefinition redeliveryPolicyRef(String redeliveryPolicyRef) {
+        setRedeliveryPolicyRef(redeliveryPolicyRef);
         return this;
     }
 

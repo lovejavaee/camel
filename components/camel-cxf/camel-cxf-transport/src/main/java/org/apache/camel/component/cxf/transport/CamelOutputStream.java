@@ -45,10 +45,10 @@ class CamelOutputStream extends CachedOutputStream {
      */
     private final Message outMessage;
     private boolean isOneWay;
-    private String targetCamelEndpointUri;
-    private Producer producer;
-    private HeaderFilterStrategy headerFilterStrategy;
-    private MessageObserver observer;
+    private final String targetCamelEndpointUri;
+    private final Producer producer;
+    private final HeaderFilterStrategy headerFilterStrategy;
+    private final MessageObserver observer;
     private boolean hasLoggedAsyncWarning;
 
     CamelOutputStream(String targetCamelEndpointUri, Producer producer,
@@ -128,7 +128,7 @@ class CamelOutputStream extends CachedOutputStream {
         Runnable runnable = () -> {
             try {
                 syncInvoke(exchange);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 ((PhaseInterceptorChain) outMessage.getInterceptorChain()).abort();
                 outMessage.setContent(Exception.class, e);
                 ((PhaseInterceptorChain) outMessage.getInterceptorChain()).unwind(outMessage);

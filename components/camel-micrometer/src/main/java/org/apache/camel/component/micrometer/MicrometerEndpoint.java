@@ -24,7 +24,6 @@ import org.apache.camel.Component;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
-import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -35,13 +34,14 @@ import org.apache.camel.support.DefaultEndpoint;
  * Collect various metrics directly from Camel routes using the Micrometer library.
  */
 @UriEndpoint(firstVersion = "2.22.0", scheme = "micrometer", title = "Micrometer",
-             syntax = "micrometer:metricsType:metricsName", producerOnly = true, category = { Category.MONITORING },
+             remote = false, syntax = "micrometer:metricsType:metricsName", producerOnly = true,
+             category = { Category.MONITORING },
              headersClass = MicrometerConstants.class)
 public class MicrometerEndpoint extends DefaultEndpoint {
 
     protected MeterRegistry registry;
 
-    @UriPath(description = "Type of metrics", enums = "counter,distribution_summary,timer")
+    @UriPath(description = "Type of metrics", enums = "counter,summary,timer")
     @Metadata(required = true)
     protected final Meter.Type metricsType;
     @UriPath(description = "Name of metrics")
@@ -70,8 +70,13 @@ public class MicrometerEndpoint extends DefaultEndpoint {
     }
 
     @Override
+    public boolean isRemote() {
+        return false;
+    }
+
+    @Override
     public Consumer createConsumer(Processor processor) {
-        throw new RuntimeCamelException("Cannot consume from " + getClass().getSimpleName() + ": " + getEndpointUri());
+        throw new UnsupportedOperationException("Consumer not supported");
     }
 
     @Override

@@ -27,11 +27,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.CamelContextAware;
+import org.apache.camel.Component;
 import org.apache.camel.Endpoint;
 import org.apache.camel.ErrorHandlerFactory;
 import org.apache.camel.Ordered;
 import org.apache.camel.Route;
 import org.apache.camel.RoutesBuilder;
+import org.apache.camel.model.BeanFactoryDefinition;
 import org.apache.camel.model.FromDefinition;
 import org.apache.camel.model.InterceptDefinition;
 import org.apache.camel.model.InterceptFromDefinition;
@@ -50,16 +52,20 @@ import org.apache.camel.model.errorhandler.RefErrorHandlerDefinition;
 import org.apache.camel.model.rest.RestConfigurationDefinition;
 import org.apache.camel.model.rest.RestDefinition;
 import org.apache.camel.model.rest.RestsDefinition;
+import org.apache.camel.spi.DataFormat;
+import org.apache.camel.spi.Language;
 import org.apache.camel.spi.OnCamelContextEvent;
 import org.apache.camel.spi.PropertiesComponent;
 import org.apache.camel.spi.Resource;
 import org.apache.camel.spi.ResourceAware;
 import org.apache.camel.spi.RestConfiguration;
+import org.apache.camel.spi.SupervisingRouteController;
 import org.apache.camel.support.LifecycleStrategySupport;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.function.ThrowingBiConsumer;
 import org.apache.camel.util.function.ThrowingConsumer;
+import org.apache.camel.util.function.VoidFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +73,7 @@ import org.slf4j.LoggerFactory;
  * A <a href="http://camel.apache.org/dsl.html">Java DSL</a> which is used to build {@link Route} instances in a
  * {@link CamelContext} for smart routing.
  */
-public abstract class RouteBuilder extends BuilderSupport implements RoutesBuilder, Ordered, ResourceAware {
+public abstract class RouteBuilder extends BuilderSupport implements RoutesBuilder, ModelRoutesBuilder, Ordered, ResourceAware {
     protected Logger log = LoggerFactory.getLogger(getClass());
 
     private Resource resource;
@@ -75,10 +81,12 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
     private final List<RouteBuilderLifecycleStrategy> lifecycleInterceptors = new ArrayList<>();
     private final List<TransformerBuilder> transformerBuilders = new ArrayList<>();
     private final List<ValidatorBuilder> validatorBuilders = new ArrayList<>();
+    // XML and YAML DSL allows to define custom beans which we need to capture
+    private final List<BeanFactoryDefinition<?>> beans = new ArrayList<>();
 
     private RestsDefinition restCollection = new RestsDefinition();
     private RestConfigurationDefinition restConfiguration;
-    private RoutesDefinition routeCollection = new RoutesDefinition();
+    private final RoutesDefinition routeCollection = new RoutesDefinition();
     private RouteTemplatesDefinition routeTemplateCollection = new RouteTemplatesDefinition();
     private TemplatedRoutesDefinition templatedRouteCollection = new TemplatedRoutesDefinition();
 
@@ -201,6 +209,101 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
     }
 
     /**
+     * To customize a given component / data format / language / service using Java lambda style. This is only intended
+     * for low-code integrations where you have a minimal set of code and files, to make it easy and quick to
+     * customize/configure components directly in a single {@link RouteBuilder} class.
+     *
+     * @param type the type such as a component FQN class name
+     * @param code callback for customizing the component instance (if present)
+     */
+    public <T> void customize(Class<T> type, VoidFunction<T> code) throws Exception {
+        ObjectHelper.notNull(type, "type", this);
+        ObjectHelper.notNull(code, "code", this);
+
+        // custom may be stored directly in registry so lookup first here
+        T obj = getContext().getRegistry().findSingleByType(type);
+        // try component / dataformat / language
+        if (obj == null && Component.class.isAssignableFrom(type)) {
+            org.apache.camel.spi.annotations.Component ann
+                    = type.getAnnotation(org.apache.camel.spi.annotations.Component.class);
+            if (ann != null) {
+                String name = ann.value();
+                // just grab first scheme name if the component has scheme alias (eg http,https)
+                if (name.contains(",")) {
+                    name = StringHelper.before(name, ",");
+                }
+                // do not auto-start component as we need to configure it first
+                obj = (T) getCamelContext().getComponent(name, true, false);
+            }
+            if (obj != null && !type.getName().equals("org.apache.camel.component.stub.StubComponent")
+                    && "org.apache.camel.component.stub.StubComponent".equals(obj.getClass().getName())) {
+                // if we run in stub mode then we can't apply the configuration as we stubbed the actual component
+                obj = null;
+            }
+        }
+        if (obj == null && DataFormat.class.isAssignableFrom(type)) {
+            // it's maybe a dataformat
+            org.apache.camel.spi.annotations.Dataformat ann
+                    = type.getAnnotation(org.apache.camel.spi.annotations.Dataformat.class);
+            if (ann != null) {
+                String name = ann.value();
+                obj = (T) getCamelContext().resolveDataFormat(name);
+            }
+        }
+        if (obj == null && Language.class.isAssignableFrom(type)) {
+            // it's maybe a dataformat
+            org.apache.camel.spi.annotations.Language ann
+                    = type.getAnnotation(org.apache.camel.spi.annotations.Language.class);
+            if (ann != null) {
+                String name = ann.value();
+                obj = (T) getCamelContext().resolveLanguage(name);
+            }
+        }
+        // it may be a special service
+        if (obj == null) {
+            obj = getContext().hasService(type);
+        }
+        if (obj != null) {
+            code.apply(obj);
+        }
+    }
+
+    /**
+     * To customize a given component / data format / language / service using Java lambda style. This is only intended
+     * for low-code integrations where you have a minimal set of code and files, to make it easy and quick to
+     * customize/configure components directly in a single {@link RouteBuilder} class.
+     *
+     * @param name the name of the component / service
+     * @param type the type such as a component FQN class name
+     * @param code callback for customizing the component instance (if present)
+     */
+    public <T> void customize(String name, Class<T> type, VoidFunction<T> code) throws Exception {
+        ObjectHelper.notNull(name, "name", this);
+        ObjectHelper.notNull(type, "type", this);
+        ObjectHelper.notNull(code, "code", this);
+
+        T obj = getContext().getRegistry().lookupByNameAndType(name, type);
+        if (obj == null && Component.class.isAssignableFrom(type)) {
+            // do not auto-start component as we need to configure it first
+            obj = (T) getCamelContext().getComponent(name, true, false);
+            if (obj != null && !"stub".equals(name)
+                    && "org.apache.camel.component.stub.StubComponent".equals(obj.getClass().getName())) {
+                // if we run in stub mode then we can't apply the configuration as we stubbed the actual component
+                obj = null;
+            }
+        }
+        if (obj == null && DataFormat.class.isAssignableFrom(type)) {
+            obj = (T) getCamelContext().resolveDataFormat(name);
+        }
+        if (obj == null && Language.class.isAssignableFrom(type)) {
+            obj = (T) getCamelContext().resolveLanguage(name);
+        }
+        if (obj != null) {
+            code.apply(obj);
+        }
+    }
+
+    /**
      * Binds the bean to the repository (if possible).
      *
      * @param id   the id of the bean
@@ -273,7 +376,6 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         if (restConfiguration == null) {
             restConfiguration = new RestConfigurationDefinition();
         }
-
         return restConfiguration;
     }
 
@@ -308,6 +410,9 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
      */
     public RestDefinition rest() {
         getRestCollection().setCamelContext(getContext());
+        if (resource != null) {
+            getRestCollection().setResource(resource);
+        }
         RestDefinition answer = getRestCollection().rest();
         configureRest(answer);
         return answer;
@@ -321,6 +426,9 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
      */
     public RestDefinition rest(String path) {
         getRestCollection().setCamelContext(getContext());
+        if (resource != null) {
+            getRestCollection().setResource(resource);
+        }
         RestDefinition answer = getRestCollection().rest(path);
         configureRest(answer);
         return answer;
@@ -382,6 +490,24 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
     }
 
     /**
+     * Creates an input to the route, and use a variable to store a copy of the incoming message body (only body, not
+     * headers). This is handy for easy access to the incoming message body via variables.
+     *
+     * @param  uri      the from uri
+     * @param  variable the name of the variable
+     * @return          the builder
+     */
+    public RouteDefinition fromV(String uri, String variable) {
+        getRouteCollection().setCamelContext(getContext());
+        if (resource != null) {
+            getRouteCollection().setResource(resource);
+        }
+        RouteDefinition answer = getRouteCollection().fromV(uri, variable);
+        configureRoute(answer);
+        return answer;
+    }
+
+    /**
      * Creates a new route from the given endpoint
      *
      * @param  endpoint the from endpoint
@@ -397,12 +523,36 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         return answer;
     }
 
-    public RouteDefinition from(EndpointConsumerBuilder endpointDefinition) {
+    /**
+     * Creates a new route from the given endpoint
+     *
+     * @param  endpoint the from endpoint
+     * @return          the builder
+     */
+    public RouteDefinition from(EndpointConsumerBuilder endpoint) {
         getRouteCollection().setCamelContext(getContext());
         if (resource != null) {
             getRouteCollection().setResource(resource);
         }
-        RouteDefinition answer = getRouteCollection().from(endpointDefinition);
+        RouteDefinition answer = getRouteCollection().from(endpoint);
+        configureRoute(answer);
+        return answer;
+    }
+
+    /**
+     * Creates an input to the route, and use a variable to store a copy of the incoming message body (only body, not
+     * headers). This is handy for easy access to the incoming message body via variables.
+     *
+     * @param  endpoint the from endpoint
+     * @param  variable the name of the variable
+     * @return          the builder
+     */
+    public RouteDefinition fromV(EndpointConsumerBuilder endpoint, String variable) {
+        getRouteCollection().setCamelContext(getContext());
+        if (resource != null) {
+            getRouteCollection().setResource(resource);
+        }
+        RouteDefinition answer = getRouteCollection().fromV(endpoint, variable);
         configureRoute(answer);
         return answer;
     }
@@ -565,7 +715,8 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
      * @param  exceptions list of exceptions to catch
      * @return            the builder
      */
-    public OnExceptionDefinition onException(Class<? extends Throwable>... exceptions) {
+    @SafeVarargs
+    public final OnExceptionDefinition onException(Class<? extends Throwable>... exceptions) {
         OnExceptionDefinition last = null;
         for (Class<? extends Throwable> ex : exceptions) {
             last = last == null ? onException(ex) : last.onException(ex);
@@ -592,12 +743,13 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
     }
 
     @Override
-    public void addRoutesToCamelContext(CamelContext context) throws Exception {
+    public void prepareModel(CamelContext context) throws Exception {
         // must configure routes before rests
         configureRoutes(context);
         configureRests(context);
 
         // but populate rests before routes, as we want to turn rests into routes
+        populateBeans();
         populateRests();
         populateTransformers();
         populateValidators();
@@ -607,10 +759,17 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         for (RouteDefinition route : routeCollection.getRoutes()) {
             routeCollection.prepareRoute(route);
         }
+    }
+
+    @Override
+    public void addRoutesToCamelContext(CamelContext context) throws Exception {
+        prepareModel(context);
+
+        // this will add the routes to camel
         populateRoutes();
 
-        if (this instanceof OnCamelContextEvent) {
-            context.addLifecycleStrategy(LifecycleStrategySupport.adapt((OnCamelContextEvent) this));
+        if (this instanceof OnCamelContextEvent onCamelContextEvent) {
+            context.addLifecycleStrategy(LifecycleStrategySupport.adapt(onCamelContextEvent));
         }
     }
 
@@ -628,6 +787,7 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         configureRests(context);
 
         // but populate rests before routes, as we want to turn rests into routes
+        populateBeans();
         populateRests();
         populateTransformers();
         populateValidators();
@@ -641,8 +801,15 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         // trigger update of the routes
         populateOrUpdateRoutes();
 
-        if (this instanceof OnCamelContextEvent) {
-            context.addLifecycleStrategy(LifecycleStrategySupport.adapt((OnCamelContextEvent) this));
+        // trigger reloaded routes to be started if under supervising controller
+        // as this requires to be done manually via the controller
+        // the default route controller will auto-start routes when added to camel
+        if (getContext().getRouteController() instanceof SupervisingRouteController src) {
+            src.startRoutes(true);
+        }
+
+        if (this instanceof OnCamelContextEvent onCamelContextEvent) {
+            context.addLifecycleStrategy(LifecycleStrategySupport.adapt(onCamelContextEvent));
         }
 
         for (RouteDefinition route : routeCollection.getRoutes()) {
@@ -701,16 +868,34 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         lifecycleInterceptors.remove(interceptor);
     }
 
+    /**
+     * A utility method allowing to build any tokenizer using a fluent syntax as shown in the next example:
+     *
+     * <pre>
+     * {@code
+     * from("jms:queue:orders")
+     *         .tokenize(
+     *                 tokenizer()
+     *                         .byParagraph()
+     *                         .maxTokens(1024)
+     *                         .end())
+     *         .to("qdrant:db");
+     * }
+     * </pre>
+     *
+     * @return an entry point to the builder of all supported tokenizers.
+     */
+    public TokenizerBuilderFactory tokenizer() {
+        return new TokenizerBuilderFactory();
+    }
+
     // Implementation methods
     // -----------------------------------------------------------------------
+
     protected void checkInitialized() throws Exception {
         if (initialized.compareAndSet(false, true)) {
-            // Set the CamelContext ErrorHandler here
             CamelContext camelContext = getContext();
-            if (camelContext.getCamelContextExtension().getErrorHandlerFactory() != null) {
-                setErrorHandlerFactory(
-                        camelContext.getCamelContextExtension().getErrorHandlerFactory());
-            }
+            initializeCamelContext(camelContext);
 
             List<RouteBuilderLifecycleStrategy> strategies = new ArrayList<>(lifecycleInterceptors);
             strategies.addAll(camelContext.getRegistry().findByType(RouteBuilderLifecycleStrategy.class));
@@ -724,6 +909,12 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
 
             // remember the source resource
             getRouteCollection().setResource(getResource());
+            getRestCollection().setResource(getResource());
+            getRouteTemplateCollection().setResource(getResource());
+            getTemplatedRouteCollection().setResource(getResource());
+            for (BeanFactoryDefinition def : beans) {
+                def.setResource(getResource());
+            }
 
             for (RouteDefinition route : getRouteCollection().getRoutes()) {
                 // ensure the route is prepared after configure method is complete
@@ -734,6 +925,19 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
                 interceptor.afterConfigure(this);
             }
         }
+    }
+
+    protected void initializeCamelContext(CamelContext camelContext) {
+        // Set the CamelContext ErrorHandler here
+        if (camelContext.getCamelContextExtension().getErrorHandlerFactory() != null) {
+            setErrorHandlerFactory(
+                    camelContext.getCamelContextExtension().getErrorHandlerFactory());
+        }
+        // inject camel context on collections
+        getRouteCollection().setCamelContext(camelContext);
+        getRestCollection().setCamelContext(camelContext);
+        getRouteTemplateCollection().setCamelContext(camelContext);
+        getTemplatedRouteCollection().setCamelContext(camelContext);
     }
 
     protected void populateTemplatedRoutes() throws Exception {
@@ -848,6 +1052,30 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
         }
     }
 
+    protected void populateBeans() {
+        CamelContext camelContext = notNullCamelContext();
+
+        Model model = camelContext.getCamelContextExtension().getContextPlugin(Model.class);
+        for (BeanFactoryDefinition<?> def : beans) {
+            // add to model
+            model.addCustomBean(def);
+        }
+    }
+
+    @Override
+    public RoutesDefinition getRoutes() {
+        return getRouteCollection();
+    }
+
+    @Override
+    public RestsDefinition getRests() {
+        return getRestCollection();
+    }
+
+    public List<BeanFactoryDefinition<?>> getBeans() {
+        return beans;
+    }
+
     public RestsDefinition getRestCollection() {
         return restCollection;
     }
@@ -862,10 +1090,6 @@ public abstract class RouteBuilder extends BuilderSupport implements RoutesBuild
 
     public RoutesDefinition getRouteCollection() {
         return this.routeCollection;
-    }
-
-    public void setRouteCollection(RoutesDefinition routeCollection) {
-        this.routeCollection = routeCollection;
     }
 
     public RouteTemplatesDefinition getRouteTemplateCollection() {

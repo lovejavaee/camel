@@ -38,7 +38,7 @@ public abstract class AssertionClause extends MockExpressionClauseSupport<MockVa
     private final Expression previous = new PreviousTimestamp();
     private final Expression next = new NextTimestamp();
 
-    public AssertionClause(MockEndpoint mock) {
+    protected AssertionClause(MockEndpoint mock) {
         super(null);
         this.mock = mock;
     }
@@ -78,7 +78,7 @@ public abstract class AssertionClause extends MockExpressionClauseSupport<MockVa
     }
 
     /**
-     * Adds a {@link TimeClause} predicate for message arriving.
+     * Adds a {@link TimeClause} predicate for the message arriving.
      */
     public TimeClause arrives() {
         final TimeClause clause = new TimeClause(previous, next);
@@ -104,10 +104,10 @@ public abstract class AssertionClause extends MockExpressionClauseSupport<MockVa
 
             if (exchange != null) {
                 Object value = exchange.getMessage().getBody();
-                // if the value is StreamCache then ensure its readable before evaluating any predicates
+                // if the value is StreamCache then ensure It's readable before evaluating any predicates
                 // by resetting it (this is also what StreamCachingAdvice does)
-                if (value instanceof StreamCache) {
-                    ((StreamCache) value).reset();
+                if (value instanceof StreamCache streamCache) {
+                    streamCache.reset();
                 }
             }
 

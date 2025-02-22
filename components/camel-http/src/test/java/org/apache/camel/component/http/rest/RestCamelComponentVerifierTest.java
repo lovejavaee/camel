@@ -17,7 +17,6 @@
 package org.apache.camel.component.http.rest;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,8 +30,8 @@ import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.protocol.DefaultHttpProcessor;
 import org.apache.hc.core5.http.protocol.HttpProcessor;
+import org.apache.hc.core5.http.protocol.RequestValidateHost;
 import org.apache.hc.core5.http.protocol.ResponseContent;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,20 +45,15 @@ public class RestCamelComponentVerifierTest extends BaseHttpTest {
     private Map<String, Object> parameters;
     private ComponentVerifierExtension verifier;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        super.setUp();
-
+    public void setupResources() throws Exception {
         localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost")
                 .setHttpProcessor(getHttpProcessor())
                 .register("/verify", new BasicValidationHandler(GET.name(), null, null, getExpectedContent()))
                 .create();
 
         localServer.start();
-
-        RestComponent component = context().getComponent("rest", RestComponent.class);
-        verifier = component.getVerifier();
 
         parameters = new HashMap<>();
         parameters.put("producerComponentName", "http");
@@ -67,10 +61,14 @@ public class RestCamelComponentVerifierTest extends BaseHttpTest {
         parameters.put("path", "verify");
     }
 
-    @AfterEach
+    @BeforeEach
+    public void setupVerifier() {
+        RestComponent component = context().getComponent("rest", RestComponent.class);
+        verifier = component.getVerifier();
+    }
+
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -84,7 +82,8 @@ public class RestCamelComponentVerifierTest extends BaseHttpTest {
 
     private HttpProcessor getHttpProcessor() {
         return new DefaultHttpProcessor(
-                Collections.singletonList(
+                Arrays.asList(
+                        new RequestValidateHost(),
                         new RequestBasicAuth()),
                 Arrays.asList(
                         new ResponseContent(),
@@ -108,7 +107,7 @@ public class RestCamelComponentVerifierTest extends BaseHttpTest {
     // Tests
     // *************************************************
     @Test
-    public void testParameters() throws Exception {
+    public void testParameters() {
 
         parameters.put("method", "get");
 
@@ -118,7 +117,7 @@ public class RestCamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testMissingRestParameters() throws Exception {
+    public void testMissingRestParameters() {
         // This parameter does not belong to the rest component and validation
         // is delegated to the transport component
         parameters.put("copyHeaders", false);
@@ -153,7 +152,7 @@ public class RestCamelComponentVerifierTest extends BaseHttpTest {
     }
 
     @Test
-    public void testConnectivity() throws Exception {
+    public void testConnectivity() {
 
         parameters.put("method", "get");
 

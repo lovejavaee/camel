@@ -16,6 +16,8 @@
  */
 package org.apache.camel.management;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 
 import javax.management.JMX;
@@ -49,7 +51,7 @@ public class ManagedThrottlingExceptionRoutePolicyTest extends ManagementTestSup
         assertEquals(1, set.size());
         ObjectName on = set.iterator().next();
         boolean registered = mbeanServer.isRegistered(on);
-        assertEquals(true, registered, "Should be registered");
+        assertTrue(registered, "Should be registered");
 
         // check the starting endpoint uri
         String uri = (String) mbeanServer.getAttribute(on, "EndpointUri");
@@ -83,6 +85,12 @@ public class ManagedThrottlingExceptionRoutePolicyTest extends ManagementTestSup
         // state should be closed w/ no failures
         String myState = proxy.currentState();
         assertEquals("State closed, failures 0", myState);
+
+        // exception types
+        String[] types = proxy.getExceptionTypes();
+        assertEquals(2, types.length);
+        assertEquals("java.io.IOException", types[0]);
+        assertEquals("java.lang.UnsupportedOperationException", types[1]);
 
         // the route has no failures
         Integer val = proxy.getCurrentFailures();
@@ -139,13 +147,15 @@ public class ManagedThrottlingExceptionRoutePolicyTest extends ManagementTestSup
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
-        ThrottlingExceptionRoutePolicy policy = new ThrottlingExceptionRoutePolicy(10, 1000, 5000, null);
+    protected RouteBuilder createRouteBuilder() {
+        ThrottlingExceptionRoutePolicy policy = new ThrottlingExceptionRoutePolicy(
+                10, 1000, 5000,
+                List.of(IOException.class, UnsupportedOperationException.class));
         policy.setHalfOpenHandler(new DummyHandler());
 
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").routeId("testRoute")
                         .routePolicy(policy)
                         .to("log:foo")
@@ -155,18 +165,18 @@ public class ManagedThrottlingExceptionRoutePolicyTest extends ManagementTestSup
         };
     }
 
-    class BoomProcess implements Processor {
+    static class BoomProcess implements Processor {
 
         @Override
         public void process(Exchange exchange) throws Exception {
             // need to sleep a little to cause last failure to be slow
             Thread.sleep(50);
-            throw new RuntimeException("boom!");
+            throw new IOException("boom!");
         }
 
     }
 
-    class DummyHandler implements ThrottlingExceptionHalfOpenHandler {
+    static class DummyHandler implements ThrottlingExceptionHalfOpenHandler {
 
         @Override
         public boolean isReadyToBeClosed() {

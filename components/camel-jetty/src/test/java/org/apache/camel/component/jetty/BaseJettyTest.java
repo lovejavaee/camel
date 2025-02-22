@@ -17,23 +17,18 @@
 package org.apache.camel.component.jetty;
 
 import java.util.Properties;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.camel.BindToRegistry;
 import org.apache.camel.CamelContext;
 import org.apache.camel.http.common.HttpHeaderFilterStrategy;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.eclipse.jetty.server.Server;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 public abstract class BaseJettyTest extends CamelTestSupport {
 
     public static final String SSL_SYSPROPS = "SslSystemProperties";
-
-    static CopyOnWriteArrayList<String> runningTests = new CopyOnWriteArrayList<>();
 
     @RegisterExtension
     protected AvailablePortFinder.Port port1 = AvailablePortFinder.find();
@@ -41,14 +36,11 @@ public abstract class BaseJettyTest extends CamelTestSupport {
     @RegisterExtension
     protected AvailablePortFinder.Port port2 = AvailablePortFinder.find();
 
-    @BeforeEach
-    void addRunningTest() {
-        runningTests.add(getClass().getName());
-    }
-
+    // Due to CAMEL-21122 ports are never released. So, force them to be released.
     @AfterEach
-    void remRunningTest() {
-        runningTests.remove(getClass().getName());
+    void cleanupPorts() {
+        port1.release();
+        port2.release();
     }
 
     @Override
@@ -61,8 +53,8 @@ public abstract class BaseJettyTest extends CamelTestSupport {
     @BindToRegistry("prop")
     public Properties loadProp() {
         Properties prop = new Properties();
-        prop.setProperty("port", "" + getPort());
-        prop.setProperty("port2", "" + getPort2());
+        prop.setProperty("port", Integer.toString(getPort()));
+        prop.setProperty("port2", Integer.toString(getPort2()));
         return prop;
     }
 
@@ -88,10 +80,4 @@ public abstract class BaseJettyTest extends CamelTestSupport {
         filterStrat.setAllowNullValues(true);
         jetty.setHeaderFilterStrategy(filterStrat);
     }
-
-    protected boolean isJetty8() {
-        String majorVersion = Server.getVersion().split("\\.")[0];
-        return "8".equals(majorVersion);
-    }
-
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.camel.language.groovy;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -24,11 +25,17 @@ import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
 import groovy.lang.Script;
 import org.apache.camel.Exchange;
+import org.apache.camel.attachment.AttachmentMessage;
 import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.ExpressionSupport;
 import org.apache.camel.support.ObjectHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GroovyExpression extends ExpressionSupport {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GroovyExpression.class);
+
     private final String text;
 
     public GroovyExpression(String text) {
@@ -50,13 +57,14 @@ public class GroovyExpression extends ExpressionSupport {
         Map<String, Object> globalVariables = new HashMap<>();
         Script script = instantiateScript(exchange, globalVariables);
         script.setBinding(createBinding(exchange, globalVariables));
+
         Object value = script.run();
 
         return exchange.getContext().getTypeConverter().convertTo(type, value);
     }
 
     @SuppressWarnings("unchecked")
-    private Script instantiateScript(Exchange exchange, Map<String, Object> globalVariables) {
+    protected Script instantiateScript(Exchange exchange, Map<String, Object> globalVariables) {
         // Get the script from the cache, or create a new instance
         GroovyLanguage language = (GroovyLanguage) exchange.getContext().resolveLanguage("groovy");
         Set<GroovyShellFactory> shellFactories = exchange.getContext().getRegistry().findByType(GroovyShellFactory.class);
@@ -81,9 +89,15 @@ public class GroovyExpression extends ExpressionSupport {
         return ObjectHelper.newInstance(scriptClass, Script.class);
     }
 
-    private Binding createBinding(Exchange exchange, Map<String, Object> globalVariables) {
-        Map<String, Object> variables = new HashMap<>(globalVariables);
-        ExchangeHelper.populateVariableMap(exchange, variables, true);
-        return new Binding(variables);
+    protected Binding createBinding(Exchange exchange, Map<String, Object> globalVariables) {
+        Map<String, Object> map = new HashMap<>(globalVariables);
+        ExchangeHelper.populateVariableMap(exchange, map, true);
+        if (exchange.getMessage() instanceof AttachmentMessage am && am.hasAttachments()) {
+            map.put("attachments", am.getAttachments());
+        } else {
+            map.put("attachments", Collections.EMPTY_MAP);
+        }
+        map.put("log", LOG);
+        return new Binding(map);
     }
 }

@@ -24,8 +24,6 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Producer;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.converter.IOConverter;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.awaitility.Awaitility.*;
@@ -35,9 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class FromFileToFtpDefaultRootRenameStrategyIT extends FtpServerTestSupport {
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() throws Exception {
         prepareFtpServer();
     }
 
@@ -77,7 +73,7 @@ public class FromFileToFtpDefaultRootRenameStrategyIT extends FtpServerTestSuppo
         // create a binary file .. uploaded to the default root location
         Endpoint endpoint = context.getEndpoint(getFtpUrl());
         Exchange exchange = endpoint.createExchange();
-        exchange.getIn().setBody(IOConverter.toFile("src/test/data/ftpbinarytest/logo.jpeg"));
+        exchange.getIn().setBody(new File("src/test/data/ftpbinarytest/logo.jpeg"));
         exchange.getIn().setHeader(Exchange.FILE_NAME, "logo.jpeg");
         Producer producer = endpoint.createProducer();
         producer.start();

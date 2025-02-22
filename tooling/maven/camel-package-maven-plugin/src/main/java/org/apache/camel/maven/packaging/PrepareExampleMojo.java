@@ -38,11 +38,9 @@ import org.apache.commons.io.FileUtils;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.project.MavenProjectHelper;
 import org.mvel2.templates.TemplateRuntime;
 
 /**
@@ -64,13 +62,7 @@ public class PrepareExampleMojo extends AbstractMojo {
     protected String filter = "camel-example";
 
     @Parameter(property = "filterMiddleFolder", required = false, readonly = true)
-    protected String filterMiddleFolder = "aws,azure,vault";
-
-    /**
-     * Maven ProjectHelper.
-     */
-    @Component
-    private MavenProjectHelper projectHelper;
+    protected String filterMiddleFolder = "aws,azure,google,resume-api,vault";
 
     /**
      * Execute goal.
@@ -88,7 +80,7 @@ public class PrepareExampleMojo extends AbstractMojo {
         List<String> middleFolders = Arrays.asList(filterMiddleFolder.split(","));
         String currentDir = Paths.get(".").normalize().toAbsolutePath().toString();
         if (startingFolder != null && !startingFolder.isEmpty()) {
-            // only run in examples directory where the main readme.adoc file is located
+            // only run in the examples directory where the main readme.adoc file is located
             if (!currentDir.endsWith("examples")) {
                 return;
             }
@@ -191,9 +183,10 @@ public class PrepareExampleMojo extends AbstractMojo {
                 .list((folder, fileName) -> fileName.regionMatches(true, 0, "readme", 0, "readme".length()));
         if (readmes != null && readmes.length == 1) {
             model.setReadmeFileName(readmes[0]);
+            models.add(model);
         }
 
-        models.add(model);
+        // Don't add if no readme found
     }
 
     private String templateExamples(List<ExampleModel> models, long deprecated) throws MojoExecutionException {

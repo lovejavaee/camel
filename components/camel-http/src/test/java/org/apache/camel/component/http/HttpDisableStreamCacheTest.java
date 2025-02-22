@@ -16,45 +16,37 @@
  */
 package org.apache.camel.component.http;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
-import org.apache.camel.Exchange;
-import org.apache.camel.TypeConversionException;
-import org.apache.camel.TypeConverter;
+import org.apache.camel.RoutesBuilder;
+import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.handler.BasicValidationHandler;
+import org.apache.camel.util.IOHelper;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.http.common.HttpMethods.GET;
-import static org.apache.camel.test.junit5.TestSupport.assertIsInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class HttpDisableStreamCacheTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/test/", new BasicValidationHandler(GET.name(), null, null, getExpectedContent())).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void cleanupResources() throws Exception {
         if (localServer != null) {
             localServer.stop();
         }
@@ -62,21 +54,30 @@ public class HttpDisableStreamCacheTest extends BaseHttpTest {
 
     @Test
     public void httpDisableStreamCache() {
-        Exchange exchange = template.request("http://localhost:"
-                                             + localServer.getLocalPort() + "/test/?disableStreamCache=true",
-                exchange1 -> {
-                });
-
-        InputStream is = assertIsInstanceOf(InputStream.class, exchange.getMessage().getBody());
-        assertNotNull(is);
-
-        String name = is.getClass().getName();
-        // should not be stream cache
-        assertFalse(name.contains("CachedOutputStream"));
-
-        TypeConverter converter = context.getTypeConverter();
-        assertThrows(TypeConversionException.class, () -> converter.convertTo(String.class, exchange, is),
-                "Should have thrown an exception");
+        Object out = template.requestBody("direct:start", (String) null);
+        assertEquals("camel rocks!", context.getTypeConverter().convertTo(String.class, out));
     }
 
+    @Override
+    protected RoutesBuilder createRouteBuilder() throws Exception {
+        return new RouteBuilder() {
+            @Override
+            public void configure() throws Exception {
+                from("direct:start").streamCache("false")
+                        .to("http://localhost:" + localServer.getLocalPort() + "/test/?disableStreamCache=true")
+                        .process(e -> {
+                            InputStream is = (InputStream) e.getMessage().getBody();
+                            assertNotNull(is);
+
+                            // we can only read the raw http stream once
+                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                            IOHelper.copy(is, bos);
+
+                            e.setVariable("newBody", bos.toString());
+                        })
+                        .setBody().variable("newBody");
+
+            }
+        };
+    }
 }

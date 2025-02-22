@@ -29,6 +29,7 @@ import org.apache.camel.health.HealthCheck;
 import org.apache.camel.health.HealthCheckAware;
 import org.apache.camel.spi.ExceptionHandler;
 import org.apache.camel.spi.ExchangeFactory;
+import org.apache.camel.spi.HostedService;
 import org.apache.camel.spi.RouteIdAware;
 import org.apache.camel.spi.UnitOfWork;
 import org.apache.camel.support.service.ServiceHelper;
@@ -40,7 +41,8 @@ import org.slf4j.LoggerFactory;
 /**
  * A default consumer useful for implementation inheritance.
  */
-public class DefaultConsumer extends ServiceSupport implements Consumer, RouteAware, RouteIdAware, HealthCheckAware {
+public class DefaultConsumer extends ServiceSupport
+        implements Consumer, RouteAware, RouteIdAware, HealthCheckAware, HostedService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultConsumer.class);
 
@@ -62,6 +64,11 @@ public class DefaultConsumer extends ServiceSupport implements Consumer, RouteAw
         // create a per consumer exchange factory
         this.exchangeFactory = endpoint.getCamelContext().getCamelContextExtension()
                 .getExchangeFactory().newExchangeFactory(this);
+    }
+
+    @Override
+    public boolean isHostedService() {
+        return false;
     }
 
     @Override
@@ -140,9 +147,9 @@ public class DefaultConsumer extends ServiceSupport implements Consumer, RouteAw
     @Override
     public void releaseExchange(Exchange exchange, boolean autoRelease) {
         if (exchange != null) {
-            if (!autoRelease && exchange instanceof PooledExchange) {
+            if (!autoRelease && exchange instanceof PooledExchange pooledExchange) {
                 // if not auto release we must manually force done
-                ((PooledExchange) exchange).done();
+                pooledExchange.done();
             }
             exchangeFactory.release(exchange);
         }
@@ -256,17 +263,27 @@ public class DefaultConsumer extends ServiceSupport implements Consumer, RouteAw
         getExceptionHandler().handleException(message, newt);
     }
 
+    /**
+     * Handles the given exception using the {@link #getExceptionHandler()}
+     *
+     * @param message  additional message about the exception
+     * @param exchange exchange which cause the exception
+     * @param t        the exception to handle
+     */
+    protected void handleException(String message, Exchange exchange, Throwable t) {
+        Throwable newt = (t == null) ? new IllegalArgumentException("Handling [null] exception") : t;
+        getExceptionHandler().handleException(message, exchange, newt);
+    }
+
     private static final class DefaultConsumerCallback implements AsyncCallback {
 
         private final DefaultConsumer consumer;
         private final Exchange exchange;
-        private final boolean pooled;
         private final boolean autoRelease;
 
         public DefaultConsumerCallback(DefaultConsumer consumer, Exchange exchange, boolean autoRelease) {
             this.consumer = consumer;
             this.exchange = exchange;
-            this.pooled = exchange instanceof PooledExchange;
             this.autoRelease = autoRelease;
         }
 

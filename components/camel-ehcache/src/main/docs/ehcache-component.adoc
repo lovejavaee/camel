@@ -5,6 +5,7 @@
 :description: Perform caching operations using Ehcache.
 :since: 2.18
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: ehcache
@@ -55,7 +56,9 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Ehcache based idempotent repository example:
+== Examples
+
+=== Ehcache based idempotent repository example:
 
 [source,java]
 ------------------------------------------------------------------------------------------------
@@ -69,7 +72,7 @@ from("direct:in")
 
  
 
-== Ehcache based aggregation repository example:
+=== Ehcache based aggregation repository example:
 
 [source,java]
 ---------------------------------------------------------------------------------------------------------------------------------

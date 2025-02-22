@@ -31,6 +31,9 @@ public final class GoogleCloudStorageConstants {
     @Metadata(label = "producer", description = "The object Name which will be used for the current operation",
               javaType = "String")
     public static final String OBJECT_NAME = "CamelGoogleCloudStorageObjectName";
+    @Metadata(label = "producer", description = "The prefix to be used in List Objects operation",
+              javaType = "String")
+    public static final String PREFIX_NAME = "CamelGoogleCloudStoragePrefixName";
     @Metadata(label = "producer", description = "The object Destination Name which will be used for the current operation",
               javaType = "String")
     public static final String DESTINATION_OBJECT_NAME = "CamelGoogleCloudStorageDestinationObjectName";
@@ -92,6 +95,9 @@ public final class GoogleCloudStorageConstants {
     public static final String METADATA_CREATE_TIME = "CamelGoogleCloudStorageCreateTime";
     @Metadata(label = "consumer", description = "The last update of the object", javaType = "Date")
     public static final String METADATA_LAST_UPDATE = "CamelGoogleCloudStorageLastUpdate";
+    @Metadata(description = "The bucket Name to override which this object will be stored or which will be used for the current operation or in which this object is contained.",
+              javaType = "String")
+    public static final String OVERRIDE_BUCKET_NAME = "CamelGoogleCloudStorageOverrideBucketName";
 
     /**
      * Prevent instantiation.

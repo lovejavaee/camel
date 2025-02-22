@@ -27,9 +27,12 @@ import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.support.DefaultExchange;
+import org.apache.camel.util.StopWatch;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
 
@@ -38,7 +41,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         Exchange exchange = new DefaultExchange(context);
         exchange.getIn().setBody("Hello");
 
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<Exchange> future = template.asyncSend("direct:start", exchange);
 
         // you can do other stuff
@@ -47,7 +50,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
 
         Exchange result = future.get();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result.getIn().getBody());
         assertTrue(delta > 50, "Should take longer than: " + delta);
 
@@ -57,26 +60,26 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
     @Test
     public void testSendAsyncProcessor() throws Exception {
         Future<Exchange> future = template.asyncSend("direct:start", new Processor() {
-            public void process(Exchange exchange) throws Exception {
+            public void process(Exchange exchange) {
                 exchange.getIn().setBody("Hello");
             }
         });
-        long start = System.currentTimeMillis();
 
+        StopWatch watch = new StopWatch();
         // you can do other stuff
         String echo = template.requestBody("direct:echo", "Hi", String.class);
         assertEquals("HiHi", echo);
 
         Exchange result = future.get();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result.getIn().getBody());
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
 
     @Test
-    public void testRequestAsyncBody() throws Exception {
-        long start = System.currentTimeMillis();
+    public void testRequestAsyncBody() {
+        StopWatch watch = new StopWatch();
         Future<Object> future = template.asyncRequestBody("direct:start", "Hello");
 
         // you can do other stuff
@@ -86,14 +89,14 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         // we can use extract body to convert to expect body type
         String result = template.extractFutureBody(future, String.class);
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result);
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
 
     @Test
     public void testRequestAsyncBodyType() throws Exception {
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<String> future = template.asyncRequestBody("direct:start", "Hello", String.class);
 
         // you can do other stuff
@@ -104,7 +107,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         // handle know its type
         String result = future.get();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result);
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
@@ -115,7 +118,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         mock.expectedBodiesReceived("Hello World");
         mock.expectedHeaderReceived("foo", 123);
 
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<Object> future = template.asyncRequestBodyAndHeader("direct:start", "Hello", "foo", 123);
 
         // you can do other stuff
@@ -127,7 +130,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
 
         assertMockEndpointsSatisfied();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result);
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
@@ -138,7 +141,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         mock.expectedBodiesReceived("Hello World");
         mock.expectedHeaderReceived("foo", 123);
 
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<String> future = template.asyncRequestBodyAndHeader("direct:start", "Hello", "foo", 123, String.class);
 
         // you can do other stuff
@@ -151,7 +154,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
 
         assertMockEndpointsSatisfied();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result);
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
@@ -166,7 +169,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         Map<String, Object> headers = new HashMap<>();
         headers.put("foo", 123);
         headers.put("bar", "cheese");
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<Object> future = template.asyncRequestBodyAndHeaders("direct:start", "Hello", headers);
 
         // you can do other stuff
@@ -178,7 +181,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
 
         assertMockEndpointsSatisfied();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result);
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
@@ -193,7 +196,7 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
         Map<String, Object> headers = new HashMap<>();
         headers.put("foo", 123);
         headers.put("bar", "cheese");
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<String> future = template.asyncRequestBodyAndHeaders("direct:start", "Hello", headers, String.class);
 
         // you can do other stuff
@@ -206,63 +209,61 @@ public class DefaultProducerTemplateAsyncTest extends ContextTestSupport {
 
         assertMockEndpointsSatisfied();
 
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertEquals("Hello World", result);
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
 
     @Test
-    public void testRequestAsyncErrorWhenProcessing() throws Exception {
+    public void testRequestAsyncErrorWhenProcessing() {
         Exchange exchange = new DefaultExchange(context);
         exchange.getIn().setBody("Hello");
 
-        long start = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         Future<Object> future = template.asyncRequestBody("direct:error", exchange);
 
         // you can do other stuff
         String echo = template.requestBody("direct:echo", "Hi", String.class);
         assertEquals("HiHi", echo);
 
-        try {
-            template.extractFutureBody(future, Exchange.class);
-            fail("Should have thrown exception");
-        } catch (RuntimeCamelException e) {
-            assertEquals("Damn forced by unit test", e.getCause().getMessage());
-        }
+        RuntimeCamelException e
+                = assertThrows(RuntimeCamelException.class, () -> template.extractFutureBody(future, Exchange.class),
+                        "Should have thrown exception");
 
-        long delta = System.currentTimeMillis() - start;
+        assertEquals("Damn forced by unit test", e.getCause().getMessage());
+
+        long delta = watch.taken();
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
 
     @Test
-    public void testRequestAsyncBodyErrorWhenProcessing() throws Exception {
-        long start = System.currentTimeMillis();
+    public void testRequestAsyncBodyErrorWhenProcessing() {
+        StopWatch watch = new StopWatch();
         Future<Object> future = template.asyncRequestBody("direct:error", "Hello");
 
         // you can do other stuff
         String echo = template.requestBody("direct:echo", "Hi", String.class);
         assertEquals("HiHi", echo);
 
-        try {
-            template.extractFutureBody(future, String.class);
-            fail("Should have thrown exception");
-        } catch (RuntimeCamelException e) {
-            assertEquals("Damn forced by unit test", e.getCause().getMessage());
-        }
+        RuntimeCamelException e
+                = assertThrows(RuntimeCamelException.class, () -> template.extractFutureBody(future, String.class),
+                        "Should have thrown exception");
 
-        long delta = System.currentTimeMillis() - start;
+        assertEquals("Damn forced by unit test", e.getCause().getMessage());
+
+        long delta = watch.taken();
         assertTrue(delta > 50, "Should take longer than: " + delta);
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").delay(200).asyncDelayed().transform(body().append(" World")).to("mock:result");
 
                 from("direct:error").delay(200).asyncDelayed().process(new Processor() {
-                    public void process(Exchange exchange) throws Exception {
+                    public void process(Exchange exchange) {
                         throw new IllegalArgumentException("Damn forced by unit test");
                     }
                 });

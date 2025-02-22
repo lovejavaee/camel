@@ -29,6 +29,7 @@ import org.apache.camel.saga.CamelSagaStep;
 import org.apache.camel.spi.IdAware;
 import org.apache.camel.spi.RouteIdAware;
 import org.apache.camel.support.processor.DelegateAsyncProcessor;
+import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.ObjectHelper;
 
 /**
@@ -36,11 +37,11 @@ import org.apache.camel.util.ObjectHelper;
  */
 public abstract class SagaProcessor extends DelegateAsyncProcessor implements Traceable, IdAware, RouteIdAware {
 
-    protected CamelSagaService sagaService;
+    protected final CamelSagaService sagaService;
 
-    protected CamelSagaStep step;
+    protected final CamelSagaStep step;
 
-    protected SagaCompletionMode completionMode;
+    protected final SagaCompletionMode completionMode;
 
     private String id;
     private String routeId;
@@ -76,12 +77,17 @@ public abstract class SagaProcessor extends DelegateAsyncProcessor implements Tr
             AsyncCallback callback) {
         if (this.completionMode == SagaCompletionMode.AUTO) {
             if (exchange.getException() != null) {
-                coordinator.compensate().whenComplete((done, ex) -> ifNotException(ex, exchange, callback, () -> {
-                    setCurrentSagaCoordinator(exchange, previousCoordinator);
+                if (coordinator != null) {
+                    coordinator.compensate(exchange).whenComplete((done, ex) -> ifNotException(ex, exchange, callback, () -> {
+                        setCurrentSagaCoordinator(exchange, previousCoordinator);
+                        callback.done(false);
+                    }));
+                } else {
+                    // No coordinator available, so no saga available.
                     callback.done(false);
-                }));
+                }
             } else {
-                coordinator.complete().whenComplete((done, ex) -> ifNotException(ex, exchange, callback, () -> {
+                coordinator.complete(exchange).whenComplete((done, ex) -> ifNotException(ex, exchange, callback, () -> {
                     setCurrentSagaCoordinator(exchange, previousCoordinator);
                     callback.done(false);
                 }));
@@ -147,4 +153,15 @@ public abstract class SagaProcessor extends DelegateAsyncProcessor implements Tr
         }
     }
 
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+        ServiceHelper.startService(sagaService);
+    }
+
+    @Override
+    protected void doStop() throws Exception {
+        super.doStop();
+        ServiceHelper.stopService(sagaService);
+    }
 }

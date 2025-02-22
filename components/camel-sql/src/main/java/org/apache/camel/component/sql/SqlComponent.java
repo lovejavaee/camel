@@ -24,7 +24,7 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 import org.apache.camel.support.PropertyBindingSupport;
 import org.apache.camel.util.PropertiesHelper;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,7 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * queries.
  */
 @Component("sql")
-public class SqlComponent extends DefaultComponent {
+public class SqlComponent extends HealthCheckComponent {
 
     @Metadata(autowired = true)
     private DataSource dataSource;
@@ -42,6 +42,12 @@ public class SqlComponent extends DefaultComponent {
     private boolean usePlaceholder = true;
     @Metadata(label = "advanced", autowired = true)
     private RowMapperFactory rowMapperFactory;
+    @Metadata(label = "advanced",
+              description = "Whether to detect the network address location of the JMS broker on startup."
+                            + " This information is gathered via reflection on the ConnectionFactory, and is vendor specific."
+                            + " This option can be used to turn this off.",
+              defaultValue = "true")
+    private boolean serviceLocationEnabled = true;
 
     public SqlComponent() {
     }
@@ -87,13 +93,15 @@ public class SqlComponent extends DefaultComponent {
         if (onConsumeBatchComplete != null && usePlaceholder) {
             onConsumeBatchComplete = onConsumeBatchComplete.replaceAll(parameterPlaceholderSubstitute, "?");
         }
-        RowMapperFactory factory = getAndRemoveParameter(parameters, "rowMapperFactory", RowMapperFactory.class);
+        RowMapperFactory factory
+                = getAndRemoveOrResolveReferenceParameter(parameters, "rowMapperFactory", RowMapperFactory.class);
         if (factory == null) {
             factory = rowMapperFactory;
         }
 
         // create endpoint
         SqlEndpoint endpoint = new SqlEndpoint(uri, this);
+        endpoint.setServiceLocationEnabled(serviceLocationEnabled);
         endpoint.setQuery(query);
         endpoint.setPlaceholder(parameterPlaceholderSubstitute);
         endpoint.setUsePlaceholder(isUsePlaceholder());
@@ -159,4 +167,17 @@ public class SqlComponent extends DefaultComponent {
     public void setRowMapperFactory(RowMapperFactory rowMapperFactory) {
         this.rowMapperFactory = rowMapperFactory;
     }
+
+    public boolean isServiceLocationEnabled() {
+        return serviceLocationEnabled;
+    }
+
+    /**
+     * Whether to detect the network address location of the JMS broker on startup. This information is gathered via
+     * reflection on the ConnectionFactory, and is vendor specific. This option can be used to turn this off.
+     */
+    public void setServiceLocationEnabled(boolean serviceLocationEnabled) {
+        this.serviceLocationEnabled = serviceLocationEnabled;
+    }
+
 }

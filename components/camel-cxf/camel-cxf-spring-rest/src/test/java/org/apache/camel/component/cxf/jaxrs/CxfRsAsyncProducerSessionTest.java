@@ -24,16 +24,14 @@ import org.apache.camel.component.cxf.common.CXFTestSupport;
 import org.apache.camel.component.cxf.common.message.CxfConstants;
 import org.apache.camel.test.spring.junit5.CamelSpringTestSupport;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.context.support.AbstractXmlApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfRsAsyncProducerSessionTest extends CamelSpringTestSupport {
     private static int port1 = CXFTestSupport.getPort1();
-    private static int port2 = CXFTestSupport.getPort("CxfRsProducerSessionTest.jetty");
+    private static int port2 = CXFTestSupport.getPort("CxfRsProducerSessionTest.undertow");
 
     public int getPort1() {
         return port1;

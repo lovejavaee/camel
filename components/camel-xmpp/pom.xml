@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-xmpp</artifactId>
@@ -33,6 +33,10 @@
     <description>Camel XMPP support</description>
 
     <properties>
+        <!-- XMPP container is only available on x86 -->
+        <skipITs.ppc64le>true</skipITs.ppc64le>
+        <skipITs.s390x>true</skipITs.s390x>
+        <skipITs.aarch64>true</skipITs.aarch64>
     </properties>
 
     <dependencies>
@@ -78,8 +82,15 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- test infra -->
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+            <version>${slf4j-version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- test infra -->
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-xmpp</artifactId>
             <version>${project.version}</version>
@@ -87,21 +98,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <forkCount>1</forkCount>
-                    <!-- Something on the tests generate a lot of bogus output-->
-                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
-                    <systemPropertyVariables>
-                        <visibleassertions.silence>true</visibleassertions.silence>
-                    </systemPropertyVariables>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

@@ -80,12 +80,7 @@ public class FileLockExclusiveReadLockStrategy extends MarkerFileExclusiveReadLo
             while (!exclusive) {
                 // timeout check
                 if (timeout > 0) {
-                    long delta = watch.taken();
-                    if (delta > timeout) {
-                        CamelLogger.log(LOG, readLockLoggingLevel,
-                                "Cannot acquire read lock within " + timeout + " millis. Will skip the file: " + target);
-                        // we could not get the lock within the timeout period,
-                        // so return false
+                    if (isTimedOut(watch, target, timeout, readLockLoggingLevel)) {
                         return false;
                     }
                 }
@@ -121,15 +116,7 @@ public class FileLockExclusiveReadLockStrategy extends MarkerFileExclusiveReadLo
             // somehow hold a lock to a file
             // such as AntiVirus or MS Office that has special locks for it's
             // supported files
-            if (timeout == 0) {
-                // if not using timeout, then we cant retry, so return false
-                return false;
-            }
-            LOG.debug("Cannot acquire read lock. Will try again.", e);
-            boolean interrupted = sleep();
-            if (interrupted) {
-                // we were interrupted while sleeping, we are likely being
-                // shutdown so return false
+            if (handleIOException(e)) {
                 return false;
             }
         } finally {
@@ -150,6 +137,21 @@ public class FileLockExclusiveReadLockStrategy extends MarkerFileExclusiveReadLo
 
         // we grabbed the lock
         return true;
+    }
+
+    private boolean handleIOException(IOException e) {
+        if (timeout == 0) {
+            // if not using timeout, then we cant retry, so return false
+            return true;
+        }
+        LOG.debug("Cannot acquire read lock. Will try again.", e);
+        boolean interrupted = sleep();
+        if (interrupted) {
+            // we were interrupted while sleeping, we are likely being
+            // shutdown so return false
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -184,6 +186,7 @@ public class FileLockExclusiveReadLockStrategy extends MarkerFileExclusiveReadLo
             Thread.sleep(checkInterval);
             return false;
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.debug("Sleep interrupted while waiting for exclusive read lock, so breaking out");
             return true;
         }

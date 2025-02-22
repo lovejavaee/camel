@@ -66,7 +66,7 @@ public final class CxfConverter {
         if (object instanceof Collection) {
             return ((Collection<?>) object).toArray();
         } else {
-            Object answer[];
+            Object[] answer;
             if (object == null) {
                 answer = new Object[0];
             } else {
@@ -101,7 +101,8 @@ public final class CxfConverter {
     /**
      * Use a fallback type converter so we can convert the embedded list element if the value is MessageContentsList.
      * The algorithm of this converter finds the first non-null list element from the list and applies conversion to the
-     * list element.
+     * list element if can determine this MessageContentsList is used in CXF context(first element is the return value
+     * while others are Holders).
      *
      * @param  type     the desired type to be converted to
      * @param  exchange optional exchange which can be null
@@ -119,37 +120,59 @@ public final class CxfConverter {
         if (MessageContentsList.class.isAssignableFrom(value.getClass())) {
             MessageContentsList list = (MessageContentsList) value;
 
-            // try to turn the first array element into the object that we want
-            for (Object embedded : list) {
-                if (embedded != null) {
-                    if (type.isInstance(embedded)) {
-                        return type.cast(embedded);
-                    } else {
-                        TypeConverter tc = registry.lookup(type, embedded.getClass());
-                        if (tc == null) {
-                            // maybe one of its interface fits
-                            for (Class<?> clazz : embedded.getClass().getInterfaces()) {
-                                tc = registry.lookup(type, clazz);
-                                if (tc != null) {
-                                    break;
-                                }
-                            }
-                        }
-                        if (tc != null) {
-                            Object result = tc.convertTo(type, exchange, embedded);
-                            if (result != null) {
-                                return (T) result;
-                            }
-                            // there is no suitable result will be return
-                            break;
-                        }
+            if (list.size() > 1 && type == String.class) {
+                //to check if the MessageContentsList is used in CXF context
+                //If not, use the general way to convert from List.class to String.class
+                boolean foundHolder = false;
+                for (Object embedded : list) {
+                    if (embedded != null && embedded.getClass().getName().equals("javax.xml.ws.Holder")) {
+                        foundHolder = true;
+                        break;
                     }
                 }
+                if (!foundHolder) {
+                    // this isn't a typical CXF MessageContentsList
+                    // just using other fallback converters
+                    return null;
+                }
             }
-            // return void to indicate its not possible to convert at this time
-            return (T) MISS_VALUE;
+
+            // try to turn the first array element into the object that we want
+            return tryCoerceFirstArrayElement(type, exchange, registry, list);
         }
 
         return null;
+    }
+
+    public static <T> T tryCoerceFirstArrayElement(
+            Class<T> type, Exchange exchange, TypeConverterRegistry registry, MessageContentsList list) {
+        for (Object embedded : list) {
+            if (embedded != null) {
+                if (type.isInstance(embedded)) {
+                    return type.cast(embedded);
+                } else {
+                    TypeConverter tc = registry.lookup(type, embedded.getClass());
+                    if (tc == null) {
+                        // maybe one of its interfaces fits
+                        for (Class<?> clazz : embedded.getClass().getInterfaces()) {
+                            tc = registry.lookup(type, clazz);
+                            if (tc != null) {
+                                break;
+                            }
+                        }
+                    }
+                    if (tc != null) {
+                        Object result = tc.convertTo(type, exchange, embedded);
+                        if (result != null) {
+                            return (T) result;
+                        }
+                        // there is no suitable result will be return
+                        break;
+                    }
+                }
+            }
+        }
+        // return void to indicate its not possible to convert at this time
+        return (T) MISS_VALUE;
     }
 }

@@ -5,6 +5,7 @@
 :description: Performs a query, poll, insert, update or delete in a relational database using MyBatis.
 :since: 2.7
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: mybatis
@@ -76,10 +77,10 @@ Camel will not replace the body. This allows you to continue routing and
 keep the original body. The response from MyBatis is always stored in
 the header with the key `CamelMyBatisResult`.
 
-== Samples
+== Examples
 
-For example if you wish to consume beans from a JMS queue and insert
-them into a database you could do the following:
+For example, if you wish to consume beans from a JMS queue and insert
+them into a database, you could do the following:
 
 [source,java]
 ----
@@ -110,11 +111,18 @@ Where *insertAccount* is the MyBatis ID in the SQL mapping file:
 
 == Using StatementType for better control of MyBatis
 
-When routing to an MyBatis endpoint you will want more fine grained
+When routing to an MyBatis endpoint, you will want more fine-grained
 control so you can control whether the SQL statement to be executed is a
 `SELECT`, `UPDATE`, `DELETE` or `INSERT` etc. So for instance if we want
 to route to an MyBatis endpoint in which the IN body contains parameters
 to a `SELECT` statement we can do:
+
+[source,java]
+----
+from("direct:start")
+        .to("mybatis:selectAccountById?statementType=SelectOne")
+        .to("mock:result");
+----
 
 In the code above we can invoke the MyBatis statement
 `selectAccountById` and the IN body should contain the account id we
@@ -123,24 +131,63 @@ want to retrieve, such as an `Integer` type.
 We can do the same for some of the other operations, such as
 `SelectList`:
 
+[source,java]
+----
+from("direct:start")
+        .to("mybatis:selectAllAccounts?statementType=SelectList")
+        .to("mock:result");
+----
+
 And the same for `UPDATE`, where we can send an `Account` object as the
 IN body to MyBatis:
+
+[source,java]
+----
+from("direct:start")
+        .to("mybatis:updateAccount?statementType=Update")
+        .to("mock:result");
+----
 
 === Using InsertList StatementType
 
 MyBatis allows you to insert multiple rows using its for-each batch
 driver. To use this, you need to use the <foreach> in the mapper XML
-file. For example as shown below:
+file. For example, as shown below:
+
+[source,xml]
+----
+<!-- Batch Insert example, using the Account parameter class -->
+<insert id="batchInsertAccount" parameterType="java.util.List">
+    insert into ACCOUNT (
+    ACC_ID,
+    ACC_FIRST_NAME,
+    ACC_LAST_NAME,
+    ACC_EMAIL
+    )
+    values (
+    <foreach item="Account" collection="list" open="" close="" separator="),(">
+        #{Account.id}, #{Account.firstName}, #{Account.lastName}, #{Account.emailAddress}
+    </foreach>
+    )
+</insert>
+----
 
 Then you can insert multiple rows, by sending a Camel message to the
 `mybatis` endpoint which uses the `InsertList` statement type, as shown
 below:
 
+[source,java]
+----
+from("direct:start")
+        .to("mybatis:batchInsertAccount?statementType=InsertList")
+        .to("mock:result");
+----
+
 === Using UpdateList StatementType
 
 MyBatis allows you to update multiple rows using its for-each batch
 driver. To use this, you need to use the <foreach> in the mapper XML
-file. For example as shown below:
+file. For example, as shown below:
 
 [source,xml]
 ----
@@ -170,7 +217,7 @@ from("direct:start")
 
 MyBatis allows you to delete multiple rows using its for-each batch
 driver. To use this, you need to use the <foreach> in the mapper XML
-file. For example as shown below:
+file. For example, as shown below:
 
 [source,xml]
 ----
@@ -197,15 +244,14 @@ from("direct:start")
 
 === Notice on InsertList, UpdateList and DeleteList StatementTypes
 
-Parameter of any type (List, Map, etc.) can be passed to mybatis and an
-end user is responsible for handling it as required +
- with the help of http://www.mybatis.org/mybatis-3/dynamic-sql.html[mybatis
-dynamic queries] capabilities.
+Parameter of any type (List, Map, etc.) can be passed to mybatis, and an
+end user is responsible for handling it as required with the help of
+http://www.mybatis.org/mybatis-3/dynamic-sql.html[mybatis dynamic queries] capabilities.
 
 === Scheduled polling example
 
 This component supports scheduled polling and can therefore be used as
-a Polling Consumer. For example to poll the
+a Polling Consumer. For example, to poll the
 database every minute:
 
 [source,java]
@@ -213,9 +259,6 @@ database every minute:
 from("mybatis:selectAllAccounts?delay=60000")
   .to("activemq:queue:allAccounts");
 ----
-
-See "ScheduledPollConsumer Options"
-on Polling Consumer for more options.
 
 Alternatively you can use another mechanism for triggering the scheduled
 polls, such as the xref:timer-component.adoc[Timer] or xref:timer-component.adoc[Quartz]
@@ -250,9 +293,22 @@ by commas.
 
 The route below illustrates we execute the *consumeAccount* statement
 data is processed. This allows us to change the status of the row in the
-database to processed, so we avoid consuming it twice or more.
+database to process, so we avoid consuming it twice or more.
+
+[source,java]
+----
+from("mybatis:selectUnprocessedAccounts?onConsume=consumeAccount")
+    .to("mock:results");
+----
 
 And the statements in the sqlmap file:
+
+[source,xml]
+----
+<update id="consumeAccount" parameterType="Account">
+    update ACCOUNT set PROCESSED = true where ACC_ID = #{id}
+</update>
+----
 
 === Participating in transactions
 
@@ -302,9 +358,9 @@ then wraps that same `DataSource`:
 <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
     <property name="dataSource" ref="dataSource"/>
     <!-- standard mybatis config file -->
-<property name="configLocation" value="/META-INF/SqlMapConfig.xml"/>
+    <property name="configLocation" value="/META-INF/SqlMapConfig.xml"/>
     <!-- externalised mappers -->
-<property name="mapperLocations" value="classpath*:META-INF/mappers/**/*.xml"/>
+    <property name="mapperLocations" value="classpath*:META-INF/mappers/**/*.xml"/>
 </bean>
 ----
 
@@ -317,9 +373,7 @@ The camel-mybatis component is then configured with that factory:
 </bean>
 ----
 
-Finally, a transaction policy is defined
-over the top of the transaction manager, which can then be used as
-usual:
+Finally, a transaction policy is defined over the top of the transaction manager, which can then be used as usual:
 
 [source,xml]
 ----
@@ -337,6 +391,25 @@ usual:
 </camelContext>
 ----
 
+== MyBatis Spring Boot Starter integration
 
+Spring Boot users can use https://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/[mybatis-spring-boot-starter] artifact provided by the mybatis team
+
+[source,xml]
+----
+<dependency>
+  <groupId>org.mybatis.spring.boot</groupId>
+  <artifactId>mybatis-spring-boot-starter</artifactId>
+  <version>3.0.3</version>
+</dependency>
+----
+
+in particular, autoconfigured beans from mybatis-spring-boot-starter can be used as follows:
+
+[source,properties]
+----
+#application.properties
+camel.component.mybatis.sql-session-factory = #sqlSessionFactory
+----
 
 include::spring-boot:partial$starter.adoc[]

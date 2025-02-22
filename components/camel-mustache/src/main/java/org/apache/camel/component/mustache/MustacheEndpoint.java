@@ -43,7 +43,8 @@ import static org.apache.camel.component.mustache.MustacheConstants.MUSTACHE_TEM
  * Transform messages using a Mustache template.
  */
 @UriEndpoint(firstVersion = "2.12.0", scheme = "mustache", title = "Mustache", syntax = "mustache:resourceUri",
-             producerOnly = true, category = { Category.TRANSFORMATION }, headersClass = MustacheConstants.class)
+             remote = false, producerOnly = true, category = { Category.TRANSFORMATION },
+             headersClass = MustacheConstants.class)
 public class MustacheEndpoint extends ResourceEndpoint {
 
     private MustacheFactory mustacheFactory;
@@ -63,6 +64,11 @@ public class MustacheEndpoint extends ResourceEndpoint {
 
     public MustacheEndpoint(String endpointUri, Component component, String resourceUri) {
         super(endpointUri, component, resourceUri);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

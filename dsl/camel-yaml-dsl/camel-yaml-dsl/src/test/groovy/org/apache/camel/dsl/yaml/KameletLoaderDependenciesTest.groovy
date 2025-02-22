@@ -28,7 +28,7 @@ class KameletLoaderDependenciesTest extends YamlTestSupport {
         context.registry.bind("myDep", new DependencyStrategy() {
             @Override
             void onDependency(String dependency) {
-                deps.add(dependency);
+                deps.add(dependency)
             }
         })
 
@@ -38,7 +38,7 @@ class KameletLoaderDependenciesTest extends YamlTestSupport {
     def "kamelet dependencies"() {
         when:
             loadKamelets('''
-                apiVersion: camel.apache.org/v1alpha1
+                apiVersion: camel.apache.org/v1
                 kind: Kamelet
                 metadata:
                   name: myDependency

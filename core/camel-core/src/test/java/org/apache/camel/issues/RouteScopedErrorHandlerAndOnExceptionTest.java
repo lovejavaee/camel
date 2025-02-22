@@ -29,7 +29,7 @@ import org.apache.camel.model.RouteDefinition;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Based on user forum issue
@@ -41,7 +41,7 @@ public class RouteScopedErrorHandlerAndOnExceptionTest extends ContextTestSuppor
         RouteDefinition route = context.getRouteDefinitions().get(0);
         AdviceWith.adviceWith(route, context, new AdviceWithRouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 interceptSendToEndpoint("seda:*").skipSendToOriginalEndpoint().throwException(new ConnectException("Forced"));
             }
         });
@@ -51,13 +51,12 @@ public class RouteScopedErrorHandlerAndOnExceptionTest extends ContextTestSuppor
         // we fail all redeliveries so after that we send to mock:exhausted
         getMockEndpoint("mock:exhausted").expectedMessageCount(1);
 
-        try {
-            template.sendBody("direct:start", "Hello World");
-            fail("Should thrown an exception");
-        } catch (CamelExecutionException e) {
-            ConnectException cause = assertIsInstanceOf(ConnectException.class, e.getCause());
-            assertEquals("Forced", cause.getMessage());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("direct:start", "Hello World"),
+                "Should thrown an exception");
+
+        ConnectException cause = assertIsInstanceOf(ConnectException.class, e.getCause());
+        assertEquals("Forced", cause.getMessage());
 
         assertMockEndpointsSatisfied();
     }
@@ -67,7 +66,7 @@ public class RouteScopedErrorHandlerAndOnExceptionTest extends ContextTestSuppor
         RouteDefinition route = context.getRouteDefinitions().get(0);
         AdviceWith.adviceWith(route, context, new AdviceWithRouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 interceptSendToEndpoint("seda:*").skipSendToOriginalEndpoint()
                         .throwException(new FileNotFoundException("Forced"));
             }
@@ -83,10 +82,10 @@ public class RouteScopedErrorHandlerAndOnExceptionTest extends ContextTestSuppor
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
 
                 from("direct:start").errorHandler(deadLetterChannel("mock:local").maximumRedeliveries(2).redeliveryDelay(0))
                         // no redelivery delay for faster unit tests

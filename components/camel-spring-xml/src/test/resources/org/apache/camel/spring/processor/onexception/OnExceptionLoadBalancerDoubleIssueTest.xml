@@ -33,6 +33,7 @@
   </bean>
 
   <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
 
     <onException>
       <exception>java.lang.Exception</exception>
@@ -42,7 +43,7 @@
     <route>
       <from uri="direct:error"/>
       <loadBalance>
-        <roundRobin id="round"/>
+        <roundRobinLoadBalancer id="round"/>
         <to uri="mock:error"/>
         <to uri="mock:error2"/>
         <to uri="mock:error3"/>

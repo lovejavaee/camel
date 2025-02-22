@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
@@ -39,6 +40,7 @@ import org.apache.camel.resume.ResumeStrategy;
 import org.apache.camel.support.resume.Resumables;
 import org.apache.camel.util.FileUtil;
 import org.apache.camel.util.ObjectHelper;
+import org.apache.camel.util.function.Suppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +51,7 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
 
     private static final Logger LOG = LoggerFactory.getLogger(FileConsumer.class);
     private ResumeStrategy resumeStrategy;
-    private String endpointPath;
+    private final String endpointPath;
     private Set<String> extendedAttributes;
 
     public FileConsumer(FileEndpoint endpoint, Processor processor, GenericFileOperations<File> operations,
@@ -72,7 +74,7 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
         return exchange;
     }
 
-    private boolean pollDirectory(File directory, List<GenericFile<File>> fileList, int depth) {
+    private boolean pollDirectory(Exchange dynamic, File directory, List<GenericFile<File>> fileList, int depth) {
         depth++;
 
         if (LOG.isTraceEnabled()) {
@@ -87,10 +89,18 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
             Arrays.sort(files, Comparator.comparing(File::getAbsoluteFile));
         }
 
+        if (processPolledFiles(dynamic, fileList, depth, files)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean processPolledFiles(Exchange dynamic, List<GenericFile<File>> fileList, int depth, File[] files) {
         for (File file : files) {
             // check if we can continue polling in files
             if (!canPollMoreFiles(fileList)) {
-                return false;
+                return true;
             }
 
             // trace log as Windows/Unix can have different views what the file is
@@ -101,76 +111,111 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
             }
 
             // creates a generic file
-            GenericFile<File> gf
-                    = asGenericFile(endpointPath, file, getEndpoint().getCharset(), getEndpoint().isProbeContentType());
+            Supplier<GenericFile<File>> gf = Suppliers.memorize(
+                    () -> asGenericFile(endpointPath, file, getEndpoint().getCharset(), getEndpoint().isProbeContentType()));
 
             if (resumeStrategy != null) {
-                ResumeAdapter adapter = resumeStrategy.getAdapter();
-                LOG.trace("Checking the resume adapter: {}", adapter);
-                if (adapter instanceof FileOffsetResumeAdapter) {
-                    LOG.trace("The resume adapter is for offsets: {}", adapter);
-                    ((FileOffsetResumeAdapter) adapter).setResumePayload(gf);
-                    adapter.resume();
-                }
-
-                if (adapter instanceof DirectoryEntriesResumeAdapter) {
+                final ResumeAdapter adapter = setupResumeStrategy(gf.get());
+                if (adapter instanceof DirectoryEntriesResumeAdapter directoryEntriesResumeAdapter) {
                     LOG.trace("Running the resume process for file {}", file);
-                    if (((DirectoryEntriesResumeAdapter) adapter).resume(file)) {
+                    if (directoryEntriesResumeAdapter.resume(file)) {
                         LOG.trace("Skipping file {} because it has been marked previously consumed", file);
                         continue;
                     }
                 }
             }
 
-            if (file.isDirectory()) {
-                if (endpoint.isRecursive() && depth < endpoint.getMaxDepth() && isValidFile(gf, true, files)) {
-                    boolean canPollMore = pollDirectory(file, fileList, depth);
-                    if (!canPollMore) {
-                        return false;
-                    }
-                }
-            } else {
-                // Windows can report false to a file on a share so regard it
-                // always as a file (if it is not a directory)
-                if (depth >= endpoint.minDepth && isValidFile(gf, false, files)) {
-                    LOG.trace("Adding valid file: {}", file);
-                    // matched file so add
-                    if (extendedAttributes != null) {
-                        Path path = file.toPath();
-                        Map<String, Object> allAttributes = new HashMap<>();
-                        for (String attribute : extendedAttributes) {
-                            readAttributes(file, path, allAttributes, attribute);
-                        }
-
-                        gf.setExtendedAttributes(allAttributes);
-                    }
-
-                    fileList.add(gf);
-                }
-
+            if (processEntry(dynamic, fileList, depth, file, gf, files)) {
+                return true;
             }
         }
+        return false;
+    }
 
-        return true;
+    private boolean processEntry(
+            Exchange dynamic,
+            List<GenericFile<File>> fileList, int depth, File file, Supplier<GenericFile<File>> gf, File[] files) {
+        if (file.isDirectory()) {
+            return processDirectoryEntry(dynamic, fileList, depth, file, gf, files);
+        } else {
+            processFileEntry(dynamic, fileList, depth, file, gf, files);
+
+        }
+        return false;
+    }
+
+    private void processFileEntry(
+            Exchange dynamic,
+            List<GenericFile<File>> fileList, int depth, File file, Supplier<GenericFile<File>> gf, File[] files) {
+        // Windows can report false to a file on a share so regard it
+        // always as a file (if it is not a directory)
+        if (depth >= endpoint.minDepth) {
+            boolean valid
+                    = isValidFile(dynamic, gf, file.getName(), file.getAbsolutePath(),
+                            getRelativeFilePath(endpointPath, null, null, file),
+                            false, files);
+            if (valid) {
+                LOG.trace("Adding valid file: {}", file);
+                if (extendedAttributes != null) {
+                    Path path = file.toPath();
+                    Map<String, Object> allAttributes = new HashMap<>();
+                    for (String attribute : extendedAttributes) {
+                        readAttributes(file, path, allAttributes, attribute);
+                    }
+                    gf.get().setExtendedAttributes(allAttributes);
+                }
+                fileList.add(gf.get());
+            }
+        }
+    }
+
+    private boolean processDirectoryEntry(
+            Exchange dynamic,
+            List<GenericFile<File>> fileList, int depth, File file, Supplier<GenericFile<File>> gf, File[] files) {
+        if (endpoint.isRecursive() && depth < endpoint.getMaxDepth()) {
+            boolean valid
+                    = isValidFile(dynamic, gf, file.getName(), file.getAbsolutePath(),
+                            getRelativeFilePath(endpointPath, null, null, file),
+                            true, files);
+            if (valid) {
+                boolean canPollMore = pollDirectory(dynamic, file, fileList, depth);
+                return !canPollMore;
+            }
+        }
+        return false;
+    }
+
+    private ResumeAdapter setupResumeStrategy(GenericFile<File> gf) {
+        ResumeAdapter adapter = resumeStrategy.getAdapter();
+        LOG.trace("Checking the resume adapter: {}", adapter);
+        if (adapter instanceof FileOffsetResumeAdapter fileOffsetResumeAdapter) {
+            LOG.trace("The resume adapter is for offsets: {}", adapter);
+            fileOffsetResumeAdapter.setResumePayload(gf);
+            adapter.resume();
+        }
+        return adapter;
     }
 
     @Override
-    protected boolean pollDirectory(String fileName, List<GenericFile<File>> fileList, int depth) {
+    protected boolean pollDirectory(Exchange dynamic, String fileName, List<GenericFile<File>> fileList, int depth) {
         LOG.trace("pollDirectory from fileName: {}", fileName);
 
         File directory = new File(fileName);
         if (!directory.exists() || !directory.isDirectory()) {
-            LOG.debug("Cannot poll as directory does not exists or its not a directory: {}", directory);
+            LOG.debug("Cannot poll as directory does not exist or its not a directory: {}", directory);
             if (getEndpoint().isDirectoryMustExist()) {
                 throw new GenericFileOperationFailedException("Directory does not exist: " + directory);
             }
             return true;
         }
 
-        return pollDirectory(directory, fileList, depth);
+        return pollDirectory(dynamic, directory, fileList, depth);
     }
 
     private File[] listFiles(File directory) {
+        if (!getEndpoint().isIncludeHiddenDirs() && directory.isHidden()) {
+            return null;
+        }
         final File[] dirFiles = directory.listFiles();
 
         if (dirFiles == null || dirFiles.length == 0) {
@@ -218,7 +263,7 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
     }
 
     @Override
-    protected boolean isMatched(GenericFile<File> file, String doneFileName, File[] files) {
+    protected boolean isMatched(Supplier<GenericFile<File>> file, String doneFileName, File[] files) {
         String onlyName = FileUtil.stripPath(doneFileName);
         // the done file name must be among the files
         for (File f : files) {
@@ -288,6 +333,27 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
     }
 
     @Override
+    protected Supplier<String> getRelativeFilePath(String endpointPath, String path, String absolutePath, File file) {
+        return () -> {
+            File f;
+            String endpointNormalizedSep = FileUtil.normalizePath(endpointPath) + File.separator;
+            String p = file.getPath();
+            if (p.startsWith(endpointNormalizedSep)) {
+                p = p.substring(endpointNormalizedSep.length());
+            }
+            f = new File(p);
+
+            String answer;
+            if (f.getParent() != null) {
+                answer = f.getParent() + File.separator + file.getName();
+            } else {
+                answer = f.getName();
+            }
+            return answer;
+        };
+    }
+
+    @Override
     protected void updateFileHeaders(GenericFile<File> file, Message message) {
         File upToDateFile = file.getFile();
         if (fileHasMoved(file)) {
@@ -310,6 +376,22 @@ public class FileConsumer extends GenericFileConsumer<File> implements ResumeAwa
     @Override
     public FileEndpoint getEndpoint() {
         return (FileEndpoint) super.getEndpoint();
+    }
+
+    @Override
+    protected boolean isMatchedHiddenFile(Supplier<GenericFile<File>> file, String name, boolean isDirectory) {
+        if (isDirectory) {
+            if (!name.startsWith(".")) {
+                return true;
+            }
+            return getEndpoint().isIncludeHiddenDirs() && !FileConstants.DEFAULT_SUB_FOLDER.equals(name);
+        }
+
+        if (getEndpoint().isIncludeHiddenFiles()) {
+            return true;
+        } else {
+            return super.isMatchedHiddenFile(file, name, isDirectory);
+        }
     }
 
     private boolean fileHasMoved(GenericFile<File> file) {

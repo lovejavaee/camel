@@ -27,13 +27,15 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.AvailablePortFinder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@DisabledIfSystemProperty(named = "ci.env.name", matches = "apache.org", disabledReason = "Slow test")
 public class InterfacesTest extends BaseJettyTest {
 
-    private static boolean isMacOS = System.getProperty("os.name").startsWith("Mac");
+    private static final boolean isMacOS = System.getProperty("os.name").startsWith("Mac");
 
     @RegisterExtension
     protected AvailablePortFinder.Port port3 = AvailablePortFinder.find();

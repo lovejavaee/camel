@@ -27,13 +27,15 @@ public final class JmsConstants {
     public static final String JMS_DESTINATION = "CamelJmsDestination";
     @Metadata(label = "producer", description = "The name of the queue or topic to use as destination.", javaType = "String")
     public static final String JMS_DESTINATION_NAME = "CamelJmsDestinationName";
+    @Metadata(description = "The name of the queue or topic the message was sent to.", javaType = "String")
+    public static final String JMS_DESTINATION_NAME_PRODUCED = "CamelJMSDestinationProduced";
     @Metadata(description = "The JMS group ID.", javaType = "String")
     public static final String JMS_X_GROUP_ID = "JMSXGroupID";
     @Metadata(description = "The JMS unique message ID.", javaType = "String")
     public static final String JMS_HEADER_MESSAGE_ID = "JMSMessageID";
     @Metadata(description = "The JMS correlation ID.", javaType = "String")
     public static final String JMS_HEADER_CORRELATION_ID = "JMSCorrelationID";
-    @Metadata(description = "The JMS correlation ID as bytes.", javaType = "String")
+    @Metadata(description = "The JMS correlation ID as bytes.", javaType = "byte[]")
     public static final String JMS_HEADER_CORRELATION_ID_AS_BYTES = "JMSCorrelationIDAsBytes";
     @Metadata(description = "The JMS delivery mode.", javaType = "int")
     public static final String JMS_HEADER_DELIVERY_MODE = "JMSDeliveryMode";
@@ -57,11 +59,13 @@ public final class JmsConstants {
     public static final String JMS_HEADER_XUSER_ID = "JMSXUserID";
     @Metadata(description = "The message type.", javaType = "org.apache.camel.component.jms.JmsMessageType")
     public static final String JMS_MESSAGE_TYPE = "CamelJmsMessageType";
-    public static final String JMS_DELIVERY_MODE = "CamelJmsDeliveryMode";
     @Metadata(label = "producer",
               description = "The timeout for waiting for a reply when using the InOut Exchange Pattern (in milliseconds).",
-              javaType = "long", defaultValue = "20_000")
+              javaType = "long", defaultValue = "20000")
     public static final String JMS_REQUEST_TIMEOUT = "CamelJmsRequestTimeout";
+
+    // temporary header for delivery mode when preserver message qos is enabled
+    public static final String JMS_DELIVERY_MODE = "CamelJmsDeliveryMode";
 
     private JmsConstants() {
         // utility class

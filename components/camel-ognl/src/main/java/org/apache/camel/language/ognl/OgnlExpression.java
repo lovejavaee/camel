@@ -16,10 +16,9 @@
  */
 package org.apache.camel.language.ognl;
 
-import java.util.Map;
-
 import ognl.ClassResolver;
 import ognl.Ognl;
+import ognl.OgnlContext;
 import ognl.OgnlException;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExpressionEvaluationException;
@@ -52,9 +51,10 @@ public class OgnlExpression extends ExpressionSupport {
     @Override
     public <T> T evaluate(Exchange exchange, Class<T> tClass) {
         ClassResolver cr = new CamelClassResolver(exchange.getContext().getClassResolver());
-        Map<?, ?> oglContext = Ognl.createDefaultContext(null, cr);
+        RootObject root = new RootObject(exchange);
+        OgnlContext oglContext = Ognl.createDefaultContext(root, cr);
         try {
-            Object value = Ognl.getValue(expression, oglContext, new RootObject(exchange));
+            Object value = OgnlHelper.getValue(expression, oglContext, root);
             return exchange.getContext().getTypeConverter().convertTo(tClass, value);
         } catch (OgnlException e) {
             throw new ExpressionEvaluationException(this, exchange, e);

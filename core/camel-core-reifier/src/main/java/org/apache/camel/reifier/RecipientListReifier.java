@@ -46,6 +46,7 @@ public class RecipientListReifier extends ProcessorReifier<RecipientListDefiniti
         final Expression expression = createExpression(definition.getExpression());
 
         boolean isParallelProcessing = parseBoolean(definition.getParallelProcessing(), false);
+        boolean isSynchronous = parseBoolean(definition.getSynchronous(), false);
         boolean isStreaming = parseBoolean(definition.getStreaming(), false);
         boolean isParallelAggregate = parseBoolean(definition.getParallelAggregate(), false);
         boolean isShareUnitOfWork = parseBoolean(definition.getShareUnitOfWork(), false);
@@ -62,6 +63,7 @@ public class RecipientListReifier extends ProcessorReifier<RecipientListDefiniti
         answer.setAggregationStrategy(createAggregationStrategy());
         answer.setParallelProcessing(isParallelProcessing);
         answer.setParallelAggregate(isParallelAggregate);
+        answer.setSynchronous(isSynchronous);
         answer.setStreaming(isStreaming);
         answer.setShareUnitOfWork(isShareUnitOfWork);
         answer.setStopOnException(isStopOnException);
@@ -115,11 +117,11 @@ public class RecipientListReifier extends ProcessorReifier<RecipientListDefiniti
         String ref = parseString(definition.getAggregationStrategy());
         if (strategy == null && ref != null) {
             Object aggStrategy = lookupByName(ref);
-            if (aggStrategy instanceof AggregationStrategy) {
-                strategy = (AggregationStrategy) aggStrategy;
-            } else if (aggStrategy instanceof BiFunction) {
+            if (aggStrategy instanceof AggregationStrategy aggregationStrategy) {
+                strategy = aggregationStrategy;
+            } else if (aggStrategy instanceof BiFunction biFunction) {
                 AggregationStrategyBiFunctionAdapter adapter
-                        = new AggregationStrategyBiFunctionAdapter((BiFunction) aggStrategy);
+                        = new AggregationStrategyBiFunctionAdapter(biFunction);
                 if (definition.getAggregationStrategyMethodAllowNull() != null) {
                     adapter.setAllowNullNewExchange(parseBoolean(definition.getAggregationStrategyMethodAllowNull(), false));
                     adapter.setAllowNullOldExchange(parseBoolean(definition.getAggregationStrategyMethodAllowNull(), false));

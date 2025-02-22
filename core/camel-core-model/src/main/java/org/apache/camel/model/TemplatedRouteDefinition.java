@@ -33,6 +33,8 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.CamelContextAware;
 import org.apache.camel.RouteTemplateContext;
 import org.apache.camel.spi.Metadata;
+import org.apache.camel.spi.Resource;
+import org.apache.camel.spi.ResourceAware;
 
 /**
  * Defines a templated route (a route built from a route template)
@@ -41,10 +43,12 @@ import org.apache.camel.spi.Metadata;
 @XmlRootElement(name = "templatedRoute")
 @XmlType(propOrder = { "parameters", "beans" })
 @XmlAccessorType(XmlAccessType.FIELD)
-public class TemplatedRouteDefinition implements CamelContextAware {
+public class TemplatedRouteDefinition implements CamelContextAware, ResourceAware {
 
     @XmlTransient
     private CamelContext camelContext;
+    @XmlTransient
+    private Resource resource;
 
     @XmlAttribute(required = true)
     private String routeTemplateRef;
@@ -57,7 +61,7 @@ public class TemplatedRouteDefinition implements CamelContextAware {
     private List<TemplatedRouteParameterDefinition> parameters;
     @XmlElement(name = "bean")
     @Metadata(description = "Adds a local bean as input of the template to build the route")
-    private List<TemplatedRouteBeanDefinition> beans;
+    private List<BeanFactoryDefinition<TemplatedRouteDefinition>> beans;
 
     public String getRouteTemplateRef() {
         return routeTemplateRef;
@@ -75,11 +79,11 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         this.parameters = parameters;
     }
 
-    public List<TemplatedRouteBeanDefinition> getBeans() {
+    public List<BeanFactoryDefinition<TemplatedRouteDefinition>> getBeans() {
         return beans;
     }
 
-    public void setBeans(List<TemplatedRouteBeanDefinition> beans) {
+    public void setBeans(List<BeanFactoryDefinition<TemplatedRouteDefinition>> beans) {
         this.beans = beans;
     }
 
@@ -107,6 +111,16 @@ public class TemplatedRouteDefinition implements CamelContextAware {
     @Override
     public void setCamelContext(CamelContext camelContext) {
         this.camelContext = camelContext;
+    }
+
+    @Override
+    public Resource getResource() {
+        return resource;
+    }
+
+    @Override
+    public void setResource(Resource resource) {
+        this.resource = resource;
     }
 
     // Fluent API
@@ -143,7 +157,7 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setName(name);
         def.setBeanType(type);
         beans.add(def);
@@ -161,15 +175,15 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setName(name);
         if (bean instanceof RouteTemplateContext.BeanSupplier) {
             def.setBeanSupplier((RouteTemplateContext.BeanSupplier<Object>) bean);
         } else if (bean instanceof Supplier) {
             def.setBeanSupplier(ctx -> ((Supplier<?>) bean).get());
-        } else if (bean instanceof String) {
-            // its a string type
-            def.setType((String) bean);
+        } else if (bean instanceof String str) {
+            // it is a string type
+            def.setType(str);
         } else {
             def.setBeanSupplier(ctx -> bean);
         }
@@ -187,7 +201,7 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setName(name);
         def.setBeanSupplier(ctx -> ((Supplier<?>) bean).get());
         beans.add(def);
@@ -205,7 +219,7 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setName(name);
         def.setBeanType(type);
         def.setBeanSupplier(bean);
@@ -224,7 +238,7 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setName(name);
         def.setType(language);
         def.setScript(script);
@@ -244,7 +258,7 @@ public class TemplatedRouteDefinition implements CamelContextAware {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setName(name);
         def.setBeanType(type);
         def.setType(language);
@@ -259,11 +273,11 @@ public class TemplatedRouteDefinition implements CamelContextAware {
      * @param  name the name of the bean
      * @return      fluent builder to choose which language and script to use for creating the bean
      */
-    public TemplatedRouteBeanDefinition bean(String name) {
+    public BeanFactoryDefinition<TemplatedRouteDefinition> bean(String name) {
         if (beans == null) {
             beans = new ArrayList<>();
         }
-        TemplatedRouteBeanDefinition def = new TemplatedRouteBeanDefinition();
+        BeanFactoryDefinition<TemplatedRouteDefinition> def = new BeanFactoryDefinition<>();
         def.setParent(this);
         def.setName(name);
         beans.add(def);

@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
@@ -49,6 +50,7 @@ public class SnsTopicProducerWithSubscriptionIT extends Aws2SNSBase {
     private static final Logger LOG = LoggerFactory.getLogger(SnsTopicProducerWithSubscriptionIT.class);
 
     private String sqsQueueUrl;
+    private String sqsQueueArn;
     private SqsClient client;
 
     public List<Message> receive() {
@@ -100,6 +102,9 @@ public class SnsTopicProducerWithSubscriptionIT extends Aws2SNSBase {
 
             sqsQueueUrl = client.createQueue(createQueueRequest).queueUrl();
         }
+        sqsQueueArn = client.getQueueAttributes(b -> b.queueUrl(sqsQueueUrl)
+                .attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes().get(QueueAttributeName.QUEUE_ARN);
     }
 
     @Test
@@ -126,8 +131,8 @@ public class SnsTopicProducerWithSubscriptionIT extends Aws2SNSBase {
             @Override
             public void configure() {
                 from("direct:start")
-                        .toF("aws2-sns://%s?subject=The+subject+message&autoCreateTopic=true&subscribeSNStoSQS=true&queueUrl=%s",
-                                sharedNameGenerator.getName(), sqsQueueUrl);
+                        .toF("aws2-sns://%s?subject=The+subject+message&autoCreateTopic=true&subscribeSNStoSQS=true&queueArn=%s",
+                                sharedNameGenerator.getName(), sqsQueueArn);
             }
         };
     }

@@ -68,8 +68,14 @@ public class SplunkHECProducer extends DefaultProducer {
 
             connManager = new PoolingHttpClientConnectionManager(registryBuilder.build());
         } else {
-            connManager = new PoolingHttpClientConnectionManager();
+            SSLConnectionSocketFactory sslsf
+                    = new SSLConnectionSocketFactory(endpoint.provideSSLContext(), NoopHostnameVerifier.INSTANCE);
+            RegistryBuilder<ConnectionSocketFactory> registryBuilder = RegistryBuilder.create();
+            registryBuilder.register("https", sslsf);
+
+            connManager = new PoolingHttpClientConnectionManager(registryBuilder.build());
         }
+
         connManager.setMaxTotal(10);
         builder.setConnectionManager(connManager);
         httpClient = builder.build();
@@ -82,7 +88,7 @@ public class SplunkHECProducer extends DefaultProducer {
         HttpPost httppost = new HttpPost(
                 (endpoint.getConfiguration().isHttps() ? "https" : "http") + "://"
                                          + endpoint.getSplunkURL() + endpoint.getConfiguration().getSplunkEndpoint());
-        httppost.addHeader("Authorization", " Splunk " + endpoint.getToken());
+        httppost.addHeader("Authorization", " Splunk " + endpoint.getConfiguration().getToken());
 
         EntityTemplate entityTemplate = new EntityTemplate(
                 -1, ContentType.APPLICATION_JSON, null, outputStream -> MAPPER.writer().writeValue(outputStream, payload));

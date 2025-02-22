@@ -34,16 +34,16 @@ public class PubNubConfiguration implements Cloneable {
     private String subscribeKey;
     @UriParam(label = "security", secret = true)
     private String secretKey;
-    @UriParam(label = "security", secret = true)
+    @Deprecated
+    @UriParam(label = "security", secret = true,
+              defaultValueNote = "This setting is deprecated because it relates to deprecated Access Manager (PAM V2) and will be removed in the future. Please, migrate to new Access Manager (PAM V3) https://www.pubnub.com/docs/general/resources/migration-guides/pam-v3-migration")
     private String authKey;
-    @UriParam(label = "security", secret = true)
-    private String cipherKey;
     @UriParam(label = "security", defaultValue = "true")
     private boolean secure = true;
     @UriParam
     @Metadata(required = true)
     private String uuid;
-    @UriParam(label = "producer", enums = "HERENOW,WHERENOW,GETSTATE,SETSTATE,GETHISTORY,PUBLISH,FIRE")
+    @UriParam(label = "producer", enums = "HERENOW,GETSTATE,SETSTATE,GETHISTORY,PUBLISH,FIRE")
     private String operation;
     @UriParam(label = "consumer", defaultValue = "false")
     private boolean withPresence;
@@ -102,17 +102,6 @@ public class PubNubConfiguration implements Cloneable {
     }
 
     /**
-     * If cipher is passed, all communications to/from PubNub will be encrypted.
-     */
-    public String getCipherKey() {
-        return cipherKey;
-    }
-
-    public void setCipherKey(String cipherKey) {
-        this.cipherKey = cipherKey;
-    }
-
-    /**
      * Use SSL for secure transmission.
      */
     public boolean isSecure() {
@@ -153,7 +142,6 @@ public class PubNubConfiguration implements Cloneable {
      * Event Handlers registered on the channel.</li>
      * <li>HERENOW: Obtain information about the current state of a channel including a list of unique user-ids
      * currently subscribed to the channel and the total occupancy count.</li>
-     * <li>WHERENOW: Obtain information about the current list of channels to which a uuid is subscribed to.</li>
      * <li>GETSTATE: Used to get key/value pairs specific to a subscriber uuid. State information is supplied as a JSON
      * object of key/value pairs</li>
      * <li>SETSTATE: Used to set key/value pairs specific to a subscriber uuid</li>

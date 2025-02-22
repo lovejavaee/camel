@@ -16,6 +16,9 @@
  */
 package org.apache.camel.component.bean;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.apache.camel.AsyncCallback;
 import org.apache.camel.BeanScope;
 import org.apache.camel.Exchange;
@@ -38,16 +41,16 @@ public abstract class AbstractBeanProcessor extends AsyncProcessorSupport {
     private transient Processor processor;
     private transient Object bean;
     private transient boolean lookupProcessorDone;
-    private final Object lock = new Object();
+    private final Lock lock = new ReentrantLock();
     private BeanScope scope;
     private String method;
     private boolean shorthandMethod;
 
-    public AbstractBeanProcessor(Object pojo, BeanInfo beanInfo) {
+    protected AbstractBeanProcessor(Object pojo, BeanInfo beanInfo) {
         this(new ConstantBeanHolder(pojo, beanInfo));
     }
 
-    public AbstractBeanProcessor(BeanHolder beanHolder) {
+    protected AbstractBeanProcessor(BeanHolder beanHolder) {
         this.beanHolder = beanHolder;
     }
 
@@ -59,18 +62,14 @@ public abstract class AbstractBeanProcessor extends AsyncProcessorSupport {
     @Override
     public boolean process(Exchange exchange, AsyncCallback callback) {
         // do we have an explicit method name we always should invoke (either configured on endpoint or as a header)
-        String explicitMethodName = exchange.getIn().getHeader(BeanConstants.BEAN_METHOD_NAME, method, String.class);
+        final String explicitMethodName = exchange.getIn().getHeader(BeanConstants.BEAN_METHOD_NAME, method, String.class);
 
-        Object bean;
-        BeanInfo beanInfo;
+        final Object beanInstance;
+        final BeanInfo beanInfo;
         try {
-            bean = beanHolder.getBean(exchange);
+            beanInstance = beanHolder.getBean(exchange);
             // get bean info for this bean instance (to avoid thread issue)
-            beanInfo = beanHolder.getBeanInfo(bean);
-            if (beanInfo == null) {
-                // fallback and use old way
-                beanInfo = beanHolder.getBeanInfo();
-            }
+            beanInfo = doGetBeanInfo(beanInstance);
         } catch (Exception e) {
             exchange.setException(e);
             callback.done(true);
@@ -81,49 +80,29 @@ public abstract class AbstractBeanProcessor extends AsyncProcessorSupport {
         // but only do this if allowed
         // we need to check beanHolder is Processor is support, to avoid the bean cached issue
         if (allowProcessor(explicitMethodName, beanInfo)) {
-            Processor target = getProcessor();
-            if (target == null) {
-                // only attempt to lookup the processor once or nearly once
-                // allow cache by default or if the scope is singleton
-                boolean allowCache = scope == null || scope == BeanScope.Singleton;
-                if (allowCache) {
-                    if (!lookupProcessorDone) {
-                        synchronized (lock) {
-                            lookupProcessorDone = true;
-                            // so if there is a custom type converter for the bean to processor
-                            target = exchange.getContext().getTypeConverter().tryConvertTo(Processor.class, exchange, bean);
-                            processor = target;
-                        }
-                    }
-                } else {
-                    // so if there is a custom type converter for the bean to processor
-                    target = exchange.getContext().getTypeConverter().tryConvertTo(Processor.class, exchange, bean);
-                }
-            }
+            final Processor target = getCustomAdapter(exchange, beanInstance);
             if (target != null) {
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("Using a custom adapter as bean invocation: {}", target);
-                }
-                try {
-                    target.process(exchange);
-                } catch (Throwable e) {
-                    exchange.setException(e);
-                }
-                callback.done(true);
+                useCustomAdapter(exchange, callback, target);
+
                 return true;
             }
         }
 
-        Message in = exchange.getIn();
+        return useMethodInvocation(exchange, callback, explicitMethodName, beanInfo, beanInstance);
+    }
+
+    private static boolean useMethodInvocation(
+            Exchange exchange, AsyncCallback callback, String explicitMethodName, BeanInfo beanInfo, Object beanInstance) {
+        final Message in = exchange.getIn();
 
         // set explicit method name to invoke as a header, which is how BeanInfo can detect it
         if (explicitMethodName != null) {
             in.setHeader(BeanConstants.BEAN_METHOD_NAME, explicitMethodName);
         }
 
-        MethodInvocation invocation;
+        final MethodInvocation invocation;
         try {
-            invocation = beanInfo.createInvocation(bean, exchange);
+            invocation = beanInfo.createInvocation(beanInstance, exchange);
         } catch (Exception e) {
             exchange.setException(e);
             callback.done(true);
@@ -137,13 +116,61 @@ public abstract class AbstractBeanProcessor extends AsyncProcessorSupport {
 
         if (invocation == null) {
             exchange.setException(new IllegalStateException(
-                    "No method invocation could be created, no matching method could be found on: " + bean));
+                    "No method invocation could be created, no matching method could be found on: " + beanInstance));
             callback.done(true);
             return true;
         }
 
         // invoke invocation
         return invocation.proceed(callback);
+    }
+
+    private Processor getCustomAdapter(Exchange exchange, Object beanTmp) {
+        Processor target = getProcessor();
+        if (target == null) {
+            // only attempt to lookup the processor once or nearly once
+            // allow cache by default or if the scope is singleton
+            boolean allowCache = scope == null || scope == BeanScope.Singleton;
+            if (allowCache) {
+                if (!lookupProcessorDone) {
+                    lock.lock();
+                    try {
+                        lookupProcessorDone = true;
+                        // so if there is a custom type converter for the bean to processor
+                        target = exchange.getContext().getTypeConverter().tryConvertTo(Processor.class, exchange, beanTmp);
+                        processor = target;
+                    } finally {
+                        lock.unlock();
+                    }
+                }
+            } else {
+                // so if there is a custom type converter for the bean to processor
+                target = exchange.getContext().getTypeConverter().tryConvertTo(Processor.class, exchange, beanTmp);
+            }
+        }
+        return target;
+    }
+
+    private static void useCustomAdapter(Exchange exchange, AsyncCallback callback, Processor target) {
+        if (LOG.isTraceEnabled()) {
+            LOG.trace("Using a custom adapter as bean invocation: {}", target);
+        }
+        try {
+            target.process(exchange);
+        } catch (AssertionError | Exception e) {
+            exchange.setException(e);
+        } finally {
+            callback.done(true);
+        }
+    }
+
+    private BeanInfo doGetBeanInfo(Object beanTmp) {
+        BeanInfo beanInfo = beanHolder.getBeanInfo(beanTmp);
+        if (beanInfo == null) {
+            // fallback and use old way
+            beanInfo = beanHolder.getBeanInfo();
+        }
+        return beanInfo;
     }
 
     protected Processor getProcessor() {

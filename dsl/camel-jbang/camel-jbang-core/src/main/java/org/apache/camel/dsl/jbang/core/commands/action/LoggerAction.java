@@ -36,22 +36,18 @@ import org.apache.camel.util.json.JsonObject;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "logger",
-                     description = "List or change logging levels")
+                     description = "List or change logging levels", sortOptions = false, showDefaultValues = true)
 public class LoggerAction extends ActionBaseCommand {
+
+    @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
+    String name = "*";
 
     @CommandLine.Option(names = { "--sort" }, completionCandidates = PidNameAgeCompletionCandidates.class,
                         description = "Sort by pid, name or age", defaultValue = "pid")
     String sort;
 
-    @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
-    String name;
-
-    @CommandLine.Option(names = { "--all" },
-                        description = "To select all running Camel integrations")
-    boolean all;
-
     @CommandLine.Option(names = { "--logging-level" }, completionCandidates = LoggingLevelCompletionCandidates.class,
-                        description = "To change logging level")
+                        description = "To change logging level (${COMPLETION-CANDIDATES})")
     String loggingLevel;
 
     @CommandLine.Option(names = { "--logger" },
@@ -67,9 +63,7 @@ public class LoggerAction extends ActionBaseCommand {
         if (loggingLevel == null) {
             return callList();
         }
-        if (!all && name == null) {
-            return 0;
-        } else if (all) {
+        if (name == null) {
             name = "*";
         }
         return callChangeLoggingLevel();
@@ -130,7 +124,7 @@ public class LoggerAction extends ActionBaseCommand {
         rows.sort(this::sortRow);
 
         if (!rows.isEmpty()) {
-            System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+            printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                     new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                     new Column().header("NAME").dataAlign(HorizontalAlign.LEFT)
                             .maxWidth(40, OverflowBehaviour.ELLIPSIS_RIGHT)

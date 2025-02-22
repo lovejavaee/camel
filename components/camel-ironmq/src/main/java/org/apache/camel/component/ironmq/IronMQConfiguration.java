@@ -26,15 +26,16 @@ import org.apache.camel.spi.UriPath;
 public class IronMQConfiguration {
     // common properties
 
-    @UriParam
-    private String projectId;
-
-    @UriParam
-    private String token;
-
     @UriPath
     @Metadata(required = true)
     private String queueName;
+
+    @UriParam
+    private String projectId;
+
+    @UriParam(label = "security")
+    @Metadata(secret = true)
+    private String token;
 
     @UriParam(defaultValue = "https://mq-aws-us-east-1-1.iron.io")
     private String ironMQCloud = "https://mq-aws-us-east-1-1.iron.io";
@@ -42,7 +43,7 @@ public class IronMQConfiguration {
     @UriParam
     private boolean preserveHeaders;
 
-    @UriParam
+    @UriParam(label = "advanced")
     private Client client;
 
     // producer properties
@@ -148,7 +149,7 @@ public class IronMQConfiguration {
     }
 
     /**
-     * Number of messages to poll pr. call. Maximum is 100.
+     * Number of messages to poll per call. Maximum is 100.
      */
     public void setMaxMessagesPerPoll(int maxMessagesPerPoll) {
         this.maxMessagesPerPoll = maxMessagesPerPoll;
@@ -184,7 +185,7 @@ public class IronMQConfiguration {
 
     /**
      * Should messages be deleted in one batch. This will limit the number of api requests since messages are deleted in
-     * one request, instead of one pr. exchange. If enabled care should be taken that the consumer is idempotent when
+     * one request, instead of one per exchange. If enabled care should be taken that the consumer is idempotent when
      * processing exchanges.
      */
     public void setBatchDelete(boolean batchDelete) {

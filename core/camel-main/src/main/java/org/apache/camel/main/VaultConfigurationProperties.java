@@ -26,6 +26,8 @@ public class VaultConfigurationProperties extends VaultConfiguration implements 
     private GcpVaultConfigurationProperties gcp;
     private AzureVaultConfigurationProperties azure;
     private HashicorpVaultConfigurationProperties hashicorp;
+    private KubernetesVaultConfigurationProperties kubernetes;
+    private KubernetesConfigmapsVaultConfigurationProperties kubernetesConfigmaps;
 
     public VaultConfigurationProperties(MainConfigurationProperties parent) {
         this.parent = parent;
@@ -49,6 +51,12 @@ public class VaultConfigurationProperties extends VaultConfiguration implements 
         }
         if (hashicorp != null) {
             hashicorp.close();
+        }
+        if (kubernetes != null) {
+            kubernetes.close();
+        }
+        if (kubernetesConfigmaps != null) {
+            kubernetesConfigmaps.close();
         }
     }
 
@@ -90,5 +98,21 @@ public class VaultConfigurationProperties extends VaultConfiguration implements 
             hashicorp = new HashicorpVaultConfigurationProperties(parent);
         }
         return hashicorp;
+    }
+
+    @Override
+    public KubernetesVaultConfigurationProperties kubernetes() {
+        if (kubernetes == null) {
+            kubernetes = new KubernetesVaultConfigurationProperties(parent);
+        }
+        return kubernetes;
+    }
+
+    @Override
+    public KubernetesConfigmapsVaultConfigurationProperties kubernetesConfigmaps() {
+        if (kubernetesConfigmaps == null) {
+            kubernetesConfigmaps = new KubernetesConfigmapsVaultConfigurationProperties(parent);
+        }
+        return kubernetesConfigmaps;
     }
 }

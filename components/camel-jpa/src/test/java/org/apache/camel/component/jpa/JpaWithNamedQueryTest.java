@@ -34,6 +34,7 @@ import org.apache.camel.support.service.ServiceHelper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.TransactionStatus;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(30)
 public class JpaWithNamedQueryTest {
 
     protected static final Logger LOG = LoggerFactory.getLogger(JpaWithNamedQueryTest.class);
@@ -94,7 +96,7 @@ public class JpaWithNamedQueryTest {
         // now lets create a consumer to consume it
         consumer = endpoint.createConsumer(new Processor() {
             public void process(Exchange e) {
-                LOG.info("Received exchange: " + e.getIn());
+                LOG.info("Received exchange: {}", e.getIn());
                 // make defensive copy
                 receivedExchange = e.copy();
                 latch.countDown();
@@ -102,7 +104,7 @@ public class JpaWithNamedQueryTest {
         });
         consumer.start();
 
-        assertTrue(latch.await(50, TimeUnit.SECONDS));
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
 
         assertReceivedResult(receivedExchange);
 
@@ -129,10 +131,10 @@ public class JpaWithNamedQueryTest {
                 for (Object rowObj : rows) {
                     assertTrue(rowObj instanceof MultiSteps, "Rows are not instances of MultiSteps");
                     final MultiSteps row = (MultiSteps) rowObj;
-                    LOG.info("entity: " + counter++ + " = " + row);
+                    LOG.info("entity: {} = {}", counter++, row);
 
                     if (row.getAddress().equals("foo@bar.com")) {
-                        LOG.info("Found updated row: " + row);
+                        LOG.info("Found updated row: {}", row);
                         assertEquals(getUpdatedStepValue(), row.getStep(), "Updated row step for: " + row);
                     } else {
                         // dummy row
@@ -173,7 +175,9 @@ public class JpaWithNamedQueryTest {
         assertTrue(value instanceof JpaEndpoint, "Should be a JPA endpoint but was: " + value);
         endpoint = (JpaEndpoint) value;
 
-        transactionTemplate = endpoint.createTransactionTemplate();
+        if (endpoint.getTransactionStrategy() instanceof DefaultTransactionStrategy strategy) {
+            transactionTemplate = strategy.getTransactionTemplate();
+        }
         entityManager = endpoint.getEntityManagerFactory().createEntityManager();
     }
 

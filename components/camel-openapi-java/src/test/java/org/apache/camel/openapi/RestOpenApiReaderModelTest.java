@@ -16,23 +16,22 @@
  */
 package org.apache.camel.openapi;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import io.apicurio.datamodels.Library;
-import io.apicurio.datamodels.openapi.models.OasDocument;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import io.swagger.v3.oas.models.OpenAPI;
 import org.apache.camel.BindToRegistry;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.impl.engine.DefaultClassResolver;
 import org.apache.camel.model.rest.RestParamType;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RestOpenApiReaderModelTest extends CamelTestSupport {
 
@@ -65,48 +64,16 @@ public class RestOpenApiReaderModelTest extends CamelTestSupport {
 
                         .get("/findAll").description("Find all users").outType(User[].class).responseMessage()
                         .message("All the found users").endResponseMessage()
-                        .to("bean:userService?method=listUsers");
+                        .to("bean:userService?method=listUsers")
+
+                        .post().description("Update all users").type(User[].class).to("bean:userService?method=updateAllUsers");
             }
         };
     }
 
-    @Test
-    public void testReaderRead() throws Exception {
-        BeanConfig config = new BeanConfig();
-        config.setHost("localhost:8080");
-        config.setSchemes(new String[] { "http" });
-        config.setBasePath("/api");
-        config.setTitle("Camel User store");
-        config.setLicense("Apache 2.0");
-        config.setVersion("2.0");
-        config.setLicenseUrl("http://www.apache.org/licenses/LICENSE-2.0.html");
-        RestOpenApiReader reader = new RestOpenApiReader();
-
-        OasDocument openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
-                new DefaultClassResolver());
-        assertNotNull(openApi);
-
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        Object dump = Library.writeNode(openApi);
-        String json = mapper.writeValueAsString(dump);
-
-        log.info(json);
-
-        assertTrue(json.contains("\"host\" : \"localhost:8080\""));
-        assertTrue(json.contains("\"description\" : \"The user returned\""));
-        assertTrue(json.contains("\"$ref\" : \"#/definitions/User\""));
-        assertTrue(json.contains("\"x-className\""));
-        assertTrue(json.contains("\"format\" : \"org.apache.camel.openapi.User\""));
-        assertTrue(json.contains("\"type\" : \"string\""));
-        assertTrue(json.contains("\"format\" : \"date\""));
-        assertFalse(json.contains("\"enum\""));
-        context.stop();
-    }
-
-    @Test
-    public void testReaderReadV3() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = { "3.1", "3.0" })
+    public void testReaderReadV3(String version) throws Exception {
         BeanConfig config = new BeanConfig();
         config.setHost("localhost:8080");
         config.setSchemes(new String[] { "http" });
@@ -114,30 +81,50 @@ public class RestOpenApiReaderModelTest extends CamelTestSupport {
         config.setTitle("Camel User store");
         config.setLicense("Apache 2.0");
         config.setLicenseUrl("http://www.apache.org/licenses/LICENSE-2.0.html");
+        config.setVersion(version);
         RestOpenApiReader reader = new RestOpenApiReader();
 
-        OasDocument openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
+        OpenAPI openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
                 new DefaultClassResolver());
         assertNotNull(openApi);
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        Object dump = Library.writeNode(openApi);
-        String json = mapper.writeValueAsString(dump);
-
+        String json = RestOpenApiSupport.getJsonFromOpenAPIAsString(openApi, config);
         log.info(json);
 
-        assertTrue(json.contains("\"url\" : \"http://localhost:8080/api\""));
-        assertTrue(json.contains("\"description\" : \"The user returned\""));
-        assertTrue(json.contains("\"$ref\" : \"#/components/schemas/User\""));
-        assertTrue(json.contains("\"x-className\""));
-        assertTrue(json.contains("\"format\" : \"org.apache.camel.openapi.User\""));
-        assertTrue(json.contains("\"type\" : \"string\""));
-        assertTrue(json.contains("\"format\" : \"date\""));
-        assertTrue(json.contains("\"nullable\" : true"));
-        assertTrue(json.contains("\"example\" : 44"));
+        DocumentContext doc = JsonPath.parse(json);
+
+        assertEquals("http://localhost:8080/api", doc.read("$.servers[0].url"));
+        assertEquals("User rest service", doc.read("$.tags[0].description"));
+        assertEquals("#/components/schemas/User",
+                doc.read("$.paths['/user'].put.requestBody.content['application/json'].schema['$ref']"));
+        assertEquals("org.apache.camel.openapi.User", doc.read("$.components.schemas.User['x-className'].format"));
+
+        assertEquals("string", doc.read("$.paths['/user/{id}/{date}'].get.parameters[1].schema.type"));
+        assertEquals("date", doc.read("$.paths['/user/{id}/{date}'].get.parameters[1].schema.format"));
+
+        assertEquals(44, doc.read("$.components.schemas.User.properties.age.example", Integer.class));
+
+        // Ensure valid schema for array request body and response body CAMEL-21076
+        assertEquals("array", doc.read("$.paths['/user'].post.requestBody.content['application/json'].schema.type"));
+        assertEquals("#/components/schemas/User",
+                doc.read("$.paths['/user'].post.requestBody.content['application/json'].schema.items['$ref']"));
+
+        assertEquals("array",
+                doc.read("$.paths['/user/findAll'].get.responses['200'].content['application/json'].schema.type"));
+        assertEquals("#/components/schemas/User",
+                doc.read("$.paths['/user/findAll'].get.responses['200'].content['application/json'].schema.items['$ref']"));
+
+        if (config.isOpenApi30()) {
+            // nullable is only supported in OpenAPI 3.0
+            assertEquals(true, doc.read("$.components.schemas.User.properties.age.nullable", Boolean.class));
+        }
+
+        // Ensure valid array output ref CAMEL-19818
+        assertFalse(json.contains("\"$ref\" : \"#/components/schemas/org.apache.camel.openapi.User\""));
+
+        // do not populate enum when no allowable values are set
         assertFalse(json.contains("\"enum\""));
+
         context.stop();
     }
 }

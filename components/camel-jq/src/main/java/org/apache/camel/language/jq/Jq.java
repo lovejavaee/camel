@@ -16,21 +16,35 @@
  */
 package org.apache.camel.language.jq;
 
-import org.apache.camel.CamelContext;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public final class Jq {
+import org.apache.camel.support.language.LanguageAnnotation;
 
-    private Jq() {
-    }
+/**
+ * An annotation used to inject a JQ expression into a method parameter when using Bean Integration.
+ */
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER })
+@LanguageAnnotation(language = "jq", factory = JqAnnotationExpressionFactory.class)
+public @interface Jq {
 
-    public static JqExpression expression(String expression) {
-        return new JqExpression(expression);
-    }
+    String value();
 
-    public static JqExpression expression(CamelContext context, String expression) {
-        JqExpression answer = new JqExpression(expression);
-        answer.init(context);
-        return answer;
-    }
+    /**
+     * The desired return type.
+     */
+    Class<?> resultType() default Object.class;
+
+    /**
+     * Source to use, instead of message body. You can prefix with variable:, header:, or property: to specify kind of
+     * source. Otherwise, the source is assumed to be a variable. Use empty or null to use default source, which is the
+     * message body.
+     */
+    String source() default "";
 
 }

@@ -69,16 +69,15 @@ final class IntrospectionSupport {
     private static final Logger LOG = LoggerFactory.getLogger(IntrospectionSupport.class);
     private static final List<Method> EXCLUDED_METHODS = new ArrayList<>();
     // use a cache to speedup introspecting for known classes during startup
-    // use a weak cache as we dont want the cache to keep around as it reference classes
+    // use a soft cache as we don't want the cache to keep around as it reference classes
     // which could prevent classloader to unload classes if being referenced from this cache
-    @SuppressWarnings("unchecked")
-    private static final Map<Class<?>, BeanIntrospection.ClassInfo> CACHE = LRUCacheFactory.newLRUWeakCache(1000);
+    private static final Map<Class<?>, BeanIntrospection.ClassInfo> CACHE = LRUCacheFactory.newLRUSoftCache(1000);
     private static final Pattern SECRETS = Pattern.compile(".*(passphrase|password|secretKey).*", Pattern.CASE_INSENSITIVE);
 
     static {
-        // exclude all java.lang.Object methods as we dont want to invoke them
+        // exclude all java.lang.Object methods as we don't want to invoke them
         EXCLUDED_METHODS.addAll(Arrays.asList(Object.class.getMethods()));
-        // exclude all java.lang.reflect.Proxy methods as we dont want to invoke them
+        // exclude all java.lang.reflect.Proxy methods as we don't want to invoke them
         EXCLUDED_METHODS.addAll(Arrays.asList(Proxy.class.getMethods()));
     }
 
@@ -123,8 +122,7 @@ final class IntrospectionSupport {
      * Clears the introspection cache.
      */
     static void clearCache() {
-        if (LOG.isDebugEnabled() && CACHE instanceof LRUCache) {
-            LRUCache localCache = (LRUCache) IntrospectionSupport.CACHE;
+        if (LOG.isDebugEnabled() && CACHE instanceof LRUCache<Class<?>, BeanIntrospection.ClassInfo> localCache) {
             LOG.debug("Clearing cache[size={}, hits={}, misses={}, evicted={}]", localCache.size(), localCache.getHits(),
                     localCache.getMisses(), localCache.getEvicted());
         }
@@ -160,11 +158,9 @@ final class IntrospectionSupport {
 
         String name = method.getName();
         if (name.startsWith("get")) {
-            name = name.substring(3);
-            name = name.substring(0, 1).toLowerCase(Locale.ENGLISH) + name.substring(1);
+            name = StringHelper.decapitalize(name.substring(3));
         } else if (name.startsWith("is")) {
-            name = name.substring(2);
-            name = name.substring(0, 1).toLowerCase(Locale.ENGLISH) + name.substring(1);
+            name = StringHelper.decapitalize(name.substring(2));
         }
 
         return name;
@@ -196,7 +192,7 @@ final class IntrospectionSupport {
             // a setXXX can also be a builder pattern so check for its return type is itself
             return type.equals(Void.TYPE) || allowBuilderPattern && ObjectHelper.isSubclass(self, type);
         }
-        // or if its a builder method
+        // or if it's a builder method
         if (allowBuilderPattern && parameterCount == 1 && ObjectHelper.isSubclass(self, type)) {
             return true;
         }
@@ -252,7 +248,7 @@ final class IntrospectionSupport {
                 String name = info.getterOrSetterShorthandName;
                 try {
                     // we may want to set options on classes that has package view visibility, so override the accessible
-                    Object value = invokeMethodSafe(method, target, null);
+                    Object value = invokeMethodSafe(method, target);
                     if (value != null || includeNull) {
                         properties.put(optionPrefix + name, value);
                         rc = true;
@@ -337,7 +333,7 @@ final class IntrospectionSupport {
         ObjectHelper.notNull(target, "target");
         ObjectHelper.notNull(propertyName, "property");
 
-        propertyName = propertyName.substring(0, 1).toUpperCase(Locale.ENGLISH) + propertyName.substring(1);
+        propertyName = StringHelper.capitalize(propertyName);
 
         Class<?> clazz = target.getClass();
         Method method = getPropertyGetter(clazz, propertyName);
@@ -406,10 +402,8 @@ final class IntrospectionSupport {
     static boolean isPropertyIsGetter(Class<?> type, String propertyName) {
         try {
             Method method = type.getMethod("is" + StringHelper.capitalize(propertyName, true));
-            if (method != null) {
-                return method.getReturnType().isAssignableFrom(boolean.class)
-                        || method.getReturnType().isAssignableFrom(Boolean.class);
-            }
+            return method.getReturnType().isAssignableFrom(boolean.class)
+                    || method.getReturnType().isAssignableFrom(Boolean.class);
         } catch (NoSuchMethodException e) {
             // ignore
         }
@@ -485,7 +479,7 @@ final class IntrospectionSupport {
                 }
             }
             if (obj instanceof Map) {
-                Map map = (Map) obj;
+                Map<Object, Object> map = (Map) obj;
                 if (context != null && refName != null && value == null) {
                     String s = refName.replace("#", "");
                     value = CamelContextHelper.lookup(context, s);
@@ -493,7 +487,7 @@ final class IntrospectionSupport {
                 map.put(lookupKey, value);
                 return true;
             } else if (obj instanceof List) {
-                List list = (List) obj;
+                List<Object> list = (List) obj;
                 if (context != null && refName != null && value == null) {
                     String s = refName.replace("#", "");
                     value = CamelContextHelper.lookup(context, s);
@@ -511,8 +505,8 @@ final class IntrospectionSupport {
                         //
                         // Note that ArrayList is the default List impl that
                         // is automatically created if the property is null.
-                        if (list instanceof ArrayList) {
-                            ((ArrayList) list).ensureCapacity(idx + 1);
+                        if (list instanceof ArrayList<?> al) {
+                            al.ensureCapacity(idx + 1);
                         }
                         while (list.size() < idx) {
                             list.add(null);
@@ -523,7 +517,7 @@ final class IntrospectionSupport {
                     list.add(value);
                 }
                 return true;
-            } else if (obj.getClass().isArray() && lookupKey != null) {
+            } else if (obj != null && obj.getClass().isArray()) {
                 if (context != null && refName != null && value == null) {
                     String s = refName.replace("#", "");
                     value = CamelContextHelper.lookup(context, s);
@@ -602,6 +596,7 @@ final class IntrospectionSupport {
                 }
             }
 
+            boolean myself = false;
             try {
                 try {
                     // If the type is null or it matches the needed type, just use the value directly
@@ -621,9 +616,10 @@ final class IntrospectionSupport {
                     } else {
                         // We need to convert it
                         // special for boolean values with string values as we only want to accept "true" or "false"
-                        if ((parameterType == Boolean.class || parameterType == boolean.class) && ref instanceof String) {
-                            String val = (String) ref;
+                        if ((parameterType == Boolean.class || parameterType == boolean.class) && ref instanceof String val) {
                             if (!val.equalsIgnoreCase("true") && !val.equalsIgnoreCase("false")) {
+                                // this is our self
+                                myself = true;
                                 throw new IllegalArgumentException(
                                         "Cannot convert the String value: " + ref + " to type: " + parameterType
                                                                    + " as the value is not true or false");
@@ -647,14 +643,21 @@ final class IntrospectionSupport {
                 } catch (InvocationTargetException e) {
                     // lets unwrap the exception
                     Throwable throwable = e.getCause();
-                    if (throwable instanceof Exception) {
-                        throw (Exception) throwable;
+                    if (throwable instanceof Exception exception) {
+                        throw exception;
                     } else {
                         throw (Error) throwable;
                     }
                 }
                 // ignore exceptions as there could be another setter method where we could type convert successfully
-            } catch (SecurityException | NoTypeConversionAvailableException | IllegalArgumentException e) {
+            } catch (IllegalArgumentException e) {
+                // this can be either our own or while trying to set the property on the bean that fails in the 3rd party component
+                if (myself) {
+                    typeConversionFailed = e;
+                } else {
+                    throw e;
+                }
+            } catch (SecurityException | NoTypeConversionAvailableException e) {
                 typeConversionFailed = e;
             }
 

@@ -18,6 +18,8 @@ package org.apache.camel.component.aws2.firehose.client;
 
 import org.apache.camel.component.aws2.firehose.KinesisFirehose2Configuration;
 import org.apache.camel.component.aws2.firehose.client.impl.KinesisFirehoseClientIAMOptimizedImpl;
+import org.apache.camel.component.aws2.firehose.client.impl.KinesisFirehoseClientIAMProfileOptimizedImpl;
+import org.apache.camel.component.aws2.firehose.client.impl.KinesisFirehoseClientSessionTokenImpl;
 import org.apache.camel.component.aws2.firehose.client.impl.KinesisFirehoseClientStandardImpl;
 
 /**
@@ -35,8 +37,14 @@ public final class KinesisFirehoseClientFactory {
      * @return               FirehoseClient
      */
     public static KinesisFirehoseInternalClient getKinesisFirehoseClient(KinesisFirehose2Configuration configuration) {
-        return configuration.isUseDefaultCredentialsProvider()
-                ? new KinesisFirehoseClientIAMOptimizedImpl(configuration)
-                : new KinesisFirehoseClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new KinesisFirehoseClientIAMOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new KinesisFirehoseClientIAMProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new KinesisFirehoseClientSessionTokenImpl(configuration);
+        } else {
+            return new KinesisFirehoseClientStandardImpl(configuration);
+        }
     }
 }

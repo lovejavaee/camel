@@ -5,6 +5,7 @@
 :description: Send and receive messages from RocketMQ cluster.
 :since: 3.20
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: rocketmq
@@ -63,9 +64,12 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== InOut Pattern
+== Usage
 
-InOut Pattern based on Message Key. When the producer sending the message, a messageKey will be generated and append to the message's key.
+=== InOut Pattern
+
+InOut Pattern based on Message Key.
+When the producer sends the message, a messageKey will be generated and append to the message's key.
 
 After the message sent, a consumer will listen to the topic configured by the parameter `ReplyToTopic`.
 

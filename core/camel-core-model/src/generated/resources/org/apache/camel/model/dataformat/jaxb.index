@@ -4,6 +4,7 @@ AvroDataFormat
 AvroLibrary
 BarcodeDataFormat
 Base64DataFormat
+BeanioDataFormat
 BindyDataFormat
 BindyType
 CBORDataFormat
@@ -14,6 +15,7 @@ DataFormatsDefinition
 FhirJsonDataFormat
 FhirXmlDataFormat
 FlatpackDataFormat
+FuryDataFormat
 GrokDataFormat
 GzipDeflaterDataFormat
 HL7DataFormat
@@ -26,9 +28,11 @@ JsonLibrary
 LZFDataFormat
 MimeMultipartDataFormat
 PGPDataFormat
+ParquetAvroDataFormat
 ProtobufDataFormat
 ProtobufLibrary
 RssDataFormat
+SmooksDataFormat
 SoapDataFormat
 SwiftMtDataFormat
 SwiftMxDataFormat

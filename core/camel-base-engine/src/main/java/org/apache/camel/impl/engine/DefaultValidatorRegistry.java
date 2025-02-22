@@ -19,6 +19,7 @@ package org.apache.camel.impl.engine;
 import org.apache.camel.CamelContext;
 import org.apache.camel.spi.DataType;
 import org.apache.camel.spi.Validator;
+import org.apache.camel.spi.ValidatorKey;
 import org.apache.camel.spi.ValidatorRegistry;
 import org.apache.camel.support.CamelContextHelper;
 import org.apache.camel.support.service.ServiceHelper;
@@ -28,7 +29,7 @@ import org.apache.camel.util.ObjectHelper;
  * Default implementation of {@link org.apache.camel.spi.ValidatorRegistry}.
  */
 public class DefaultValidatorRegistry extends AbstractDynamicRegistry<ValidatorKey, Validator>
-        implements ValidatorRegistry<ValidatorKey> {
+        implements ValidatorRegistry {
 
     public DefaultValidatorRegistry(CamelContext context) {
         super(context, CamelContextHelper.getMaximumValidatorCacheSize(context));
@@ -38,7 +39,7 @@ public class DefaultValidatorRegistry extends AbstractDynamicRegistry<ValidatorK
     public Validator resolveValidator(ValidatorKey key) {
         Validator answer = get(key);
         if (answer == null && ObjectHelper.isNotEmpty(key.getType().getName())) {
-            answer = get(new ValidatorKey(new DataType(key.getType().getModel())));
+            answer = get(new ValidatorKey(new DataType(key.getType().getScheme())));
         }
         return answer;
     }

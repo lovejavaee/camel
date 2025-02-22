@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-undertow</artifactId>
@@ -32,6 +32,7 @@
     <name>Camel :: Undertow</name>
 
     <properties>
+        <camel.surefire.fork.additional-vmargs>-Dio.undertow.client.https.disableEndpointIdentification=true</camel.surefire.fork.additional-vmargs>
     </properties>
 
     <dependencies>
@@ -117,6 +118,12 @@
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-common</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
+       </dependency>
+       <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-test-infra-common</artifactId>
+            <version>${project.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
@@ -134,7 +141,7 @@
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty.http2</groupId>
-            <artifactId>http2-client</artifactId>
+            <artifactId>jetty-http2-client</artifactId>
             <version>${jetty-version}</version>
             <scope>test</scope>
         </dependency>
@@ -146,7 +153,7 @@
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty.http2</groupId>
-            <artifactId>http2-http-client-transport</artifactId>
+            <artifactId>jetty-http2-client-transport</artifactId>
             <version>${jetty-version}</version>
             <scope>test</scope>
         </dependency>
@@ -157,5 +164,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>

@@ -24,7 +24,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.support.PluginHelper;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
  * Based on user forum issue
@@ -42,20 +42,17 @@ public class TwoDoTryAndThrowInInnerCatchIssueTest extends ContextTestSupport {
         getMockEndpoint("mock:catch4").expectedMessageCount(1);
         getMockEndpoint("mock:catch5").expectedMessageCount(1);
 
-        try {
-            template.requestBody("direct:test", "test", String.class);
-        } catch (Exception e) {
-            fail("Should not fail");
-        }
+        assertDoesNotThrow(() -> template.requestBody("direct:test", "test", String.class),
+                "Should not fail");
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 errorHandler(noErrorHandler());
 
                 from("direct:test").routeId("myroute")

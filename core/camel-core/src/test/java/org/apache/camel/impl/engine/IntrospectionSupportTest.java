@@ -39,7 +39,13 @@ import static org.apache.camel.impl.engine.IntrospectionSupport.getPropertySette
 import static org.apache.camel.impl.engine.IntrospectionSupport.isGetter;
 import static org.apache.camel.impl.engine.IntrospectionSupport.isSetter;
 import static org.apache.camel.impl.engine.IntrospectionSupport.setProperty;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit test for IntrospectionSupport
@@ -136,7 +142,7 @@ public class IntrospectionSupportTest extends ContextTestSupport {
     public static class MyOtherBuilderBean extends MyBuilderBean {
     }
 
-    public class MyOtherOtherBuilderBean extends MyOtherBuilderBean {
+    public static class MyOtherOtherBuilderBean extends MyOtherBuilderBean {
 
         @Override
         public MyOtherOtherBuilderBean setName(String name) {
@@ -250,7 +256,7 @@ public class IntrospectionSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testGetProperties() throws Exception {
+    public void testGetProperties() {
         ExampleBean bean = new ExampleBean();
         bean.setName("Claus");
         bean.setPrice(10.0);
@@ -267,7 +273,7 @@ public class IntrospectionSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testAnotherGetProperties() throws Exception {
+    public void testAnotherGetProperties() {
         AnotherExampleBean bean = new AnotherExampleBean();
         bean.setId("123");
         bean.setName("Claus");
@@ -294,7 +300,7 @@ public class IntrospectionSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testGetPropertiesOptionPrefix() throws Exception {
+    public void testGetPropertiesOptionPrefix() {
         ExampleBean bean = new ExampleBean();
         bean.setName("Claus");
         bean.setPrice(10.0);
@@ -311,7 +317,7 @@ public class IntrospectionSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testGetPropertiesSkipNull() throws Exception {
+    public void testGetPropertiesSkipNull() {
         ExampleBean bean = new ExampleBean();
         bean.setName("Claus");
         bean.setPrice(10.0);
@@ -410,36 +416,26 @@ public class IntrospectionSupportTest extends ContextTestSupport {
 
     @Test
     public void testGetPropertyGetter() throws Exception {
-        ExampleBean bean = new ExampleBean();
-        bean.setName("Claus");
-        bean.setPrice(10.0);
-
         Method name = getPropertyGetter(ExampleBean.class, "name");
         assertEquals("getName", name.getName());
 
-        try {
-            getPropertyGetter(ExampleBean.class, "xxx");
-            fail("Should have thrown exception");
-        } catch (NoSuchMethodException e) {
-            assertEquals("org.apache.camel.support.jndi.ExampleBean.getXxx()", e.getMessage());
-        }
+        NoSuchMethodException e = assertThrows(NoSuchMethodException.class,
+                () -> getPropertyGetter(ExampleBean.class, "xxx"),
+                "Should have thrown exception");
+
+        assertEquals("org.apache.camel.support.jndi.ExampleBean.getXxx()", e.getMessage());
     }
 
     @Test
     public void testGetPropertySetter() throws Exception {
-        ExampleBean bean = new ExampleBean();
-        bean.setName("Claus");
-        bean.setPrice(10.0);
-
         Method name = getPropertySetter(ExampleBean.class, "name");
         assertEquals("setName", name.getName());
 
-        try {
-            getPropertySetter(ExampleBean.class, "xxx");
-            fail("Should have thrown exception");
-        } catch (NoSuchMethodException e) {
-            assertEquals("org.apache.camel.support.jndi.ExampleBean.setXxx", e.getMessage());
-        }
+        NoSuchMethodException e = assertThrows(NoSuchMethodException.class,
+                () -> getPropertySetter(ExampleBean.class, "xxx"),
+                "Should have thrown exception");
+
+        assertEquals("org.apache.camel.support.jndi.ExampleBean.setXxx", e.getMessage());
     }
 
     @Test
@@ -519,7 +515,7 @@ public class IntrospectionSupportTest extends ContextTestSupport {
     }
 
     @Test
-    public void testFindSetterMethodsOrderedByParameterType() throws Exception {
+    public void testFindSetterMethodsOrderedByParameterType() {
         List<Method> setters = findSetterMethodsOrderedByParameterType(MyOverloadedBean.class, "bean",
                 false, false, false);
 

@@ -16,6 +16,7 @@
  */
 package org.apache.camel.component.netty.http;
 
+import java.net.URI;
 import java.util.Map;
 
 import org.apache.camel.AsyncEndpoint;
@@ -45,10 +46,14 @@ import org.slf4j.LoggerFactory;
              syntax = "netty-http:protocol://host:port/path", category = { Category.NETWORKING, Category.HTTP },
              lenientProperties = true, headersClass = NettyHttpConstants.class)
 @Metadata(excludeProperties = "textline,delimiter,autoAppendDelimiter,decoderMaxLineLength,encoding,allowDefaultCodec,udpConnectionlessSending,networkInterface"
-                              + ",clientMode,reconnect,reconnectInterval,useByteBuf,udpByteArrayCodec,broadcast,correlationManager")
+                              + ",clientMode,reconnect,reconnectInterval,useByteBuf,udpByteArrayCodec,broadcast,correlationManager",
+          annotations = {
+                  "protocol=http",
+          })
 public class NettyHttpEndpoint extends NettyEndpoint implements AsyncEndpoint, HeaderFilterStrategyAware {
 
     private static final Logger LOG = LoggerFactory.getLogger(NettyHttpEndpoint.class);
+    static final String PROXY_NOT_SUPPORTED_MESSAGE = "Netty Http Producer does not support proxy mode";
 
     @UriParam
     private NettyHttpConfiguration configuration;
@@ -103,6 +108,10 @@ public class NettyHttpEndpoint extends NettyEndpoint implements AsyncEndpoint, H
 
     @Override
     public Producer createProducer() throws Exception {
+        if (isProxyProtocol()) {
+            doFail(new IllegalArgumentException(PROXY_NOT_SUPPORTED_MESSAGE));
+        }
+
         Producer answer = new NettyHttpProducer(this, getConfiguration());
         if (getConfiguration().isSynchronous()) {
             return new SynchronousDelegateProducer(answer);
@@ -245,5 +254,11 @@ public class NettyHttpEndpoint extends NettyEndpoint implements AsyncEndpoint, H
                 securityConfiguration.setSecurityAuthenticator(jaas);
             }
         }
+    }
+
+    private boolean isProxyProtocol() {
+        URI baseUri = URI.create(getEndpointBaseUri());
+        String protocol = baseUri.getScheme();
+        return protocol != null && protocol.equalsIgnoreCase("proxy");
     }
 }

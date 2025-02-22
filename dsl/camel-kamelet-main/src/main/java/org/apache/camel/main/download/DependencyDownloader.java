@@ -16,11 +16,13 @@
  */
 package org.apache.camel.main.download;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.camel.CamelContextAware;
 import org.apache.camel.StaticService;
 import org.apache.camel.tooling.maven.MavenArtifact;
+import org.apache.camel.tooling.maven.RepositoryResolver;
 
 /**
  * To download dependencies at runtime.
@@ -47,12 +49,22 @@ public interface DependencyDownloader extends CamelContextAware, StaticService {
      */
     void addArtifactDownloadListener(ArtifactDownloadListener downloadListener);
 
-    String getRepos();
+    String getRepositories();
 
     /**
      * Additional maven repositories for download on-demand (Use commas to separate multiple repositories).
      */
-    void setRepos(String repos);
+    void setRepositories(String repositories);
+
+    /**
+     * Whether downloading from remote Maven repositories is enabled
+     */
+    void setDownload(boolean download);
+
+    /**
+     * Whether downloading from remote Maven repositories is enabled
+     */
+    boolean isDownload();
 
     boolean isFresh();
 
@@ -74,6 +86,26 @@ public interface DependencyDownloader extends CamelContextAware, StaticService {
      * Configure location of Maven settings-security.xml file
      */
     void setMavenSettingsSecurity(String mavenSettingsSecurity);
+
+    /**
+     * Whether downloading JARs from Maven Central repository is enabled
+     */
+    boolean isMavenCentralEnabled();
+
+    /**
+     * Whether downloading JARs from Maven Central repository is enabled
+     */
+    void setMavenCentralEnabled(boolean mavenCentralEnabled);
+
+    /**
+     * Whether downloading JARs from ASF Maven Snapshot repository is enabled
+     */
+    boolean isMavenApacheSnapshotEnabled();
+
+    /**
+     * Whether downloading JARs from ASF Maven Snapshot repository is enabled
+     */
+    void setMavenApacheSnapshotEnabled(boolean mavenApacheSnapshotEnabled);
 
     /**
      * Downloads the dependency incl transitive dependencies
@@ -159,5 +191,23 @@ public interface DependencyDownloader extends CamelContextAware, StaticService {
      * @param value modeline value
      */
     void onLoadingModeline(String key, String value);
+
+    /**
+     * Gets download record for a given artifact
+     *
+     * @return download record (if any) or <tt>null</tt> if artifact was not downloaded, but could have been resolved
+     *         from local disk
+     */
+    DownloadRecord getDownloadState(String groupId, String artifactId, String version);
+
+    /**
+     * Gets the records for the downloaded artifacts
+     */
+    Collection<DownloadRecord> downloadRecords();
+
+    /**
+     * Gets the {@link RepositoryResolver}
+     */
+    RepositoryResolver getRepositoryResolver();
 
 }

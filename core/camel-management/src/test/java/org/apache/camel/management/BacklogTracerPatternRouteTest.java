@@ -47,7 +47,7 @@ public class BacklogTracerPatternRouteTest extends ManagementTestSupport {
         assertEquals(Boolean.FALSE, enabled, "Should not be enabled");
 
         Integer size = (Integer) mbeanServer.getAttribute(on, "BacklogSize");
-        assertEquals(1000, size.intValue(), "Should be 1000");
+        assertEquals(100, size.intValue(), "Should be 100");
 
         // set the pattern to match only coolRoute
         mbeanServer.setAttribute(on, new Attribute("TracePattern", "coolRoute"));
@@ -83,10 +83,10 @@ public class BacklogTracerPatternRouteTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.setUseBreadcrumb(false);
                 context.setBacklogTracingStandby(true);
 

@@ -42,6 +42,7 @@ import org.apache.camel.component.netty.http.NettyHttpConfiguration;
 import org.apache.camel.component.netty.http.NettyHttpConstants;
 import org.apache.camel.component.netty.http.NettyHttpConsumer;
 import org.apache.camel.support.RestConsumerContextPathMatcher;
+import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.UnsafeUriCharactersEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,8 +65,7 @@ public class HttpServerMultiplexChannelHandler extends SimpleChannelInboundHandl
     private static final List<String> METHODS
             = Arrays.asList("GET", "HEAD", "POST", "PUT", "DELETE", "TRACE", "OPTIONS", "CONNECT", "PATCH");
 
-    // use NettyHttpConsumer as logger to make it easier to read the logs as this is part of the consumer
-    private static final Logger LOG = LoggerFactory.getLogger(NettyHttpConsumer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HttpServerMultiplexChannelHandler.class);
     private static final AttributeKey<HttpServerChannelHandler> SERVER_HANDLER_KEY = AttributeKey.valueOf("serverHandler");
     private final Set<HttpServerChannelHandler> consumers = new CopyOnWriteArraySet<>();
     private int port;
@@ -86,6 +86,7 @@ public class HttpServerMultiplexChannelHandler extends SimpleChannelInboundHandl
     @Override
     public void addConsumer(NettyHttpConsumer consumer) {
         consumers.add(new HttpServerChannelHandler(consumer));
+        RestConsumerContextPathMatcher.register(consumer.getConfiguration().getPath());
     }
 
     @Override
@@ -93,6 +94,7 @@ public class HttpServerMultiplexChannelHandler extends SimpleChannelInboundHandl
         for (HttpServerChannelHandler handler : consumers) {
             if (handler.getConsumer() == consumer) {
                 consumers.remove(handler);
+                RestConsumerContextPathMatcher.unRegister(consumer.getConfiguration().getPath());
             }
         }
     }
@@ -211,7 +213,6 @@ public class HttpServerMultiplexChannelHandler extends SimpleChannelInboundHandl
         return getHandler(request, method) != null;
     }
 
-    @SuppressWarnings("unchecked")
     private HttpServerChannelHandler getHandler(HttpRequest request, String method) {
         HttpServerChannelHandler answer = null;
 
@@ -238,7 +239,7 @@ public class HttpServerMultiplexChannelHandler extends SimpleChannelInboundHandl
         // use the path as key to find the consumer handler to use
         path = pathAsKey(path);
 
-        List<RestConsumerContextPathMatcher.ConsumerPath> paths = new ArrayList<>();
+        List<RestConsumerContextPathMatcher.ConsumerPath<HttpServerChannelHandler>> paths = new ArrayList<>();
         for (final HttpServerChannelHandler handler : consumers) {
             paths.add(new HttpRestConsumerPath(handler));
         }
@@ -282,10 +283,7 @@ public class HttpServerMultiplexChannelHandler extends SimpleChannelInboundHandl
         }
 
         // strip out query parameters
-        int idx = path.indexOf('?');
-        if (idx > -1) {
-            path = path.substring(0, idx);
-        }
+        path = StringHelper.before(path, "?", path);
 
         // strip of ending /
         if (path.endsWith("/")) {

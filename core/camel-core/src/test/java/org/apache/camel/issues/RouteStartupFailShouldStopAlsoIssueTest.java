@@ -50,7 +50,7 @@ public class RouteStartupFailShouldStopAlsoIssueTest extends ContextTestSupport 
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:bar").routeId("bar").to("mock:bar");
 
                 // the foo route fails to startup but it should be stopped when
@@ -59,11 +59,7 @@ public class RouteStartupFailShouldStopAlsoIssueTest extends ContextTestSupport 
             }
         });
 
-        try {
-            context.start();
-        } catch (Exception e) {
-            // should fail
-        }
+        assertThrows(Exception.class, () -> context.start(), "Should fail");
 
         assertTrue(context.getRouteController().getRouteStatus("foo").isStopped());
         assertFalse(context.getRouteController().getRouteStatus("foo").isStarted());
@@ -80,14 +76,14 @@ public class RouteStartupFailShouldStopAlsoIssueTest extends ContextTestSupport 
         assertEquals("doStop", EVENTS.get(2));
     }
 
-    private class MyComponent extends DefaultComponent {
+    private static class MyComponent extends DefaultComponent {
 
         public MyComponent(CamelContext context) {
             super(context);
         }
 
         @Override
-        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
             return new MyEndpoint(uri, this);
         }
     }
@@ -99,12 +95,12 @@ public class RouteStartupFailShouldStopAlsoIssueTest extends ContextTestSupport 
         }
 
         @Override
-        public Producer createProducer() throws Exception {
+        public Producer createProducer() {
             throw new UnsupportedOperationException("Not supported");
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return new MyFailConsumer(this, processor);
         }
     }

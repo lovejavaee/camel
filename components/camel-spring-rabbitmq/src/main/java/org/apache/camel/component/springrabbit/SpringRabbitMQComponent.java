@@ -16,6 +16,7 @@
  */
 package org.apache.camel.component.springrabbit;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.camel.Endpoint;
@@ -52,10 +53,14 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
     @Metadata(label = "consumer", defaultValue = "true",
               description = "Specifies whether the consumer container should auto-startup.")
     private boolean autoStartup = true;
-    @Metadata(label = "consumer", defaultValue = "false",
+    @Metadata(label = "consumer", defaultValue = "true",
               description = "Specifies whether the consumer should auto declare binding between exchange, queue and routing key when starting."
                             + " Enabling this can be good for development to make it easy to standup exchanges, queues and bindings on the broker.")
-    private boolean autoDeclare;
+    private boolean autoDeclare = true;
+    @Metadata(label = "producer", defaultValue = "false",
+              description = "Specifies whether the producer should auto declare binding between exchange, queue and routing key when starting."
+                            + " Enabling this can be good for development to make it easy to standup exchanges, queues and bindings on the broker.")
+    private boolean autoDeclareProducer;
     @Metadata(label = "advanced",
               description = "To use a custom MessageConverter so you can be in control how to map to/from a org.springframework.amqp.core.Message.")
     private MessageConverter messageConverter;
@@ -112,6 +117,11 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
     @Metadata(label = "producer", defaultValue = "false",
               description = "Whether to allow sending messages with no body. If this option is false and the message body is null, then an MessageConversionException is thrown.")
     private boolean allowNullBody;
+    @Metadata(label = "advanced",
+              description = "Specify arguments for configuring the different RabbitMQ concepts, a different prefix is required for each element:"
+                            + " consumer. exchange. queue. binding. dlq.exchange. dlq.queue. dlq.binding."
+                            + " For example to declare a queue with message ttl argument: queue.x-message-ttl=60000")
+    private Map<String, Object> args;
 
     @Override
     protected void doInit() throws Exception {
@@ -121,10 +131,10 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
             setHeaderFilterStrategy(new SpringRabbitMQHeaderFilterStrategy());
         }
         if (messageConverter == null) {
-            messageConverter = new DefaultMessageConverter(getCamelContext(), allowNullBody);
+            messageConverter = new DefaultMessageConverter(getCamelContext());
         }
         if (messagePropertiesConverter == null) {
-            messagePropertiesConverter = new DefaultMessagePropertiesConverter(getCamelContext(), getHeaderFilterStrategy());
+            messagePropertiesConverter = new DefaultMessagePropertiesConverter();
         }
     }
 
@@ -134,9 +144,11 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
         endpoint.setConnectionFactory(connectionFactory);
         endpoint.setTestConnectionOnStartup(testConnectionOnStartup);
         endpoint.setMessageConverter(messageConverter);
+        messagePropertiesConverter.setHeaderFilterStrategy(getHeaderFilterStrategy());
         endpoint.setMessagePropertiesConverter(messagePropertiesConverter);
         endpoint.setAutoStartup(autoStartup);
         endpoint.setAutoDeclare(autoDeclare);
+        endpoint.setAutoDeclareProducer(autoDeclareProducer);
         endpoint.setDeadLetterExchange(deadLetterExchange);
         endpoint.setDeadLetterExchangeType(deadLetterExchangeType);
         endpoint.setDeadLetterQueue(deadLetterQueue);
@@ -150,8 +162,16 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
         endpoint.setMaximumRetryAttempts(maximumRetryAttempts);
         endpoint.setRetryDelay(retryDelay);
         endpoint.setRejectAndDontRequeue(rejectAndDontRequeue);
+        endpoint.setAllowNullBody(allowNullBody);
 
-        endpoint.setArgs(PropertiesHelper.extractProperties(parameters, ARG_PREFIX));
+        if (args != null) {
+            Map<String, Object> copy = new HashMap<>(args);
+            Map<String, Object> extra = PropertiesHelper.extractProperties(parameters, ARG_PREFIX);
+            copy.putAll(extra);
+            endpoint.setArgs(copy);
+        } else {
+            endpoint.setArgs(PropertiesHelper.extractProperties(parameters, ARG_PREFIX));
+        }
         setProperties(endpoint, parameters);
 
         return endpoint;
@@ -211,6 +231,14 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
 
     public void setAutoDeclare(boolean autoDeclare) {
         this.autoDeclare = autoDeclare;
+    }
+
+    public boolean isAutoDeclareProducer() {
+        return autoDeclareProducer;
+    }
+
+    public void setAutoDeclareProducer(boolean autoDeclareProducer) {
+        this.autoDeclareProducer = autoDeclareProducer;
     }
 
     public String getDeadLetterExchange() {
@@ -355,5 +383,13 @@ public class SpringRabbitMQComponent extends HeaderFilterStrategyComponent {
 
     public void setAllowNullBody(boolean allowNullBody) {
         this.allowNullBody = allowNullBody;
+    }
+
+    public Map<String, Object> getArgs() {
+        return args;
+    }
+
+    public void setArgs(Map<String, Object> args) {
+        this.args = args;
     }
 }

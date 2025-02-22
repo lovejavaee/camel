@@ -32,6 +32,7 @@ import org.apache.camel.Consumer;
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.DefaultEndpoint;
@@ -42,8 +43,8 @@ import org.apache.camel.util.ObjectHelper;
  * Socket level networking using TCP or UDP with Netty 4.x.
  */
 @UriEndpoint(firstVersion = "2.14.0", scheme = "netty", title = "Netty", syntax = "netty:protocol://host:port",
-             category = { Category.NETWORKING, Category.TCP, Category.UDP }, headersClass = NettyConstants.class)
-public class NettyEndpoint extends DefaultEndpoint implements AsyncEndpoint {
+             category = { Category.NETWORKING }, headersClass = NettyConstants.class)
+public class NettyEndpoint extends DefaultEndpoint implements AsyncEndpoint, EndpointServiceLocation {
     @UriParam
     private NettyConfiguration configuration;
     @UriParam(defaultValue = "false", label = "advanced",
@@ -53,6 +54,16 @@ public class NettyEndpoint extends DefaultEndpoint implements AsyncEndpoint {
     public NettyEndpoint(String endpointUri, NettyComponent component, NettyConfiguration configuration) {
         super(endpointUri, component);
         this.configuration = configuration;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        return configuration.getProtocol() + ":" + configuration.getHost() + ":" + configuration.getPort();
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return configuration.getProtocol();
     }
 
     public boolean isSynchronous() {

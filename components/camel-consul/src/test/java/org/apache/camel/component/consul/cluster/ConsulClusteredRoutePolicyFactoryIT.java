@@ -23,7 +23,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.camel.builder.RouteBuilder;
@@ -36,13 +35,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 public class ConsulClusteredRoutePolicyFactoryIT {
     @RegisterExtension
     public static ConsulService service = ConsulServiceFactory.createService();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsulClusteredRoutePolicyFactoryIT.class);
-    private static final List<String> CLIENTS = IntStream.range(0, 3).mapToObj(Integer::toString).collect(Collectors.toList());
+    private static final List<String> CLIENTS = IntStream.range(0, 3).mapToObj(Integer::toString).toList();
     private static final List<String> RESULTS = new ArrayList<>();
     private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(CLIENTS.size() * 2);
     private static final CountDownLatch LATCH = new CountDownLatch(CLIENTS.size());
@@ -81,7 +81,7 @@ public class ConsulClusteredRoutePolicyFactoryIT {
 
             DefaultCamelContext context = new DefaultCamelContext();
             context.disableJMX();
-            context.setName("context-" + id);
+            context.getCamelContextExtension().setName("context-" + id);
             context.addService(consulClusterService);
             context.addRoutePolicyFactory(ClusteredRoutePolicyFactory.forNamespace("my-ns"));
             context.addRoutes(new RouteBuilder() {
@@ -94,7 +94,8 @@ public class ConsulClusteredRoutePolicyFactoryIT {
 
             // Start the context after some random time so the startup order
             // changes for each test.
-            Thread.sleep(ThreadLocalRandom.current().nextInt(500));
+            Awaitility.await().pollDelay(ThreadLocalRandom.current().nextInt(500), TimeUnit.MILLISECONDS)
+                    .untilAsserted(() -> Assertions.assertDoesNotThrow(context::start));
             LOGGER.info("Starting CamelContext on node: {}", id);
             context.start();
             LOGGER.info("Started CamelContext on node: {}", id);
@@ -108,7 +109,7 @@ public class ConsulClusteredRoutePolicyFactoryIT {
 
             LATCH.countDown();
         } catch (Exception e) {
-            LOGGER.warn("", e);
+            LOGGER.warn("{}", e.getMessage(), e);
         }
     }
 }

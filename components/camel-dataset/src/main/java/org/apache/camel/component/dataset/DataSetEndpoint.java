@@ -46,7 +46,8 @@ import org.slf4j.LoggerFactory;
  * data set is received. Camel will use the throughput logger when sending dataset's.
  */
 @UriEndpoint(firstVersion = "1.3.0", scheme = "dataset", title = "Dataset", syntax = "dataset:name",
-             category = { Category.CORE, Category.TESTING }, lenientProperties = true, headersClass = DataSetConstants.class)
+             remote = false, category = { Category.CORE, Category.TESTING }, lenientProperties = true,
+             headersClass = DataSetConstants.class)
 public class DataSetEndpoint extends MockEndpoint implements Service {
     private final transient Logger log;
     private final AtomicInteger receivedCounter = new AtomicInteger();
@@ -72,6 +73,11 @@ public class DataSetEndpoint extends MockEndpoint implements Service {
         this.log = LoggerFactory.getLogger(endpointUri);
         // optimize as we dont need to copy the exchange
         setCopyOnExchange(false);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     public static void assertEquals(String description, Object expected, Object actual, Exchange exchange) {

@@ -5,6 +5,7 @@
 :description: Send print jobs to printers.
 :since: 2.1
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: printer
@@ -14,8 +15,8 @@
 *{component-header}*
 
 The Printer component provides a way to direct payloads on a route to
-a printer. Obviously the payload has to be a formatted piece of payload
-in order for the component to appropriately print it. The objective is
+a printer. The payload has to be a formatted piece of payload
+in order for the component to appropriately print it. The goal is
 to be able to direct specific payloads as jobs to a line printer in a
 camel flow.
 
@@ -39,7 +40,7 @@ for this component:
 == URI format
 
 Since the URI scheme for a printer has not been standardized (the
-nearest thing to a standard being the IETF print standard) and therefore
+nearest thing to a standard being the IETF print standard), and therefore
 not uniformly applied by vendors, we have chosen *"lpr"* as the scheme.
 
 -----------------------------------------------
@@ -63,18 +64,23 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Sending Messages to a Printer
+== Usage
 
-=== Printer Producer
+=== Sending Messages to a Printer
+
+==== Printer Producer
 
 Sending data to the printer is very straightforward and involves
 creating a producer endpoint that can be sent message exchanges on in
 route.
 
-== Usage Samples
+== Examples
 
-=== Example 1: Printing text based payloads on a Default printer using letter stationary and one-sided mode
+Usage samples.
 
+=== Printing text-based payloads
+
+.Printing text-based payloads on a Default printer using letter stationary and one-sided mode
 [source,java]
 -----------------------------------------------
 RouteBuilder builder = new RouteBuilder() {
@@ -84,12 +90,13 @@ RouteBuilder builder = new RouteBuilder() {
            "&flavor=DocFlavor.INPUT_STREAM&" +
            "&mimeType=AUTOSENSE" +
            "&mediaSize=NA_LETTER" +
-           "&sides=one-sided")
+           "&sides=one-sided");
     }};
 -----------------------------------------------
 
-=== Example 2: Printing GIF based payloads on a Remote printer using A4 stationary and one-sided mode
+=== Printing GIF-based payloads
 
+.Printing GIF-based payloads on a remote printer using A4 stationary and one-sided mode
 [source,java]
 --------------------------------------------------
 RouteBuilder builder = new RouteBuilder() {
@@ -98,12 +105,13 @@ RouteBuilder builder = new RouteBuilder() {
        .to("lpr://remotehost/sales/salesprinter" +
            "?copies=2&sides=one-sided" +
            "&mimeType=GIF&mediaSize=ISO_A4" +
-           "&flavor=DocFlavor.INPUT_STREAM")
+           "&flavor=DocFlavor.INPUT_STREAM");
    }};
 --------------------------------------------------
 
-=== Example 3: Printing JPEG based payloads on a Remote printer using Japanese Postcard stationary and one-sided mode
+=== Printing JPEG-based payloads
 
+.Printing JPEG-based payloads on a remote printer using Japanese Postcard stationary and one-sided mode
 [source,java]
 --------------------------------------------------
 RouteBuilder builder = new RouteBuilder() {
@@ -113,7 +121,7 @@ RouteBuilder builder = new RouteBuilder() {
            "?copies=2&sides=one-sided" +
            "&mimeType=JPEG" +
            "&mediaSize=JAPANESE_POSTCARD" +
-           "&flavor=DocFlavor.INPUT_STREAM")
+           "&flavor=DocFlavor.INPUT_STREAM");
     }};
 --------------------------------------------------
 

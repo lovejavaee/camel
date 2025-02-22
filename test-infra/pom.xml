@@ -21,7 +21,7 @@
     <parent>
         <artifactId>camel-parent</artifactId>
         <groupId>org.apache.camel</groupId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
         <relativePath>../parent</relativePath>
     </parent>
 
@@ -30,6 +30,10 @@
     <packaging>pom</packaging>
     <name>Camel :: Test Infra</name>
     <description>Test infrastructure for Camel</description>
+
+    <properties>
+        <assembly.skipAssembly>true</assembly.skipAssembly>
+    </properties>
 
     <modules>
         <module>camel-test-infra-common</module>
@@ -49,7 +53,6 @@
         <module>camel-test-infra-messaging-common</module>
         <module>camel-test-infra-artemis</module>
         <module>camel-test-infra-dispatch-router</module>
-        <module>camel-test-infra-hdfs</module>
         <module>camel-test-infra-jdbc</module>
         <module>camel-test-infra-arangodb</module>
         <module>camel-test-infra-consul</module>
@@ -60,6 +63,7 @@
         <module>camel-test-infra-nats</module>
         <module>camel-test-infra-pulsar</module>
         <module>camel-test-infra-redis</module>
+        <module>camel-test-infra-rocketmq</module>
         <module>camel-test-infra-solr</module>
         <module>camel-test-infra-xmpp</module>
         <module>camel-test-infra-zookeeper</module>
@@ -75,5 +79,64 @@
         <module>camel-test-infra-jetty</module>
         <module>camel-test-infra-etcd3</module>
         <module>camel-test-infra-core</module>
+        <module>camel-test-infra-opensearch</module>
+        <module>camel-test-infra-smb</module>
+        <module>camel-test-infra-cli</module>
+        <module>camel-test-infra-qdrant</module>
+        <module>camel-test-infra-ollama</module>
+        <module>camel-test-infra-milvus</module>
+        <module>camel-test-infra-hazelcast</module>
+        <module>camel-test-infra-hivemq</module>
+        <module>camel-test-infra-torchserve</module>
+        <module>camel-test-infra-tensorflow-serving</module>
+        <module>camel-test-infra-triton</module>
+        <module>camel-test-infra-neo4j</module>
+        <module>camel-test-infra-all</module>
     </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>spi-annotations</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Include main and test classes in the test-jar -->
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <inlineDescriptors>
+                        <inlineDescriptor>
+                            <id>tests</id>
+                            <formats>
+                                <format>jar</format>
+                            </formats>
+                            <includeBaseDirectory>false</includeBaseDirectory>
+                            <fileSets>
+                                <fileSet>
+                                    <directory>${project.build.testOutputDirectory}</directory>
+                                    <outputDirectory>/</outputDirectory>
+                                </fileSet>
+                                <fileSet>
+                                    <directory>${project.build.outputDirectory}</directory>
+                                    <outputDirectory>/</outputDirectory>
+                                </fileSet>
+                            </fileSets>
+                        </inlineDescriptor>
+                    </inlineDescriptors>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>create-archive</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -24,6 +24,7 @@ import jakarta.xml.bind.annotation.XmlTransient;
 import org.apache.camel.Endpoint;
 import org.apache.camel.builder.EndpointProducerBuilder;
 import org.apache.camel.spi.Metadata;
+import org.apache.camel.util.URISupport;
 
 /**
  * Sends the message to an endpoint
@@ -32,6 +33,8 @@ import org.apache.camel.spi.Metadata;
 public abstract class SendDefinition<Type extends ProcessorDefinition<Type>> extends NoOutputDefinition<Type>
         implements EndpointRequiredDefinition {
 
+    @XmlTransient
+    private String endpointUriToString;
     @XmlTransient
     protected Endpoint endpoint;
     @XmlTransient
@@ -46,6 +49,14 @@ public abstract class SendDefinition<Type extends ProcessorDefinition<Type>> ext
 
     public SendDefinition(String uri) {
         this.uri = uri;
+    }
+
+    protected SendDefinition(SendDefinition source) {
+        super(source);
+        this.endpointUriToString = source.endpointUriToString;
+        this.endpoint = source.endpoint;
+        this.endpointProducerBuilder = source.endpointProducerBuilder;
+        this.uri = source.uri;
     }
 
     @Override
@@ -106,11 +117,23 @@ public abstract class SendDefinition<Type extends ProcessorDefinition<Type>> ext
 
     @Override
     public String getLabel() {
-        String uri = getEndpointUri();
+        if (endpointUriToString == null) {
+            String value = null;
+            try {
+                value = getEndpointUri();
+            } catch (RuntimeException e) {
+                // ignore any exception and use null for building the string value
+            }
+            // ensure to sanitize uri so we do not show sensitive information such as passwords
+            endpointUriToString = URISupport.sanitizeUri(value);
+        }
+
+        String uri = endpointUriToString;
         return uri != null ? uri : "no uri supplied";
     }
 
     protected void clear() {
+        this.endpointUriToString = null;
         this.endpointProducerBuilder = null;
         this.endpoint = null;
         this.uri = null;

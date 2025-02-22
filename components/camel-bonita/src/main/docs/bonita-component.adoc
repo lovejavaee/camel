@@ -5,6 +5,7 @@
 :description: Communicate with a remote Bonita BPM process engine.
 :since: 2.19
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: bonita
@@ -36,31 +37,33 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
+== Usage
 
-== Body content
+=== Body content
 
-For the startCase operation, the input variables are retrieved from the body message. This one has to contains a Map<String,Serializable>.
+For the startCase operation, the input variables are retrieved from the body message.
+This one has to contain a `Map<String,Serializable>`.
 
 
 == Examples
 
-The following example start a new case in Bonita:
+The following example starts a new case in Bonita:
 
 [source,java]
 ----------------------------------------------------------------------
-from("direct:start").to("bonita:startCase?hostname=localhost&amp;port=8080&amp;processName=TestProcess&amp;username=install&amp;password=install")
+from("direct:start").to("bonita:startCase?hostname=localhost&amp;port=8080&amp;processName=TestProcess&amp;username=install&amp;password=install");
 ----------------------------------------------------------------------
 
 == Dependencies
 
-To use Bonita in your Camel routes you need to add a dependency on
+To use Bonita in your Camel routes, you need to add a dependency on
 *camel-bonita*, which implements the component.
 
-If you use Maven you can just add the following to your pom.xml,
+If you use Maven, you can add the following to your pom.xml,
 substituting the version number for the latest and greatest release (see
 the download page for the latest versions).
 
-[source,java]
+[source,xml]
 -------------------------------------
 <dependency>
   <groupId>org.apache.camel</groupId>

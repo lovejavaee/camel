@@ -57,7 +57,7 @@ class JmsDefaultTaskExecutorTypeTest extends CamelTestSupport {
     private static final Logger LOG = LoggerFactory.getLogger(JmsDefaultTaskExecutorTypeTest.class);
 
     @RegisterExtension
-    public ArtemisService service = ArtemisServiceFactory.createPersistentVMService();
+    public static ArtemisService service = ArtemisServiceFactory.createVMService();
 
     @Test
     void testThreadPoolTaskExecutor() throws Exception {
@@ -114,7 +114,7 @@ class JmsDefaultTaskExecutorTypeTest extends CamelTestSupport {
         doSendMessages("foo.JmsDefaultTaskExecutorTypeTest.default", DefaultTaskExecutorType.ThreadPool);
         MockEndpoint.assertIsSatisfied(context, 40, TimeUnit.SECONDS);
         long numberThreadsCreated = currentThreadCount() - beforeThreadCount;
-        LOG.info("Number of threads created, testDefaultTaskExecutorThreadPoolAtComponentConfig: " + numberThreadsCreated);
+        LOG.info("Number of threads created, testDefaultTaskExecutorThreadPoolAtComponentConfig: {}", numberThreadsCreated);
         assertTrue(numberThreadsCreated <= 100, "Number of threads created should be equal or lower than "
                                                 + "100 with ThreadPoolTaskExecutor as a component default");
     }

@@ -16,11 +16,15 @@
  */
 package org.apache.camel.maven.packaging;
 
+import javax.inject.Inject;
+
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.MavenProjectHelper;
+import org.codehaus.plexus.build.BuildContext;
 
 /**
  * Used by Apache Camel project itself - do NOT use as end user.
@@ -29,10 +33,15 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
       defaultPhase = LifecyclePhase.PROCESS_CLASSES)
 public class GenerateMojo extends AbstractGenerateMojo {
 
+    @Inject
+    public GenerateMojo(MavenProjectHelper projectHelper, BuildContext buildContext) {
+        super(projectHelper, buildContext);
+    }
+
     protected void doExecute() throws MojoFailureException, MojoExecutionException {
         // jandex
         invoke(PackageJandexMojo.class);
-        // generate-schema
+        // generate model json schema
         invoke(SchemaGeneratorMojo.class);
         // generate-type-converter-loader
         invoke(TypeConverterLoaderGeneratorMojo.class);
@@ -50,6 +59,12 @@ public class GenerateMojo extends AbstractGenerateMojo {
         invoke(GenerateConfigurerMojo.class);
         // generate invoke-on-header
         invoke(GenerateInvokeOnHeaderMojo.class);
+        // generate data-type-transformer
+        invoke(GenerateDataTypeTransformerMojo.class);
+        // generate pojo-beans
+        invoke(GeneratePojoBeanMojo.class);
+        // generate dev-console
+        invoke(GenerateDevConsoleMojo.class);
         // prepare-components
         invoke(PrepareComponentMojo.class);
         // prepare-main
@@ -64,6 +79,8 @@ public class GenerateMojo extends AbstractGenerateMojo {
         invoke(ValidateComponentMojo.class);
         // update-readme
         invoke(UpdateReadmeMojo.class);
+        // santity-check
+        invoke(SanityCheckGeneratedClassesMojo.class);
     }
 
 }

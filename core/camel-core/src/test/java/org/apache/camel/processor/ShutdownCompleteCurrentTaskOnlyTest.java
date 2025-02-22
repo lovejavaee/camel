@@ -23,18 +23,21 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class ShutdownCompleteCurrentTaskOnlyTest extends ContextTestSupport {
 
-    private String url = fileUri("?initialDelay=0&delay=10&synchronous=true");
+    public static final String FILE_QUERY = "?initialDelay=0&delay=10&synchronous=true";
 
     @Override
     @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
-
+        String url = fileUri(FILE_QUERY);
         template.sendBodyAndHeader(url, "A", Exchange.FILE_NAME, "a.txt");
         template.sendBodyAndHeader(url, "B", Exchange.FILE_NAME, "b.txt");
         template.sendBodyAndHeader(url, "C", Exchange.FILE_NAME, "c.txt");
@@ -60,10 +63,11 @@ public class ShutdownCompleteCurrentTaskOnlyTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
+        String url = fileUri(FILE_QUERY);
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(url)
                         // let it complete only current task so we shutdown faster
                         .shutdownRunningTask(ShutdownRunningTask.CompleteCurrentTaskOnly).delay(1000).syncDelayed()

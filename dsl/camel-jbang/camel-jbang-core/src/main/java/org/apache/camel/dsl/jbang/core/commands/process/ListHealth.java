@@ -40,7 +40,8 @@ import org.apache.camel.util.json.JsonObject;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
-@Command(name = "health", description = "Get health check status of running Camel integrations")
+@Command(name = "health", description = "Get health check status of running Camel integrations", sortOptions = false,
+         showDefaultValues = true)
 public class ListHealth extends ProcessWatchCommand {
 
     @CommandLine.Option(names = { "--sort" }, completionCandidates = PidNameAgeCompletionCandidates.class,
@@ -132,26 +133,20 @@ public class ListHealth extends ProcessWatchCommand {
                                 String time = d.getString("invocation.time");
                                 if (time != null) {
                                     ZonedDateTime zdt = ZonedDateTime.parse(time);
-                                    if (zdt != null) {
-                                        long delta = Math.abs(ZonedDateTime.now().until(zdt, ChronoUnit.MILLIS));
-                                        row.sinceLast = TimeUtils.printAge(delta);
-                                    }
+                                    long delta = Math.abs(ZonedDateTime.now().until(zdt, ChronoUnit.MILLIS));
+                                    row.sinceLast = TimeUtils.printAge(delta);
                                 }
                                 time = d.getString("success.start.time");
                                 if (time != null) {
                                     ZonedDateTime zdt = ZonedDateTime.parse(time);
-                                    if (zdt != null) {
-                                        long delta = Math.abs(ZonedDateTime.now().until(zdt, ChronoUnit.MILLIS));
-                                        row.sinceStartSuccess = TimeUtils.printAge(delta);
-                                    }
+                                    long delta = Math.abs(ZonedDateTime.now().until(zdt, ChronoUnit.MILLIS));
+                                    row.sinceStartSuccess = TimeUtils.printAge(delta);
                                 }
                                 time = d.getString("failure.start.time");
                                 if (time != null) {
                                     ZonedDateTime zdt = ZonedDateTime.parse(time);
-                                    if (zdt != null) {
-                                        long delta = Math.abs(ZonedDateTime.now().until(zdt, ChronoUnit.MILLIS));
-                                        row.sinceStartFailure = TimeUtils.printAge(delta);
-                                    }
+                                    long delta = Math.abs(ZonedDateTime.now().until(zdt, ChronoUnit.MILLIS));
+                                    row.sinceStartFailure = TimeUtils.printAge(delta);
                                 }
                                 for (Map.Entry<String, Object> entry : d.entrySet()) {
                                     String k = entry.getKey();
@@ -194,7 +189,7 @@ public class ListHealth extends ProcessWatchCommand {
         rows.sort(this::sortRow);
 
         if (!rows.isEmpty()) {
-            System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+            printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                     new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                     new Column().header("NAME").dataAlign(HorizontalAlign.LEFT)
                             .maxWidth(40, OverflowBehaviour.ELLIPSIS_RIGHT)
@@ -222,10 +217,10 @@ public class ListHealth extends ProcessWatchCommand {
                     = rows.stream().filter(r -> r.stackTrace != null && !r.stackTrace.isEmpty()).collect(Collectors.toList());
             if (!traces.isEmpty()) {
                 for (Row row : traces) {
-                    System.out.println("\n");
-                    System.out.println(StringHelper.fillChars('-', 120));
-                    System.out.println(StringHelper.padString(1, 55) + "STACK-TRACE");
-                    System.out.println(StringHelper.fillChars('-', 120));
+                    printer().println("\n");
+                    printer().println(StringHelper.fillChars('-', 120));
+                    printer().println(StringHelper.padString(1, 55) + "STACK-TRACE");
+                    printer().println(StringHelper.fillChars('-', 120));
                     StringBuilder sb = new StringBuilder();
                     sb.append(String.format("\tPID: %s%n", row.pid));
                     sb.append(String.format("\tNAME: %s%n", row.name));
@@ -236,15 +231,13 @@ public class ListHealth extends ProcessWatchCommand {
                     sb.append(String.format("\tSINCE: %s%n", row.sinceStartFailure));
                     if (row.customMeta != null) {
                         sb.append(String.format("\tMETADATA:%n"));
-                        row.customMeta.forEach((k, v) -> {
-                            sb.append(String.format("\t\t%s = %s%n", k, v));
-                        });
+                        row.customMeta.forEach((k, v) -> sb.append(String.format("\t\t%s = %s%n", k, v)));
                     }
                     sb.append(String.format("\tMESSAGE: %s%n", row.message));
                     for (int i = 0; i < depth && i < row.stackTrace.size(); i++) {
                         sb.append(String.format("\t%s%n", row.stackTrace.get(i)));
                     }
-                    System.out.println(sb);
+                    printer().println(sb.toString());
                 }
             }
         }

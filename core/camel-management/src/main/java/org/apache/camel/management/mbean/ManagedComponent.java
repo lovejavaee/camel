@@ -40,6 +40,7 @@ import org.apache.camel.api.management.mbean.ComponentVerifierExtension.Verifica
 import org.apache.camel.api.management.mbean.ComponentVerifierExtension.VerificationError.StandardCode;
 import org.apache.camel.api.management.mbean.ManagedComponentMBean;
 import org.apache.camel.spi.ManagementStrategy;
+import org.apache.camel.support.HealthCheckComponent;
 import org.apache.camel.util.CastUtils;
 
 @ManagedResource(description = "Managed Component")
@@ -68,8 +69,8 @@ public class ManagedComponent implements ManagedInstance, ManagedComponentMBean 
     @Override
     public String getState() {
         // must use String type to be sure remote JMX can read the attribute without requiring Camel classes.
-        if (component instanceof StatefulService) {
-            ServiceStatus status = ((StatefulService) component).getStatus();
+        if (component instanceof StatefulService statefulService) {
+            ServiceStatus status = statefulService.getStatus();
             return status.name();
         }
 
@@ -93,6 +94,27 @@ public class ManagedComponent implements ManagedInstance, ManagedComponentMBean 
     }
 
     @Override
+    public boolean isHealthCheckSupported() {
+        return component instanceof HealthCheckComponent;
+    }
+
+    @Override
+    public boolean isHealthCheckConsumerEnabled() {
+        if (component instanceof HealthCheckComponent healthCheckComponent) {
+            return healthCheckComponent.isHealthCheckConsumerEnabled();
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isHealthCheckProducerEnabled() {
+        if (component instanceof HealthCheckComponent healthCheckComponent) {
+            return healthCheckComponent.isHealthCheckProducerEnabled();
+        }
+        return false;
+    }
+
+    @Override
     public boolean isVerifySupported() {
         return component.getExtension(org.apache.camel.component.extension.ComponentVerifierExtension.class).isPresent();
     }
@@ -111,7 +133,7 @@ public class ManagedComponent implements ManagedInstance, ManagedComponentMBean 
                 String rscope = result.getScope().toString();
                 return new ResultImpl(
                         Scope.valueOf(rscope), Status.valueOf(rstatus),
-                        result.getErrors().stream().map(this::translate).collect(Collectors.toList()));
+                        result.getErrors().stream().map(this::translate).toList());
 
             } else {
                 return new ResultImpl(Scope.PARAMETERS, Status.UNSUPPORTED, Collections.emptyList());

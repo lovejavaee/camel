@@ -22,13 +22,14 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 /**
  * For working with Amazon MSK SDK v2.
  */
 @Component("aws2-msk")
-public class MSK2Component extends DefaultComponent {
+public class MSK2Component extends HealthCheckComponent {
+
     @Metadata
     private MSK2Configuration configuration = new MSK2Configuration();
 
@@ -45,10 +46,13 @@ public class MSK2Component extends DefaultComponent {
         MSK2Configuration configuration = this.configuration != null ? this.configuration.copy() : new MSK2Configuration();
         MSK2Endpoint endpoint = new MSK2Endpoint(uri, this, configuration);
         setProperties(endpoint, parameters);
-        if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider()) && configuration.getMskClient() == null
+        if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseProfileCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseSessionCredentials())
+                && configuration.getMskClient() == null
                 && (configuration.getAccessKey() == null || configuration.getSecretKey() == null)) {
             throw new IllegalArgumentException(
-                    "useDefaultCredentialsProvider is set to false, Amazon msk client or accessKey and secretKey must be specified");
+                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, Amazon msk client or accessKey and secretKey must be specified");
         }
         return endpoint;
     }

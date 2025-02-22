@@ -16,11 +16,39 @@
  */
 package org.apache.camel.dsl.jbang.core.common;
 
+import java.io.File;
+import java.io.FileInputStream;
+
+import org.apache.camel.util.IOHelper;
 import org.apache.camel.util.StringHelper;
 
 public final class VersionHelper {
 
     private VersionHelper() {
+    }
+
+    public static String getJBangVersion() {
+        try {
+            // find actual version in JBANG_HOME
+            String homeDir = System.getenv("JBANG_HOME");
+            String path = "/";
+            if (homeDir == null || homeDir.isBlank()) {
+                // fallback to .jbang cache that has a list of latest version
+                path = ".jbang/cache/";
+                homeDir = CommandLineHelper.getHomeDir();
+            }
+            File file = new File(homeDir, path + "version.txt");
+            if (file.exists() && file.isFile()) {
+                FileInputStream fis = new FileInputStream(file);
+                String text = IOHelper.loadText(fis);
+                IOHelper.close(fis);
+                text = text.trim();
+                return text;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return null;
     }
 
     public static boolean isGE(String source, String target) {
@@ -36,7 +64,7 @@ public final class VersionHelper {
     }
 
     public static int compare(String source, String target) {
-        if (source == null || target == null) {
+        if (source == null || target == null || source.isBlank() || target.isBlank()) {
             return 0;
         }
         String s1 = StringHelper.before(source, ".");
@@ -62,6 +90,19 @@ public final class VersionHelper {
             t2 = StringHelper.before(t2, ".");
         } else {
             t3 = "";
+        }
+        // avoid NPE
+        if (s1 == null) {
+            s1 = source;
+        }
+        if (s2 == null) {
+            s2 = "";
+        }
+        if (t1 == null) {
+            t1 = target;
+        }
+        if (t2 == null) {
+            t2 = "";
         }
         // convert to 2-digit numbers
         if (s1.length() < 2) {
@@ -91,4 +132,15 @@ public final class VersionHelper {
         return s.compareTo(t);
     }
 
+    public static String extractCamelVersion() {
+        return org.apache.camel.main.util.VersionHelper.extractCamelVersion();
+    }
+
+    public static String extractKameletsVersion() {
+        return org.apache.camel.main.util.VersionHelper.extractKameletsVersion();
+    }
+
+    public static void setCamelVersion(String version) {
+        org.apache.camel.main.util.VersionHelper.setCamelVersion(version);
+    }
 }

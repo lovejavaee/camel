@@ -25,6 +25,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 
 import org.apache.camel.ExchangePattern;
+import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.spi.Metadata;
 
@@ -57,6 +58,16 @@ public class WireTapDefinition<Type extends ProcessorDefinition<Type>> extends T
     private String executorService;
 
     public WireTapDefinition() {
+    }
+
+    public WireTapDefinition(WireTapDefinition<?> source) {
+        super(source);
+        this.executorServiceBean = source.executorServiceBean;
+        this.onPrepareProcessor = source.onPrepareProcessor;
+        this.copy = source.copy;
+        this.dynamicUri = source.dynamicUri;
+        this.onPrepare = source.onPrepare;
+        this.executorService = source.executorService;
     }
 
     @Override
@@ -206,7 +217,7 @@ public class WireTapDefinition<Type extends ProcessorDefinition<Type>> extends T
      * producers, when uris are reused.
      *
      * Beware that when using dynamic endpoints then it affects how well the cache can be utilized. If each dynamic
-     * endpoint is unique then it's best to turn of caching by setting this to -1, which allows Camel to not cache both
+     * endpoint is unique then it's best to turn off caching by setting this to -1, which allows Camel to not cache both
      * the producers and endpoints; they are regarded as prototype scoped and will be stopped and discarded after use.
      * This reduces memory usage as otherwise producers/endpoints are stored in memory in the caches.
      *
@@ -230,7 +241,7 @@ public class WireTapDefinition<Type extends ProcessorDefinition<Type>> extends T
      * producers, when uris are reused.
      *
      * Beware that when using dynamic endpoints then it affects how well the cache can be utilized. If each dynamic
-     * endpoint is unique then it's best to turn of caching by setting this to -1, which allows Camel to not cache both
+     * endpoint is unique then it's best to turn off caching by setting this to -1, which allows Camel to not cache both
      * the producers and endpoints; they are regarded as prototype scoped and will be stopped and discarded after use.
      * This reduces memory usage as otherwise producers/endpoints are stored in memory in the caches.
      *
@@ -257,6 +268,31 @@ public class WireTapDefinition<Type extends ProcessorDefinition<Type>> extends T
      */
     public WireTapDefinition<Type> ignoreInvalidEndpoint() {
         setIgnoreInvalidEndpoint(Boolean.toString(true));
+        return this;
+    }
+
+    /**
+     * To use a variable as the source for the message body to send. This makes it handy to use variables for user data
+     * and to easily control what data to use for sending and receiving.
+     *
+     * Important: When using send variable then the message body is taken from this variable instead of the current
+     * {@link Message}, however the headers from the {@link Message} will still be used as well. In other words, the
+     * variable is used instead of the message body, but everything else is as usual.
+     */
+    public WireTapDefinition<Type> variableReceive(String variableReceive) {
+        throw new IllegalArgumentException("WireTap does not support variableReceive");
+    }
+
+    /**
+     * To use a variable as the source for the message body to send. This makes it handy to use variables for user data
+     * and to easily control what data to use for sending and receiving.
+     *
+     * Important: When using send variable then the message body is taken from this variable instead of the current
+     * message, however the headers from the message will still be used as well. In other words, the variable is used
+     * instead of the message body, but everything else is as usual.
+     */
+    public WireTapDefinition<Type> variableSend(String variableSend) {
+        setVariableSend(variableSend);
         return this;
     }
 
@@ -320,5 +356,10 @@ public class WireTapDefinition<Type extends ProcessorDefinition<Type>> extends T
 
     public void setExecutorService(String executorService) {
         this.executorService = executorService;
+    }
+
+    @Override
+    public WireTapDefinition copyDefinition() {
+        return new WireTapDefinition(this);
     }
 }

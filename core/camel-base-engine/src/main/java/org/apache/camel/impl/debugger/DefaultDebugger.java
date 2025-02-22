@@ -30,6 +30,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.MessageHistory;
 import org.apache.camel.NamedNode;
+import org.apache.camel.NonManagedService;
 import org.apache.camel.Processor;
 import org.apache.camel.spi.Breakpoint;
 import org.apache.camel.spi.CamelEvent;
@@ -51,7 +52,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
 
     private final EventNotifier debugEventNotifier = new DebugEventNotifier();
     private final List<BreakpointConditions> breakpoints = new CopyOnWriteArrayList<>();
-    private final int maxConcurrentSingleSteps = 1;
+    private final int maxConcurrentSingleSteps = 100;
     private final Map<String, Breakpoint> singleSteps = new HashMap<>(maxConcurrentSingleSteps);
     private CamelContext camelContext;
 
@@ -63,7 +64,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
         private final List<Condition> conditions;
 
         private BreakpointConditions(Breakpoint breakpoint) {
-            this(breakpoint, new ArrayList<Condition>());
+            this(breakpoint, new ArrayList<>());
         }
 
         private BreakpointConditions(Breakpoint breakpoint, List<Condition> conditions) {
@@ -145,10 +146,14 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
             public void onEvent(Exchange exchange, ExchangeEvent event, NamedNode definition) {
                 if (event instanceof ExchangeCreatedEvent) {
                     startSingleStepExchange(exchange.getExchangeId(), this);
-                } else if (event instanceof ExchangeCompletedEvent) {
-                    stopSingleStepExchange(exchange.getExchangeId());
                 }
-                breakpoint.onEvent(exchange, event, definition);
+                try {
+                    breakpoint.onEvent(exchange, event, definition);
+                } finally {
+                    if (event instanceof ExchangeCompletedEvent) {
+                        stopSingleStepExchange(exchange.getExchangeId());
+                    }
+                }
             }
 
             @Override
@@ -205,13 +210,14 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
 
     @Override
     public void stopSingleStepExchange(String exchangeId) {
+        // completed so we need a "last" event
         singleSteps.remove(exchangeId);
     }
 
     @Override
     public boolean beforeProcess(Exchange exchange, Processor processor, NamedNode definition) {
         // is the exchange in single step mode?
-        Breakpoint singleStep = singleSteps.get(exchange.getExchangeId());
+        Breakpoint singleStep = getSingleStepBreakpoint(exchange);
         if (singleStep != null) {
             onBeforeProcess(exchange, processor, definition, singleStep);
             return true;
@@ -222,7 +228,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
         for (BreakpointConditions breakpoint : breakpoints) {
             // breakpoint must be active
             if (Breakpoint.State.Active.equals(breakpoint.getBreakpoint().getState())) {
-                if (matchConditions(exchange, processor, definition, breakpoint)) {
+                if (matchConditions(exchange, processor, definition, breakpoint, true)) {
                     match = true;
                     onBeforeProcess(exchange, processor, definition, breakpoint.getBreakpoint());
                 }
@@ -235,7 +241,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
     @Override
     public boolean afterProcess(Exchange exchange, Processor processor, NamedNode definition, long timeTaken) {
         // is the exchange in single step mode?
-        Breakpoint singleStep = singleSteps.get(exchange.getExchangeId());
+        Breakpoint singleStep = getSingleStepBreakpoint(exchange);
         if (singleStep != null) {
             onAfterProcess(exchange, processor, definition, timeTaken, singleStep);
             return true;
@@ -246,7 +252,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
         for (BreakpointConditions breakpoint : breakpoints) {
             // breakpoint must be active
             if (Breakpoint.State.Active.equals(breakpoint.getBreakpoint().getState())) {
-                if (matchConditions(exchange, processor, definition, breakpoint)) {
+                if (matchConditions(exchange, processor, definition, breakpoint, false)) {
                     match = true;
                     onAfterProcess(exchange, processor, definition, timeTaken, breakpoint.getBreakpoint());
                 }
@@ -259,7 +265,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
     @Override
     public boolean onEvent(Exchange exchange, ExchangeEvent event) {
         // is the exchange in single step mode?
-        Breakpoint singleStep = singleSteps.get(exchange.getExchangeId());
+        Breakpoint singleStep = getSingleStepBreakpoint(exchange);
         if (singleStep != null) {
             onEvent(exchange, event, singleStep);
             return true;
@@ -283,7 +289,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
     protected void onBeforeProcess(Exchange exchange, Processor processor, NamedNode definition, Breakpoint breakpoint) {
         try {
             breakpoint.beforeProcess(exchange, processor, definition);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
     }
@@ -292,7 +298,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
             Exchange exchange, Processor processor, NamedNode definition, long timeTaken, Breakpoint breakpoint) {
         try {
             breakpoint.afterProcess(exchange, processor, definition, timeTaken);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
     }
@@ -306,15 +312,27 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
 
         try {
             breakpoint.onEvent(exchange, event, definition);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
     }
 
+    private Breakpoint getSingleStepBreakpoint(Exchange exchange) {
+        Breakpoint answer = singleSteps.get(exchange.getExchangeId());
+        if (answer == null) {
+            // we may step into an EIP such as split so check via correlation id (parent exchange)
+            String id = exchange.getProperty(ExchangePropertyKey.CORRELATION_ID, String.class);
+            if (id != null) {
+                answer = singleSteps.get(id);
+            }
+        }
+        return answer;
+    }
+
     private boolean matchConditions(
-            Exchange exchange, Processor processor, NamedNode definition, BreakpointConditions breakpoint) {
+            Exchange exchange, Processor processor, NamedNode definition, BreakpointConditions breakpoint, boolean before) {
         for (Condition condition : breakpoint.getConditions()) {
-            if (!condition.matchProcess(exchange, processor, definition)) {
+            if (!condition.matchProcess(exchange, processor, definition, before)) {
                 return false;
             }
         }
@@ -364,7 +382,7 @@ public class DefaultDebugger extends ServiceSupport implements Debugger, CamelCo
         return "DefaultDebugger";
     }
 
-    private final class DebugEventNotifier extends EventNotifierSupport {
+    private final class DebugEventNotifier extends EventNotifierSupport implements NonManagedService {
 
         private DebugEventNotifier() {
             setIgnoreCamelContextEvents(true);

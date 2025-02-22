@@ -18,25 +18,21 @@ package org.apache.camel.component.jetty;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EventListener;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.servlet.Filter;
 import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.RequestDispatcher;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 import javax.management.MBeanServer;
 
@@ -70,22 +66,17 @@ import org.apache.camel.util.PropertiesHelper;
 import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.URISupport;
 import org.apache.camel.util.UnsafeUriCharactersEncoder;
+import org.eclipse.jetty.ee10.servlet.FilterHolder;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.ee10.servlet.SessionHandler;
+import org.eclipse.jetty.ee10.servlets.CrossOriginFilter;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.jmx.MBeanContainer;
-import org.eclipse.jetty.server.AbstractConnector;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.Handler;
-import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.ErrorHandler;
-import org.eclipse.jetty.server.handler.HandlerCollection;
-import org.eclipse.jetty.server.handler.HandlerWrapper;
-import org.eclipse.jetty.server.session.SessionHandler;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
-import org.eclipse.jetty.servlets.CrossOriginFilter;
+import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.component.Container;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -100,7 +91,7 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         implements RestConsumerFactory, RestApiConsumerFactory, SSLContextParametersAware {
     public static final String TMP_DIR = "CamelJettyTempDir";
 
-    protected static final HashMap<String, ConnectorRef> CONNECTORS = new HashMap<>();
+    protected static final Map<String, ConnectorRef> CONNECTORS = new ConcurrentHashMap<>();
 
     private static final Logger LOG = LoggerFactory.getLogger(JettyHttpComponent.class);
     private static final String JETTY_SSL_KEYSTORE = "org.eclipse.jetty.ssl.keystore";
@@ -133,14 +124,19 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
     private Integer proxyPort;
     private boolean sendServerVersion = true;
     private QueuedThreadPool defaultQueuedThreadPool;
+    private String filesLocation;
+    private Long maxFileSize = -1L;
+    private Long maxRequestSize = -1L;
+    private Integer fileSizeThreshold = 0;
+    protected SecureRequestCustomizer secureRequestCustomizer;
 
-    public JettyHttpComponent() {
+    protected JettyHttpComponent() {
     }
 
     static class ConnectorRef {
-        Server server;
-        Connector connector;
-        CamelServlet servlet;
+        final Server server;
+        final Connector connector;
+        final CamelServlet servlet;
         int refCount;
 
         ConnectorRef(Server server, Connector connector, CamelServlet servlet) {
@@ -185,6 +181,11 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         Integer proxyPort = getAndRemoveParameter(parameters, "proxyPort", Integer.class, getProxyPort());
         Boolean async = getAndRemoveParameter(parameters, "async", Boolean.class);
         boolean muteException = getAndRemoveParameter(parameters, "muteException", boolean.class, isMuteException());
+        String filesLocation = getAndRemoveParameter(parameters, "filesLocation", String.class, getFilesLocation());
+        Integer fileSizeThreshold
+                = getAndRemoveParameter(parameters, "fileSizeThreshold", Integer.class, getFileSizeThreshold());
+        Long maxFileSize = getAndRemoveParameter(parameters, "maxFileSize", Long.class, getMaxFileSize());
+        Long maxRequestSize = getAndRemoveParameter(parameters, "maxRequestSize", Long.class, getMaxRequestSize());
 
         // extract filterInit. parameters
         Map filterInitParameters = PropertiesHelper.extractProperties(parameters, "filterInit.");
@@ -261,7 +262,10 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
             endpoint.setSslContextParameters(ssl);
         }
         endpoint.setSendServerVersion(isSendServerVersion());
-
+        endpoint.setFilesLocation(filesLocation);
+        endpoint.setFileSizeThreshold(fileSizeThreshold);
+        endpoint.setMaxFileSize(maxFileSize);
+        endpoint.setMaxRequestSize(maxRequestSize);
         setProperties(endpoint, parameters);
 
         // re-create http uri after all parameters has been set on the endpoint, as the remainders are for http uri
@@ -279,20 +283,18 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         JettyHttpEndpoint endpoint = (JettyHttpEndpoint) consumer.getEndpoint();
         String connectorKey = getConnectorKey(endpoint);
 
-        synchronized (CONNECTORS) {
-            ConnectorRef connectorRef = CONNECTORS.get(connectorKey);
+        ConnectorRef connectorRef = CONNECTORS.get(connectorKey);
 
-            // check if there are already another consumer on the same context-path and if so fail
-            if (connectorRef != null) {
-                for (Map.Entry<String, HttpConsumer> entry : connectorRef.servlet.getConsumers().entrySet()) {
-                    String path = entry.getValue().getPath();
-                    CamelContext camelContext = entry.getValue().getEndpoint().getCamelContext();
-                    if (consumer.getPath().equals(path)) {
-                        // its allowed if they are from the same camel context
-                        boolean sameContext = consumer.getEndpoint().getCamelContext() == camelContext;
-                        if (!sameContext) {
-                            return false;
-                        }
+        // check if there are already another consumer on the same context-path and if so fail
+        if (connectorRef != null) {
+            for (Map.Entry<String, HttpConsumer> entry : connectorRef.servlet.getConsumers().entrySet()) {
+                String path = entry.getValue().getPath();
+                CamelContext camelContext = entry.getValue().getEndpoint().getCamelContext();
+                if (consumer.getPath().equals(path)) {
+                    // its allowed if they are from the same camel context
+                    boolean sameContext = consumer.getEndpoint().getCamelContext() == camelContext;
+                    if (!sameContext) {
+                        return false;
                     }
                 }
             }
@@ -310,68 +312,81 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         JettyHttpEndpoint endpoint = (JettyHttpEndpoint) consumer.getEndpoint();
         String connectorKey = getConnectorKey(endpoint);
 
-        synchronized (CONNECTORS) {
-            ConnectorRef connectorRef = CONNECTORS.get(connectorKey);
-            if (connectorRef == null) {
-                Server server = createServer();
-                Connector connector = getConnector(server, endpoint);
-                if ("localhost".equalsIgnoreCase(endpoint.getHttpUri().getHost())) {
-                    LOG.warn("You use localhost interface! It means that no external connections will be available. "
-                             + "Don't you want to use 0.0.0.0 instead (all network interfaces)? {}",
-                            endpoint);
+        try {
+            CONNECTORS.compute(connectorKey, (cKey, connectorRef) -> {
+                try {
+                    return connect(consumer, endpoint, cKey, connectorRef);
+                } catch (Exception e) {
+                    throw new RuntimeCamelException(e);
                 }
-                if (endpoint.isEnableJmx()) {
-                    enableJmx(server);
-                }
-                server.addConnector(connector);
-
-                connectorRef = new ConnectorRef(
-                        server, connector,
-                        createServletForConnector(server, connector, endpoint.getHandlers(), endpoint));
-                // must enable session before we start
-                if (endpoint.isSessionSupport()) {
-                    enableSessionSupport(connectorRef.server, connectorKey);
-                }
-                connectorRef.server.start();
-
-                LOG.debug("Adding connector key: {} -> {}", connectorKey, connectorRef);
-                CONNECTORS.put(connectorKey, connectorRef);
-
-            } else {
-                LOG.debug("Using existing connector key: {} -> {}", connectorKey, connectorRef);
-
-                // check if there are any new handlers, and if so then we need to re-start the server
-                if (endpoint.getHandlers() != null && !endpoint.getHandlers().isEmpty()) {
-                    List<Handler> existingHandlers = new ArrayList<>();
-                    if (connectorRef.server.getHandlers() != null && connectorRef.server.getHandlers().length > 0) {
-                        existingHandlers = Arrays.asList(connectorRef.server.getHandlers());
-                    }
-                    List<Handler> newHandlers = new ArrayList<>(endpoint.getHandlers());
-                    boolean changed = !existingHandlers.containsAll(newHandlers) && !newHandlers.containsAll(existingHandlers);
-                    if (changed) {
-                        LOG.debug("Restarting Jetty server due to adding new Jetty Handlers: {}", newHandlers);
-                        connectorRef.server.stop();
-                        addJettyHandlers(connectorRef.server, endpoint.getHandlers());
-                        connectorRef.server.start();
-                    }
-                }
-                // check the session support
-                if (endpoint.isSessionSupport()) {
-                    enableSessionSupport(connectorRef.server, connectorKey);
-                }
-                // ref track the connector
-                connectorRef.increment();
-            }
-
-            if (endpoint.isEnableMultipartFilter()) {
-                enableMultipartFilter(endpoint, connectorRef.server);
-            }
-
-            if (endpoint.getFilters() != null && !endpoint.getFilters().isEmpty()) {
-                setFilters(endpoint, connectorRef.server);
-            }
-            connectorRef.servlet.connect(consumer);
+            });
+        } catch (RuntimeCamelException e) {
+            throw (Exception) e.getCause();
         }
+    }
+
+    private ConnectorRef connect(
+            HttpConsumer consumer, JettyHttpEndpoint endpoint, String connectorKey, ConnectorRef connectorRef)
+            throws Exception {
+        if (connectorRef == null) {
+            Server server = createServer();
+            Connector connector = getConnector(server, endpoint);
+            if ("localhost".equalsIgnoreCase(endpoint.getHttpUri().getHost())) {
+                LOG.warn("You use localhost interface! It means that no external connections will be available. "
+                         + "Don't you want to use 0.0.0.0 instead (all network interfaces)? {}",
+                        endpoint);
+            }
+            if (endpoint.isEnableJmx()) {
+                enableJmx(server);
+            }
+            server.addConnector(connector);
+
+            connectorRef = new ConnectorRef(
+                    server, connector,
+                    createServletForConnector(server, connector, endpoint.getHandlers(), endpoint));
+            // must enable session before we start
+            if (endpoint.isSessionSupport()) {
+                enableSessionSupport(connectorRef.server, connectorKey);
+            }
+            connectorRef.server.start();
+
+            LOG.debug("Adding connector key: {} -> {}", connectorKey, connectorRef);
+        } else {
+            LOG.debug("Using existing connector key: {} -> {}", connectorKey, connectorRef);
+
+            // check if there are any new handlers, and if so then we need to re-start the server
+            if (endpoint.getHandlers() != null && !endpoint.getHandlers().isEmpty()) {
+                List<Handler> existingHandlers = new ArrayList<>();
+                if (connectorRef.server.getHandlers() != null && !connectorRef.server.getHandlers().isEmpty()) {
+                    existingHandlers = connectorRef.server.getHandlers();
+                }
+                List<Handler> newHandlers = new ArrayList<>(endpoint.getHandlers());
+                boolean changed = !existingHandlers.containsAll(newHandlers) && !newHandlers.containsAll(existingHandlers);
+                if (changed) {
+                    LOG.debug("Restarting Jetty server due to adding new Jetty Handlers: {}", newHandlers);
+                    connectorRef.server.stop();
+                    addJettyHandlers(connectorRef.server, endpoint.getHandlers());
+                    connectorRef.server.start();
+                }
+            }
+            // check the session support
+            if (endpoint.isSessionSupport()) {
+                enableSessionSupport(connectorRef.server, connectorKey);
+            }
+            // ref track the connector
+            connectorRef.increment();
+        }
+
+        if (endpoint.isEnableMultipartFilter()) {
+            enableMultipartFilter(endpoint, connectorRef.server);
+        }
+
+        if (endpoint.getFilters() != null && !endpoint.getFilters().isEmpty()) {
+            setFilters(endpoint, connectorRef.server);
+        }
+        connectorRef.servlet.connect(consumer);
+
+        return connectorRef;
     }
 
     private void enableJmx(Server server) {
@@ -385,8 +400,8 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         }
     }
 
-    private void enableSessionSupport(Server server, String connectorKey) throws Exception {
-        ServletContextHandler context = server.getChildHandlerByClass(ServletContextHandler.class);
+    private void enableSessionSupport(Server server, String connectorKey) {
+        ServletContextHandler context = server.getDescendant(ServletContextHandler.class);
         if (context.getSessionHandler() == null) {
             SessionHandler sessionHandler = new SessionHandler();
             if (context.isStarted()) {
@@ -399,23 +414,20 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
     }
 
     private void setFilters(JettyHttpEndpoint endpoint, Server server) {
-        ServletContextHandler context = server.getChildHandlerByClass(ServletContextHandler.class);
+        ServletContextHandler context = server.getDescendant(ServletContextHandler.class);
         List<Filter> filters = endpoint.getFilters();
         for (Filter filter : filters) {
             FilterHolder filterHolder = new FilterHolder();
             if (endpoint.getFilterInitParameters() != null) {
                 filterHolder.setInitParameters(endpoint.getFilterInitParameters());
             }
-            filterHolder.setFilter(new CamelFilterWrapper(filter));
-            String pathSpec = endpoint.getPath();
-            if (pathSpec == null || pathSpec.isEmpty()) {
-                pathSpec = "/";
-            }
-            if (endpoint.isMatchOnUriPrefix()) {
-                pathSpec = pathSpec.endsWith("/") ? pathSpec + "*" : pathSpec + "/*";
-            }
-            addFilter(context, filterHolder, pathSpec);
+            addFilter(endpoint, filter, filterHolder, context);
         }
+    }
+
+    private void addFilter(
+            JettyHttpEndpoint endpoint, Filter filter, FilterHolder filterHolder, ServletContextHandler context) {
+        addFilter(endpoint, filterHolder, filter, context);
     }
 
     private void addFilter(ServletContextHandler context, FilterHolder filterHolder, String pathSpec) {
@@ -423,7 +435,7 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
     }
 
     private void enableMultipartFilter(HttpCommonEndpoint endpoint, Server server) throws Exception {
-        ServletContextHandler context = server.getChildHandlerByClass(ServletContextHandler.class);
+        ServletContextHandler context = server.getDescendant(ServletContextHandler.class);
         CamelContext camelContext = this.getCamelContext();
         FilterHolder filterHolder = new FilterHolder();
         filterHolder.setInitParameter("deleteFiles", "true");
@@ -442,6 +454,12 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
             // if no filter ref was provided, use the default filter
             filter = new MultiPartFilter();
         }
+        final String pathSpec = addFilter(endpoint, filterHolder, filter, context);
+        LOG.debug("using multipart filter implementation {} for path {}", filter.getClass().getName(), pathSpec);
+    }
+
+    private String addFilter(
+            HttpCommonEndpoint endpoint, FilterHolder filterHolder, Filter filter, ServletContextHandler context) {
         filterHolder.setFilter(new CamelFilterWrapper(filter));
         String pathSpec = endpoint.getPath();
         if (pathSpec == null || pathSpec.isEmpty()) {
@@ -451,7 +469,7 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
             pathSpec = pathSpec.endsWith("/") ? pathSpec + "*" : pathSpec + "/*";
         }
         addFilter(context, filterHolder, pathSpec);
-        LOG.debug("using multipart filter implementation {} for path {}", filter.getClass().getName(), pathSpec);
+        return pathSpec;
     }
 
     /**
@@ -463,33 +481,43 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         HttpCommonEndpoint endpoint = consumer.getEndpoint();
         String connectorKey = getConnectorKey(endpoint);
 
-        synchronized (CONNECTORS) {
-            ConnectorRef connectorRef = CONNECTORS.get(connectorKey);
-            if (connectorRef != null) {
-                connectorRef.servlet.disconnect(consumer);
-                if (connectorRef.decrement() == 0) {
-                    connectorRef.server.removeConnector(connectorRef.connector);
-                    connectorRef.connector.stop();
-                    connectorRef.server.stop();
-                    CONNECTORS.remove(connectorKey);
-                    // Camel controls the lifecycle of these entities so remove the
-                    // registered MBeans when Camel is done with the managed objects.
-                    if (mbContainer != null) {
-                        this.removeServerMBean(connectorRef.server);
-                        //mbContainer.removeBean(connectorRef.connector);
-                    }
-                    if (defaultQueuedThreadPool != null) {
-                        try {
-                            defaultQueuedThreadPool.stop();
-                        } catch (Exception t) {
-                            defaultQueuedThreadPool.destroy();
-                        } finally {
-                            defaultQueuedThreadPool = null;
-                        }
-                    }
+        try {
+            CONNECTORS.computeIfPresent(connectorKey, (cKey, connectorRef) -> {
+                try {
+                    return disconnect(consumer, connectorRef);
+                } catch (Exception e) {
+                    throw new RuntimeCamelException(e);
+                }
+            });
+        } catch (RuntimeCamelException e) {
+            throw (Exception) e.getCause();
+        }
+    }
+
+    private ConnectorRef disconnect(HttpConsumer consumer, ConnectorRef connectorRef) throws Exception {
+        connectorRef.servlet.disconnect(consumer);
+        if (connectorRef.decrement() == 0) {
+            connectorRef.server.removeConnector(connectorRef.connector);
+            connectorRef.connector.stop();
+            connectorRef.server.stop();
+            // Camel controls the lifecycle of these entities so remove the
+            // registered MBeans when Camel is done with the managed objects.
+            if (mbContainer != null) {
+                this.removeServerMBean(connectorRef.server);
+                //mbContainer.removeBean(connectorRef.connector);
+            }
+            if (defaultQueuedThreadPool != null) {
+                try {
+                    defaultQueuedThreadPool.stop();
+                } catch (Exception t) {
+                    defaultQueuedThreadPool.destroy();
+                } finally {
+                    defaultQueuedThreadPool = null;
                 }
             }
+            return null;
         }
+        return connectorRef;
     }
 
     private String getConnectorKey(HttpCommonEndpoint endpoint) {
@@ -498,6 +526,19 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
 
     // Properties
     // -------------------------------------------------------------------------
+
+    public SecureRequestCustomizer getSecureRequestCustomizer() {
+        return secureRequestCustomizer;
+    }
+
+    /**
+     * To use a custom SecureRequestCustomizer. The option is a org.eclipse.jetty.server.SecureRequestCustomizer type.
+     */
+    @Metadata(description = "To use a custom SecureRequestCustomizer. The option is a org.eclipse.jetty.server.SecureRequestCustomizer type.",
+              label = "advanced")
+    public void setSecureRequestCustomizer(SecureRequestCustomizer secureRequestCustomizer) {
+        this.secureRequestCustomizer = secureRequestCustomizer;
+    }
 
     public String getSslKeyPassword() {
         return sslKeyPassword;
@@ -533,7 +574,7 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
      * key entry.
      */
     @Metadata(description = "Specifies the location of the Java keystore file, which contains the Jetty server's own X.509 certificate in a key entry.",
-              label = "security", secret = true)
+              label = "security")
     public void setKeystore(String sslKeystore) {
         this.sslKeystore = sslKeystore;
     }
@@ -687,13 +728,7 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         try {
             Method method = instance.getClass().getMethod("checkConfig");
             return (Boolean) method.invoke(instance);
-        } catch (NoSuchMethodException ex) {
-            // ignore
-        } catch (IllegalArgumentException e) {
-            // ignore
-        } catch (IllegalAccessException e) {
-            // ignore
-        } catch (InvocationTargetException e) {
+        } catch (IllegalArgumentException | NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
             // ignore
         }
         return false;
@@ -795,25 +830,30 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         throw new IllegalArgumentException("Jetty component does not use HttpConfiguration.");
     }
 
-    public synchronized MBeanContainer getMbContainer() {
-        // If null, provide the default implementation.
-        if (mbContainer == null) {
-            MBeanServer mbs = null;
+    public MBeanContainer getMbContainer() {
+        lock.lock();
+        try {
+            // If null, provide the default implementation.
+            if (mbContainer == null) {
+                MBeanServer mbs = null;
 
-            final ManagementStrategy mStrategy = this.getCamelContext().getManagementStrategy();
-            final ManagementAgent mAgent = mStrategy.getManagementAgent();
-            if (mAgent != null) {
-                mbs = mAgent.getMBeanServer();
+                final ManagementStrategy mStrategy = this.getCamelContext().getManagementStrategy();
+                final ManagementAgent mAgent = mStrategy.getManagementAgent();
+                if (mAgent != null) {
+                    mbs = mAgent.getMBeanServer();
+                }
+
+                if (mbs != null) {
+                    mbContainer = new MBeanContainer(mbs);
+                } else {
+                    LOG.warn("JMX disabled in CamelContext. Jetty JMX extensions will remain disabled.");
+                }
             }
 
-            if (mbs != null) {
-                mbContainer = new MBeanContainer(mbs);
-            } else {
-                LOG.warn("JMX disabled in CamelContext. Jetty JMX extensions will remain disabled.");
-            }
+            return this.mbContainer;
+        } finally {
+            lock.unlock();
         }
-
-        return this.mbContainer;
     }
 
     /**
@@ -1022,6 +1062,46 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         this.sendServerVersion = sendServerVersion;
     }
 
+    public long getMaxFileSize() {
+        return maxFileSize;
+    }
+
+    @Metadata(description = "The maximum size allowed for uploaded files. -1 means no limit",
+              defaultValue = "-1", label = "consumer,advanced")
+    public void setMaxFileSize(long maxFileSize) {
+        this.maxFileSize = maxFileSize;
+    }
+
+    public long getMaxRequestSize() {
+        return maxRequestSize;
+    }
+
+    @Metadata(description = "The maximum size allowed for multipart/form-data requests. -1 means no limit",
+              defaultValue = "-1", label = "consumer,advanced")
+    public void setMaxRequestSize(long maxRequestSize) {
+        this.maxRequestSize = maxRequestSize;
+    }
+
+    public int getFileSizeThreshold() {
+        return fileSizeThreshold;
+    }
+
+    @Metadata(description = "The size threshold after which files will be written to disk for multipart/form-data requests. By default the files are not written to disk",
+              defaultValue = "0", label = "consumer,advanced")
+    public void setFileSizeThreshold(int fileSizeThreshold) {
+        this.fileSizeThreshold = fileSizeThreshold;
+    }
+
+    public String getFilesLocation() {
+        return filesLocation;
+    }
+
+    @Metadata(description = "The directory location where files will be store for multipart/form-data requests. By default the files are written in the system temporary folder",
+              label = "consumer,advanced")
+    public void setFilesLocation(String filesLocation) {
+        this.filesLocation = filesLocation;
+    }
+
     // Implementation methods
     // -------------------------------------------------------------------------
 
@@ -1137,7 +1217,8 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
             List<Handler> handlers, JettyHttpEndpoint endpoint)
             throws Exception {
         ServletContextHandler context
-                = new ServletContextHandler(server, "/", ServletContextHandler.NO_SECURITY | ServletContextHandler.NO_SESSIONS);
+                = new ServletContextHandler("/", false, false);
+        server.setHandler(context);
 
         addJettyHandlers(server, handlers);
 
@@ -1148,15 +1229,19 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         holder.setInitParameter(CamelServlet.ASYNC_PARAM, Boolean.toString(endpoint.isAsync()));
         context.addServlet(holder, "/*");
 
-        File file = File.createTempFile("camel", "");
-        boolean result = file.delete();
-        if (!result) {
-            LOG.error("failed to delete {}", file);
+        String location = endpoint.getFilesLocation();
+        if (location == null) {
+            File file = File.createTempFile("camel", "");
+            if (!FileUtil.deleteFile(file)) {
+                LOG.error("failed to delete {}", file);
+            }
+            location = file.getParentFile().getAbsolutePath();
         }
 
         //must register the MultipartConfig to make jetty server multipart aware
         holder.getRegistration()
-                .setMultipartConfig(new MultipartConfigElement(file.getParentFile().getAbsolutePath(), -1, -1, 0));
+                .setMultipartConfig(new MultipartConfigElement(
+                        location, endpoint.getMaxFileSize(), endpoint.getMaxRequestSize(), endpoint.getFileSizeThreshold()));
 
         // use rest enabled resolver in case we use rest
         camelServlet.setServletResolveConsumerStrategy(new HttpRestServletResolveConsumerStrategy());
@@ -1167,14 +1252,14 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
     protected void addJettyHandlers(Server server, List<Handler> handlers) {
         if (handlers != null && !handlers.isEmpty()) {
             for (Handler handler : handlers) {
-                if (handler instanceof HandlerWrapper) {
+                if (handler instanceof Handler.Wrapper) {
                     // avoid setting a handler more than once
                     if (!isHandlerInChain(server.getHandler(), handler)) {
-                        ((HandlerWrapper) handler).setHandler(server.getHandler());
+                        ((Handler.Wrapper) handler).setHandler(server.getHandler());
                         server.setHandler(handler);
                     }
                 } else {
-                    HandlerCollection handlerCollection = new HandlerCollection();
+                    ContextHandlerCollection handlerCollection = new ContextHandlerCollection();
                     handlerCollection.addHandler(server.getHandler());
                     handlerCollection.addHandler(handler);
                     server.setHandler(handlerCollection);
@@ -1188,9 +1273,9 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         if (handler.equals(current)) {
             //Found a match in the chain
             return true;
-        } else if (current instanceof HandlerWrapper) {
+        } else if (current instanceof Handler.Wrapper) {
             //Inspect the next handler in the chain
-            return isHandlerInChain(((HandlerWrapper) current).getHandler(), handler);
+            return isHandlerInChain(((Handler.Wrapper) current).getHandler(), handler);
         } else {
             //End of chain
             return false;
@@ -1242,34 +1327,25 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
         s.setHandler(collection);
         // setup the error handler if it set to Jetty component
         if (getErrorHandler() != null) {
-            s.addBean(getErrorHandler());
+            s.setErrorHandler(getErrorHandler());
         } else {
             //need an error handler that won't leak information about the exception back to the client.
             ErrorHandler eh = new ErrorHandler() {
                 @Override
-                public void handle(
-                        String target, Request baseRequest,
-                        HttpServletRequest request, HttpServletResponse response)
-                        throws IOException, ServletException {
+                public boolean handle(
+                        Request baseRequest, Response response, Callback callback)
+                        throws Exception {
                     String msg = HttpStatus.getMessage(response.getStatus());
-                    Object timeout = request.getAttribute(CamelContinuationServlet.TIMEOUT_ERROR);
+                    Object timeout = baseRequest.getAttribute(CamelContinuationServlet.TIMEOUT_ERROR);
                     if (Boolean.TRUE.equals(timeout)) {
-                        request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 504);
+                        baseRequest.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 504);
                         response.setStatus(504);
                     }
-                    request.setAttribute(RequestDispatcher.ERROR_MESSAGE, msg);
-                    super.handle(target, baseRequest, request, response);
-                }
-
-                @Override
-                protected void writeErrorPage(
-                        HttpServletRequest request, Writer writer, int code,
-                        String message, boolean showStacks)
-                        throws IOException {
-                    super.writeErrorPage(request, writer, code, message, false);
+                    baseRequest.setAttribute(RequestDispatcher.ERROR_MESSAGE, msg);
+                    return super.handle(baseRequest, response, callback);
                 }
             };
-            s.addBean(eh, false);
+            s.setErrorHandler(eh);
         }
         return s;
     }
@@ -1295,19 +1371,17 @@ public abstract class JettyHttpComponent extends HttpCommonComponent
     @Override
     protected void doStop() throws Exception {
         super.doStop();
-        if (CONNECTORS.size() > 0) {
-            for (Map.Entry<String, ConnectorRef> connectorEntry : CONNECTORS.entrySet()) {
-                ConnectorRef connectorRef = connectorEntry.getValue();
-                if (connectorRef != null && connectorRef.getRefCount() == 0) {
-                    connectorRef.server.removeConnector(connectorRef.connector);
-                    connectorRef.connector.stop();
-                    // Camel controls the lifecycle of these entities so remove the
-                    // registered MBeans when Camel is done with the managed objects.
-                    removeServerMBean(connectorRef.server);
-                    connectorRef.server.stop();
-                    //removeServerMBean(connectorRef.connector);
-                    CONNECTORS.remove(connectorEntry.getKey());
-                }
+        for (Map.Entry<String, ConnectorRef> connectorEntry : CONNECTORS.entrySet()) {
+            ConnectorRef connectorRef = connectorEntry.getValue();
+            if (connectorRef != null && connectorRef.getRefCount() == 0) {
+                connectorRef.server.removeConnector(connectorRef.connector);
+                connectorRef.connector.stop();
+                // Camel controls the lifecycle of these entities so remove the
+                // registered MBeans when Camel is done with the managed objects.
+                removeServerMBean(connectorRef.server);
+                connectorRef.server.stop();
+                //removeServerMBean(connectorRef.connector);
+                CONNECTORS.remove(connectorEntry.getKey());
             }
         }
         if (mbContainer != null) {

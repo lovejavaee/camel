@@ -20,7 +20,9 @@ import java.util.function.Predicate;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tags;
+import org.apache.camel.CamelContext;
 import org.apache.camel.Route;
+import org.apache.camel.component.micrometer.MicrometerUtils;
 
 import static org.apache.camel.component.micrometer.MicrometerConstants.*;
 
@@ -29,48 +31,87 @@ import static org.apache.camel.component.micrometer.MicrometerConstants.*;
  */
 public interface MicrometerRoutePolicyNamingStrategy {
 
-    Predicate<Meter.Id> ROUTE_POLICIES
-            = id -> MicrometerRoutePolicyService.class.getSimpleName().equals(id.getTag(SERVICE_NAME));
+    Predicate<Meter.Id> ROUTE_POLICIES = id -> KIND_ROUTE.equals(id.getTag(KIND));
 
+    /**
+     * Default naming strategy that uses micrometer naming convention.
+     */
     MicrometerRoutePolicyNamingStrategy DEFAULT = route -> DEFAULT_CAMEL_ROUTE_POLICY_METER_NAME;
+
+    /**
+     * Naming strategy that uses the classic/legacy naming style (camelCase)
+     */
+    MicrometerRoutePolicyNamingStrategy LEGACY = new MicrometerRoutePolicyNamingStrategy() {
+        @Override
+        public String getName(Route route) {
+            return formatName(DEFAULT_CAMEL_ROUTE_POLICY_METER_NAME);
+        }
+
+        @Override
+        public String formatName(String name) {
+            return MicrometerUtils.legacyName(name);
+        }
+    };
 
     String getName(Route route);
 
+    default String formatName(String name) {
+        return name;
+    }
+
     default String getExchangesSucceededName(Route route) {
-        return DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_SUCCEEDED_METER_NAME;
+        return formatName(DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_SUCCEEDED_METER_NAME);
     }
 
     default String getExchangesFailedName(Route route) {
-        return DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_FAILED_METER_NAME;
+        return formatName(DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_FAILED_METER_NAME);
     }
 
     default String getExchangesTotalName(Route route) {
-        return DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_TOTAL_METER_NAME;
+        return formatName(DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_TOTAL_METER_NAME);
     }
 
     default String getFailuresHandledName(Route route) {
-        return DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_FAILURES_HANDLED_METER_NAME;
+        return formatName(DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_FAILURES_HANDLED_METER_NAME);
     }
 
     default String getExternalRedeliveriesName(Route route) {
-        return DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_EXTERNAL_REDELIVERIES_METER_NAME;
+        return formatName(DEFAULT_CAMEL_ROUTE_POLICY_EXCHANGES_EXTERNAL_REDELIVERIES_METER_NAME);
     }
 
     default String getLongTaskName(Route route) {
-        return DEFAULT_CAMEL_ROUTE_POLICY_LONGMETER_NAME;
+        return formatName(DEFAULT_CAMEL_ROUTE_POLICY_LONGMETER_NAME);
     }
 
     default Tags getTags(Route route) {
         return Tags.of(
                 CAMEL_CONTEXT_TAG, route.getCamelContext().getName(),
-                SERVICE_NAME, MicrometerRoutePolicyService.class.getSimpleName(),
-                ROUTE_ID_TAG, route.getId());
+                KIND, KIND_ROUTE,
+                ROUTE_ID_TAG, route.getId(),
+                EVENT_TYPE_TAG, "route");
+    }
+
+    default Tags getTags(CamelContext camelContext) {
+        return Tags.of(
+                CAMEL_CONTEXT_TAG, camelContext.getName(),
+                KIND, KIND_ROUTE,
+                ROUTE_ID_TAG, "",
+                EVENT_TYPE_TAG, "context");
     }
 
     default Tags getExchangeStatusTags(Route route) {
         return Tags.of(
                 CAMEL_CONTEXT_TAG, route.getCamelContext().getName(),
-                SERVICE_NAME, MicrometerRoutePolicyService.class.getSimpleName(),
-                ROUTE_ID_TAG, route.getId());
+                KIND, KIND_ROUTE,
+                ROUTE_ID_TAG, route.getId(),
+                EVENT_TYPE_TAG, "route");
+    }
+
+    default Tags getExchangeStatusTags(CamelContext camelContext) {
+        return Tags.of(
+                CAMEL_CONTEXT_TAG, camelContext.getName(),
+                KIND, KIND_ROUTE,
+                ROUTE_ID_TAG, "",
+                EVENT_TYPE_TAG, "context");
     }
 }

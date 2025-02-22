@@ -18,6 +18,7 @@ package org.apache.camel.component.mllp.internal;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.camel.component.mllp.MllpAcknowledgementGenerationException;
 import org.apache.camel.component.mllp.MllpProtocolConstants;
@@ -28,6 +29,7 @@ import static org.apache.camel.component.mllp.MllpExceptionTestSupport.LOG_PHI_T
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -104,7 +106,7 @@ public class Hl7UtilTest {
 
     private final Hl7Util hl7util = new Hl7Util(5120, LOG_PHI_TRUE);
 
-    private Charset charset = Charset.forName("ISO_8859_1");
+    private final Charset charset = StandardCharsets.ISO_8859_1;
 
     @Test
     public void testGenerateInvalidPayloadExceptionMessage() {
@@ -205,6 +207,16 @@ public class Hl7UtilTest {
 
         assertThat(actual, startsWith(EXPECTED_ACKNOWLEDGEMENT_PAYLOAD_START));
         assertThat(actual, endsWith(EXPECTED_ACKNOWLEDGEMENT_PAYLOAD_END));
+    }
+
+    @Test
+    public void testGenerateAcknowledgementPayloadTimestamp() throws Exception {
+        MllpSocketBuffer mllpSocketBuffer = new MllpSocketBuffer(new MllpEndpointStub());
+        hl7util.generateAcknowledgementPayload(mllpSocketBuffer, TEST_MESSAGE.getBytes(), "AA");
+
+        String actualMsh7Field = mllpSocketBuffer.toString().split("\\|")[6];
+
+        assertThat(actualMsh7Field, matchesPattern("\\d{14}\\.\\d{3}[+-]\\d{4}"));
     }
 
     /**

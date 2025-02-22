@@ -28,6 +28,7 @@ import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -51,8 +52,8 @@ import org.apache.camel.util.ObjectHelper;
  * You can append query options to the URI in the following format, ?options=value&option2=value&...
  */
 @UriEndpoint(firstVersion = "2.6.0", scheme = "jmx", title = "JMX", syntax = "jmx:serverURL", consumerOnly = true,
-             category = { Category.MONITORING }, headersClass = JMXConstants.class)
-public class JMXEndpoint extends DefaultEndpoint {
+             remote = false, category = { Category.MONITORING }, headersClass = JMXConstants.class)
+public class JMXEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     // error messages as constants so they can be asserted on from unit tests
     protected static final String ERR_PLATFORM_SERVER = "Monitor type consumer only supported on platform server.";
@@ -252,6 +253,29 @@ public class JMXEndpoint extends DefaultEndpoint {
 
     public JMXEndpoint(String aEndpointUri, JMXComponent aComponent) {
         super(aEndpointUri, aComponent);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        return serverURL;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "rmi";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (user != null) {
+            return Map.of("username", user);
+        }
+        return null;
     }
 
     @Override

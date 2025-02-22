@@ -23,12 +23,7 @@ import org.junit.jupiter.api.Test;
 
 public class InOnlyTopicConsumerTest extends JmsTestSupport {
 
-    private static final String TEST_DESTINATION_NAME = "sjms:topic:in.only.topic.consumer.test";
-
-    @Override
-    protected boolean useJmx() {
-        return false;
-    }
+    private static final String TEST_DESTINATION_NAME = "sjms:topic:in.only.topic.consumer.test.InOnlyTopicConsumerTest";
 
     @Test
     public void testSynchronous() throws Exception {

@@ -20,16 +20,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.CamelContextAware;
 import org.apache.camel.Endpoint;
 import org.apache.camel.component.knative.spi.Knative;
 import org.apache.camel.component.knative.spi.KnativeConsumerFactory;
 import org.apache.camel.component.knative.spi.KnativeEnvironment;
 import org.apache.camel.component.knative.spi.KnativeProducerFactory;
+import org.apache.camel.component.knative.spi.KnativeResource;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
 import org.apache.camel.support.CamelContextHelper;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.camel.util.PropertiesHelper;
@@ -38,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Component(KnativeConstants.SCHEME)
-public class KnativeComponent extends DefaultComponent {
+public class KnativeComponent extends HealthCheckComponent {
     private static final Logger LOGGER = LoggerFactory.getLogger(KnativeComponent.class);
 
     @Metadata
@@ -54,9 +54,6 @@ public class KnativeComponent extends DefaultComponent {
     private KnativeProducerFactory producerFactory;
     @Metadata
     private KnativeConsumerFactory consumerFactory;
-
-    private boolean managedProducer;
-    private boolean managedConsumer;
 
     public KnativeComponent() {
         this(null);
@@ -135,6 +132,18 @@ public class KnativeComponent extends DefaultComponent {
         return producerFactory;
     }
 
+    public KnativeProducerFactory getOrCreateProducerFactory() throws Exception {
+        lock.lock();
+        try {
+            if (producerFactory == null) {
+                producerFactory = setUpProducerFactory();
+            }
+            return producerFactory;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /**
      * The protocol producer factory.
      */
@@ -144,6 +153,18 @@ public class KnativeComponent extends DefaultComponent {
 
     public KnativeConsumerFactory getConsumerFactory() {
         return consumerFactory;
+    }
+
+    public KnativeConsumerFactory getOrCreateConsumerFactory() throws Exception {
+        lock.lock();
+        try {
+            if (consumerFactory == null) {
+                consumerFactory = setUpConsumerFactory();
+            }
+            return consumerFactory;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -173,47 +194,22 @@ public class KnativeComponent extends DefaultComponent {
     @Override
     protected void doInit() throws Exception {
         super.doInit();
-
-        setUpProducerFactory();
-        setUpConsumerFactory();
-
-        if (this.producerFactory != null && managedProducer) {
-            ServiceHelper.initService(this.producerFactory);
-        }
-        if (this.consumerFactory != null && managedConsumer) {
-            ServiceHelper.initService(this.consumerFactory);
-        }
+        ServiceHelper.initService(consumerFactory, producerFactory);
     }
 
     @Override
     protected void doStart() throws Exception {
         super.doStart();
-
-        if (this.producerFactory != null && managedProducer) {
-            ServiceHelper.startService(this.producerFactory);
-        }
-        if (this.consumerFactory != null && managedConsumer) {
-            ServiceHelper.startService(this.consumerFactory);
-        }
-
-        if (this.producerFactory == null && this.consumerFactory == null) {
-            throw new IllegalStateException("No producer or consumer factory has been configured");
-        }
+        ServiceHelper.startService(consumerFactory, producerFactory);
     }
 
     @Override
     protected void doStop() throws Exception {
         super.doStop();
-
-        if (this.producerFactory != null && managedProducer) {
-            ServiceHelper.stopService(this.producerFactory);
-        }
-        if (this.consumerFactory != null && managedConsumer) {
-            ServiceHelper.stopService(this.consumerFactory);
-        }
+        ServiceHelper.stopService(consumerFactory, producerFactory);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
         if (ObjectHelper.isEmpty(remaining)) {
@@ -270,68 +266,64 @@ public class KnativeComponent extends DefaultComponent {
                 env = CamelContextHelper.findSingleByType(getCamelContext(), KnativeEnvironment.class);
             }
 
-            if (env == null) {
-                throw new IllegalStateException("Cannot load Knative configuration from file or env variable");
+            conf.setEnvironment(env);
+        }
+
+        if (conf.getSinkBinding() != null) {
+            if (conf.getEnvironment() == null) {
+                conf.setEnvironment(new KnativeEnvironment());
             }
 
-            conf.setEnvironment(env);
+            // if a SinkBinding is configured, then we must add it to the environment
+            KnativeResource sbRes = KnativeSupport.asResource(getCamelContext(), conf.getSinkBinding());
+            conf.getEnvironment().getResources().add(sbRes);
+        }
+
+        if (conf.getEnvironment() == null) {
+            throw new IllegalStateException("Cannot load Knative configuration from file or env variable");
         }
 
         return conf;
     }
 
-    private void setUpProducerFactory() throws Exception {
+    private KnativeProducerFactory setUpProducerFactory() throws Exception {
         if (producerFactory == null) {
             this.producerFactory = CamelContextHelper.lookup(getCamelContext(), protocol.name(), KnativeProducerFactory.class);
-
             if (this.producerFactory == null) {
                 this.producerFactory = getCamelContext()
                         .getCamelContextExtension()
                         .getBootstrapFactoryFinder(Knative.KNATIVE_TRANSPORT_RESOURCE_PATH)
                         .newInstance(protocol.name() + "-producer", KnativeProducerFactory.class)
-                        .orElse(null);
-
-                if (this.producerFactory == null) {
-                    return;
-                }
-
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Cannot create KnativeProducerFactory. Make sure camel-knative-http JAR is on classpath."));
                 if (configuration.getTransportOptions() != null) {
                     setProperties(producerFactory, new HashMap<>(configuration.getTransportOptions()));
                 }
-
-                this.managedProducer = true;
-
-                CamelContextAware.trySetCamelContext(this.producerFactory, getCamelContext());
+                getCamelContext().addService(this.producerFactory, true, true);
             }
-
-            LOGGER.info("Using Knative producer factory: {} for protocol: {}", producerFactory, protocol.name());
+            LOGGER.debug("Using Knative producer factory: {} for protocol: {}", producerFactory, protocol.name());
         }
+
+        return producerFactory;
     }
 
-    private void setUpConsumerFactory() throws Exception {
+    private KnativeConsumerFactory setUpConsumerFactory() throws Exception {
         if (consumerFactory == null) {
             this.consumerFactory = CamelContextHelper.lookup(getCamelContext(), protocol.name(), KnativeConsumerFactory.class);
-
             if (this.consumerFactory == null) {
                 this.consumerFactory = getCamelContext()
                         .getCamelContextExtension()
                         .getBootstrapFactoryFinder(Knative.KNATIVE_TRANSPORT_RESOURCE_PATH)
                         .newInstance(protocol.name() + "-consumer", KnativeConsumerFactory.class)
-                        .orElse(null);
-
-                if (this.consumerFactory == null) {
-                    return;
-                }
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Cannot create KnativeConsumerFactory. Make sure camel-knative-http JAR is on classpath."));
                 if (configuration.getTransportOptions() != null) {
                     setProperties(consumerFactory, new HashMap<>(configuration.getTransportOptions()));
                 }
-
-                this.managedConsumer = true;
-
-                CamelContextAware.trySetCamelContext(this.consumerFactory, getCamelContext());
+                getCamelContext().addService(this.consumerFactory, true, true);
             }
-
-            LOGGER.info("Using Knative consumer factory: {} for protocol: {}", consumerFactory, protocol.name());
+            LOGGER.debug("Using Knative consumer factory: {} for protocol: {}", consumerFactory, protocol.name());
         }
+        return consumerFactory;
     }
 }

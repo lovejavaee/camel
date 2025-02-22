@@ -18,6 +18,7 @@ package org.apache.camel.component.file;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.util.UUID;
 
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
@@ -33,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit test for the FileRenameStrategy using preMove options
  */
 public class FileConsumerBeginRenameStrategyTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME_1 = "paris" + UUID.randomUUID() + ".txt";
+    private static final String TEST_FILE_NAME_2 = "london" + UUID.randomUUID() + ".txt";
 
     @Test
     public void testRenameSuccess() throws Exception {
@@ -40,7 +43,7 @@ public class FileConsumerBeginRenameStrategyTest extends ContextTestSupport {
         mock.expectedMessageCount(1);
         mock.expectedBodiesReceived("Hello Paris");
 
-        template.sendBodyAndHeader(fileUri("reports"), "Hello Paris", Exchange.FILE_NAME, "paris.txt");
+        template.sendBodyAndHeader(fileUri("reports"), "Hello Paris", Exchange.FILE_NAME, TEST_FILE_NAME_1);
 
         mock.assertIsSatisfied();
     }
@@ -49,30 +52,28 @@ public class FileConsumerBeginRenameStrategyTest extends ContextTestSupport {
     public void testRenameFileExists() throws Exception {
         // create a file in inprogress to let there be a duplicate file
         testDirectory("inprogress", true);
-        FileWriter fw = new FileWriter(testFile("inprogress/london.txt").toFile());
-        try {
+
+        try (FileWriter fw = new FileWriter(testFile("inprogress/" + TEST_FILE_NAME_2).toFile())) {
             fw.write("I was there once in London");
             fw.flush();
-        } finally {
-            fw.close();
         }
 
         MockEndpoint mock = getMockEndpoint("mock:report");
         mock.expectedBodiesReceived("Hello London");
 
-        template.sendBodyAndHeader(fileUri("reports"), "Hello London", Exchange.FILE_NAME, "london.txt");
+        template.sendBodyAndHeader(fileUri("reports"), "Hello London", Exchange.FILE_NAME, TEST_FILE_NAME_2);
 
         mock.assertIsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("reports?preMove=../inprogress/${file:name}&initialDelay=0&delay=10"))
                         .process(new Processor() {
                             @SuppressWarnings("unchecked")
-                            public void process(Exchange exchange) throws Exception {
+                            public void process(Exchange exchange) {
                                 GenericFile<File> file
                                         = (GenericFile<File>) exchange.getProperty(FileComponent.FILE_EXCHANGE_FILE);
                                 assertNotNull(file);

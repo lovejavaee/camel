@@ -35,7 +35,7 @@ import org.apache.camel.support.DefaultEndpoint;
  * Perform caching operations using Caffeine Cache with an attached CacheLoader.
  */
 @UriEndpoint(firstVersion = "2.20.0", scheme = "caffeine-loadcache", title = "Caffeine LoadCache",
-             syntax = "caffeine-loadcache:cacheName", category = { Category.CACHE, Category.DATAGRID, Category.CLUSTERING },
+             remote = false, syntax = "caffeine-loadcache:cacheName", category = { Category.CACHE, Category.CLUSTERING },
              producerOnly = true, headersClass = CaffeineConstants.class)
 public class CaffeineLoadCacheEndpoint extends DefaultEndpoint {
     @UriPath(description = "the cache name")
@@ -46,10 +46,15 @@ public class CaffeineLoadCacheEndpoint extends DefaultEndpoint {
 
     private volatile LoadingCache<?, ?> cache;
 
-    CaffeineLoadCacheEndpoint(String uri, Component component, String cacheName, CaffeineConfiguration configuration) {
+    public CaffeineLoadCacheEndpoint(String uri, Component component, String cacheName, CaffeineConfiguration configuration) {
         super(uri, component);
         this.cacheName = cacheName;
         this.configuration = configuration;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

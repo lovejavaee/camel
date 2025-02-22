@@ -16,7 +16,8 @@
  */
 package org.apache.camel.component.spring.security;
 
-import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.security.auth.Subject;
 
@@ -35,12 +36,12 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
-import org.springframework.security.access.AccessDecisionManager;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.access.ConfigAttribute;
-import org.springframework.security.access.event.AuthorizationFailureEvent;
-import org.springframework.security.access.event.AuthorizedEvent;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.event.AuthorizationDeniedEvent;
+import org.springframework.security.authorization.event.AuthorizationGrantedEvent;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.Assert;
@@ -48,13 +49,13 @@ import org.springframework.util.Assert;
 public class SpringSecurityAuthorizationPolicy extends IdentifiedType
         implements AuthorizationPolicy, InitializingBean, ApplicationEventPublisherAware {
     private static final Logger LOG = LoggerFactory.getLogger(SpringSecurityAuthorizationPolicy.class);
-    private AccessDecisionManager accessDecisionManager;
+    private AuthorizationManager<Exchange> authorizationManager;
     private AuthenticationManager authenticationManager;
-    private AuthenticationAdapter authenticationAdapter;
+    private volatile AuthenticationAdapter authenticationAdapter;
     private ApplicationEventPublisher eventPublisher;
-    private SpringSecurityAccessPolicy accessPolicy;
     private boolean alwaysReauthenticate;
     private boolean useThreadSecurityContext = true;
+    private final Lock lock = new ReentrantLock();
 
     @Override
     public void beforeWrap(Route route, NamedNode definition) {
@@ -67,28 +68,27 @@ public class SpringSecurityAuthorizationPolicy extends IdentifiedType
     }
 
     protected void beforeProcess(Exchange exchange) throws Exception {
-        List<ConfigAttribute> attributes = accessPolicy.getConfigAttributes();
-
         try {
             Authentication authToken = getAuthentication(exchange.getIn());
             if (authToken == null) {
                 throw new CamelAuthorizationException("Cannot find the Authentication instance.", exchange);
             }
 
-            Authentication authenticated = authenticateIfRequired(authToken);
+            Authentication authentication = authenticateIfRequired(authToken);
+            AuthorizationDecision decision = this.authorizationManager.check(() -> authentication, exchange);
 
             // Attempt authorization with exchange
             try {
-                this.accessDecisionManager.decide(authenticated, exchange, attributes);
+                this.authorizationManager.verify(() -> authentication, exchange);
             } catch (AccessDeniedException accessDeniedException) {
                 exchange.getIn().setHeader(Exchange.AUTHENTICATION_FAILURE_POLICY_ID, getId());
-                AuthorizationFailureEvent event = new AuthorizationFailureEvent(
-                        exchange, attributes, authenticated,
-                        accessDeniedException);
+                AuthorizationDeniedEvent<Exchange> event = new AuthorizationDeniedEvent<>(
+                        () -> authentication, exchange, decision);
                 publishEvent(event);
                 throw accessDeniedException;
             }
-            publishEvent(new AuthorizedEvent(exchange, attributes, authenticated));
+
+            publishEvent(new AuthorizationGrantedEvent<Exchange>(() -> authentication, exchange, decision));
 
         } catch (RuntimeException exception) {
             exchange.getIn().setHeader(Exchange.AUTHENTICATION_FAILURE_POLICY_ID, getId());
@@ -128,8 +128,7 @@ public class SpringSecurityAuthorizationPolicy extends IdentifiedType
     @Override
     public void afterPropertiesSet() throws Exception {
         Assert.notNull(this.authenticationManager, "An AuthenticationManager is required");
-        Assert.notNull(this.accessDecisionManager, "An AccessDecisionManager is required");
-        Assert.notNull(this.accessPolicy, "The accessPolicy is required");
+        Assert.notNull(this.authorizationManager, "An AuthorizationManager is required");
     }
 
     private Authentication authenticateIfRequired(Authentication authentication) {
@@ -150,24 +149,28 @@ public class SpringSecurityAuthorizationPolicy extends IdentifiedType
     }
 
     public AuthenticationAdapter getAuthenticationAdapter() {
-        if (authenticationAdapter == null) {
-            synchronized (this) {
-                if (authenticationAdapter != null) {
-                    return authenticationAdapter;
-                } else {
-                    authenticationAdapter = new DefaultAuthenticationAdapter();
+        AuthenticationAdapter adapter = authenticationAdapter;
+        if (adapter == null) {
+            lock.lock();
+            try {
+                adapter = authenticationAdapter;
+                if (adapter == null) {
+                    adapter = new DefaultAuthenticationAdapter();
+                    authenticationAdapter = adapter;
                 }
+            } finally {
+                lock.unlock();
             }
         }
-        return authenticationAdapter;
+        return adapter;
     }
 
     public void setAuthenticationAdapter(AuthenticationAdapter adapter) {
         this.authenticationAdapter = adapter;
     }
 
-    public AccessDecisionManager getAccessDecisionManager() {
-        return accessDecisionManager;
+    public AuthorizationManager<Exchange> getAuthorizationManager() {
+        return authorizationManager;
     }
 
     public AuthenticationManager getAuthenticationManager() {
@@ -177,14 +180,6 @@ public class SpringSecurityAuthorizationPolicy extends IdentifiedType
     @Override
     public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
         this.eventPublisher = applicationEventPublisher;
-    }
-
-    public void setSpringSecurityAccessPolicy(SpringSecurityAccessPolicy policy) {
-        this.accessPolicy = policy;
-    }
-
-    public SpringSecurityAccessPolicy getSpringSecurityAccessPolicy() {
-        return accessPolicy;
     }
 
     public boolean isAlwaysReauthenticate() {
@@ -207,7 +202,7 @@ public class SpringSecurityAuthorizationPolicy extends IdentifiedType
         this.authenticationManager = newManager;
     }
 
-    public void setAccessDecisionManager(AccessDecisionManager accessDecisionManager) {
-        this.accessDecisionManager = accessDecisionManager;
+    public void setAuthorizationManager(AuthorizationManager<Exchange> authorizationManager) {
+        this.authorizationManager = authorizationManager;
     }
 }

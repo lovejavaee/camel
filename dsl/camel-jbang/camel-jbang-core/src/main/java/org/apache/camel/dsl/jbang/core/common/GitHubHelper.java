@@ -36,7 +36,6 @@ public final class GitHubHelper {
     public static String asGithubSingleUrl(String url) {
         // strip https://github.com/
         url = url.substring(19);
-        // https://github.com/apache/camel-k-examples/blob/main/generic-examples/languages/routes.kts
         // https://raw.githubusercontent.com/apache/camel-kamelets-examples/main/jbang/hello-java/Hey.java
         // https://github.com/apache/camel-kamelets-examples/blob/main/jbang/hello-java/Hey.java
         url = url.replaceFirst("/", ":");
@@ -62,11 +61,6 @@ public final class GitHubHelper {
             throws Exception {
 
         // this is a directory, so we need to query github which files are there and filter them
-
-        // URL: https://api.github.com/repos/apache/camel-k/contents/examples/kamelets/kameletbindings
-        // URL: https://api.github.com/repos/apache/camel-k/contents/examples/kamelets/kameletbindings?ref=v1.7.0
-        // https://github.com/apache/camel-k/tree/main/examples/kamelets/kameletbindings
-        // https://github.com/apache/camel-k/tree/v1.7.0/examples/kamelets/kameletbindings
 
         // strip https://github.com/
         url = url.substring(19);
@@ -96,7 +90,6 @@ public final class GitHubHelper {
         path = sj.toString();
 
         if ("tree".equals(action)) {
-            // https://api.github.com/repos/apache/camel-k/contents/examples/kamelets/kameletbindings?ref=v1.7.0
             url = "https://api.github.com/repos/" + org + "/" + repo + "/contents/" + path;
             if (!"main".equals(branch) && !"master".equals(branch)) {
                 url = url + "?ref=" + branch;
@@ -133,9 +126,8 @@ public final class GitHubHelper {
                         properties.add(u);
                     } else if (routes != null) {
                         if ("java".equalsIgnoreCase(ext) || "xml".equalsIgnoreCase(ext)
-                                || "yaml".equalsIgnoreCase(ext)
-                                || "groovy".equalsIgnoreCase(ext) || "js".equalsIgnoreCase(ext) || "jsh".equalsIgnoreCase(ext)
-                                || "kts".equalsIgnoreCase(ext)) {
+                                || "yaml".equalsIgnoreCase(ext) || "camel.yaml".equalsIgnoreCase(ext)
+                                || "groovy".equalsIgnoreCase(ext) || "js".equalsIgnoreCase(ext)) {
                             String htmlUrl = c.get("html_url").asText();
                             String u = asGithubSingleUrl(htmlUrl);
                             routes.add(u);

@@ -23,9 +23,12 @@ import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import jakarta.servlet.ServletException;
 
 import io.undertow.Handlers;
 import io.undertow.Undertow;
@@ -36,21 +39,18 @@ import io.undertow.servlet.api.DeploymentManager;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.apache.camel.util.IOHelper;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.camel.util.ObjectHelper;
 
 public class ServletCamelRouterTestSupport extends CamelTestSupport {
 
     public static final String CONTEXT = "/mycontext";
     protected String contextUrl;
-    protected boolean startCamelContext = true;
     protected int port;
     protected DeploymentManager manager;
     protected Undertow server;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void setupResources() throws Exception {
         port = AvailablePortFinder.getNextAvailable();
         DeploymentInfo servletBuilder = getDeploymentInfo();
         manager = Servlets.newContainer().addDeployment(servletBuilder);
@@ -61,17 +61,12 @@ public class ServletCamelRouterTestSupport extends CamelTestSupport {
                 .setHandler(path).build();
         server.start();
         contextUrl = "http://localhost:" + port + CONTEXT;
-        if (startCamelContext) {
-            super.setUp();
-        }
+
+        testConfiguration().withAutoStartContext(true);
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        if (startCamelContext) {
-            super.tearDown();
-        }
+    public void cleanupResources() throws ServletException {
         server.stop();
         manager.stop();
         manager.undeploy();
@@ -101,9 +96,23 @@ public class ServletCamelRouterTestSupport extends CamelTestSupport {
         con.setRequestMethod(req.getMethod());
         if (req instanceof PostMethodWebRequest) {
             con.setDoOutput(true);
+            String contentType = con.getRequestProperty("Content-Type");
+            boolean isMultipart = ObjectHelper.isNotEmpty(contentType) && contentType.startsWith("multipart/form-data");
+            if (isMultipart) {
+                StringBuilder builder = new StringBuilder();
+                builder.append("------Boundary\r\n");
+                builder.append("Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n");
+                builder.append("Content-Type: application/octet-stream\r\n\r\n");
+                con.getOutputStream().write(builder.toString().getBytes(StandardCharsets.UTF_8));
+            }
+
             InputStream is = ((PostMethodWebRequest) req).content;
             if (is != null) {
                 IOHelper.copy(is, con.getOutputStream());
+            }
+
+            if (isMultipart) {
+                con.getOutputStream().write("\r\n------Boundary--\r\n".getBytes(StandardCharsets.UTF_8));
             }
         }
         int code = con.getResponseCode();

@@ -21,8 +21,6 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -40,7 +38,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -89,7 +86,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     private final ConcurrentMap<String, ChildData<T>> currentData = new ConcurrentHashMap<>();
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicBoolean connected = new AtomicBoolean();
-    private final SequenceComparator sequenceComparator = new SequenceComparator();
+    private final SequenceComparator<T> sequenceComparator = new SequenceComparator<T>();
     private final String uuid = UUID.randomUUID().toString();
 
     private volatile String id;
@@ -100,37 +97,27 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     private final AtomicBoolean unstable = new AtomicBoolean();
     private volatile T state;
 
-    private final Watcher childrenWatcher = new Watcher() {
-        @Override
-        public void process(WatchedEvent event) {
-            if (event.getType() != Event.EventType.None) {
-                // only interested in real change events, eg no refresh on Keeper.Disconnect
-                offerOperation(new RefreshOperation(ZooKeeperGroup.this, RefreshMode.STANDARD));
-            }
+    private final Watcher childrenWatcher = (WatchedEvent event) -> {
+        if (event.getType() != Watcher.Event.EventType.None) {
+            // only interested in real change events, eg no refresh on Keeper.Disconnect
+            offerOperation(new RefreshOperation(ZooKeeperGroup.this, RefreshMode.STANDARD));
         }
     };
 
-    private final Watcher dataWatcher = new Watcher() {
-        @Override
-        public void process(WatchedEvent event) {
-            try {
-                if (event.getType() == Event.EventType.NodeDeleted) {
-                    remove(event.getPath());
-                } else if (event.getType() == Event.EventType.NodeDataChanged) {
-                    offerOperation(new GetDataOperation(ZooKeeperGroup.this, event.getPath()));
-                }
-            } catch (Exception e) {
-                handleException(e);
+    private final Watcher dataWatcher = (WatchedEvent event) -> {
+        try {
+            if (event.getType() == Watcher.Event.EventType.NodeDeleted) {
+                remove(event.getPath());
+            } else if (event.getType() == Watcher.Event.EventType.NodeDataChanged) {
+                offerOperation(new GetDataOperation(ZooKeeperGroup.this, event.getPath()));
             }
+        } catch (Exception e) {
+            handleException(e);
         }
     };
 
-    private final ConnectionStateListener connectionStateListener = new ConnectionStateListener() {
-        @Override
-        public void stateChanged(CuratorFramework client, ConnectionState newState) {
-            handleStateChange(newState);
-        }
-    };
+    private final ConnectionStateListener connectionStateListener
+            = (CuratorFramework client, ConnectionState newState) -> handleStateChange(newState);
 
     /**
      * @param client the client
@@ -177,12 +164,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
             }
 
             client.getConnectionStateListenable().addListener(connectionStateListener);
-            executorService.execute(new Runnable() {
-                @Override
-                public void run() {
-                    mainLoop();
-                }
-            });
+            executorService.execute(this::mainLoop);
         }
     }
 
@@ -200,6 +182,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
             try {
                 executorService.awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 throw (IOException) new InterruptedIOException().initCause(e);
             }
             try {
@@ -329,7 +312,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     @Override
     public Map<String, T> members() {
         List<ChildData<T>> children = getActiveChildren();
-        Collections.sort(children, sequenceComparator);
+        children.sort(sequenceComparator);
         Map<String, T> members = new LinkedHashMap<>();
         for (ChildData<T> child : children) {
             members.put(child.getPath(), child.getNode());
@@ -340,14 +323,14 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     @Override
     public boolean isMaster() {
         List<ChildData<T>> children = getActiveChildren();
-        Collections.sort(children, sequenceComparator);
+        children.sort(sequenceComparator);
         return !children.isEmpty() && children.get(0).getPath().equals(id);
     }
 
     @Override
     public T master() {
         List<ChildData<T>> children = getActiveChildren();
-        Collections.sort(children, sequenceComparator);
+        children.sort(sequenceComparator);
         if (children.isEmpty()) {
             return null;
         }
@@ -357,7 +340,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     @Override
     public List<T> slaves() {
         List<ChildData<T>> children = getActiveChildren();
-        Collections.sort(children, sequenceComparator);
+        children.sort(sequenceComparator);
         List<T> slaves = new ArrayList<>();
         for (int i = 1; i < children.size(); i++) {
             slaves.add(children.get(i).getNode());
@@ -406,14 +389,14 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
      *
      * @return list of children and data
      */
-    public List<ChildData> getCurrentData() {
+    public List<ChildData<T>> getCurrentData() {
         return new ArrayList<>(currentData.values());
     }
 
     /**
      * Used for testing purpose
      */
-    void putCurrentData(String key, ChildData value) {
+    void putCurrentData(String key, ChildData<T> value) {
         currentData.put(key, value);
     }
 
@@ -424,7 +407,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
      * @param  fullPath full path to the node to check
      * @return          data or null
      */
-    public ChildData getCurrentData(String fullPath) {
+    public ChildData<T> getCurrentData(String fullPath) {
         return currentData.get(fullPath);
     }
 
@@ -470,12 +453,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
         try {
             ensurePath.ensure(client.getZookeeperClient());
             List<String> children = client.getChildren().usingWatcher(childrenWatcher).forPath(path);
-            Collections.sort(children, new Comparator<String>() {
-                @Override
-                public int compare(String left, String right) {
-                    return left.compareTo(right);
-                }
-            });
+            children.sort((String left, String right) -> left.compareTo(right));
             processChildren(children, mode);
         } catch (Exception e) {
             handleException(e);
@@ -505,14 +483,14 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
      */
     protected void handleException(Throwable e) {
         if (e instanceof IllegalStateException && "Client is not started".equals(e.getMessage())) {
-            LOG.debug("", e);
+            LOG.debug("{}", e.getMessage(), e);
         } else {
-            LOG.error("", e);
+            LOG.error("{}", e.getMessage(), e);
         }
     }
 
     protected void remove(String fullPath) {
-        ChildData data = currentData.remove(fullPath);
+        ChildData<T> data = currentData.remove(fullPath);
         if (data != null) {
             offerOperation(new EventOperation(this, GroupListener.GroupEvent.CHANGED));
         }
@@ -544,7 +522,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     }
 
     private void processChildren(List<String> children, RefreshMode mode) throws Exception {
-        List<String> fullPaths = children.stream().map(c -> ZKPaths.makePath(path, c)).collect(Collectors.toList());
+        List<String> fullPaths = children.stream().map(c -> ZKPaths.makePath(path, c)).toList();
 
         Set<String> removedNodes = new HashSet<>(currentData.keySet());
         fullPaths.forEach(removedNodes::remove);
@@ -590,8 +568,7 @@ public class ZooKeeperGroup<T extends NodeState> implements Group<T> {
     }
 
     private byte[] encode(T state) {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             mapper.writeValue(baos, state);
             return baos.toByteArray();
         } catch (IOException e) {

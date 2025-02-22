@@ -33,21 +33,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class VetoCamelContextStartTest extends ContextTestSupport {
 
-    private LifecycleStrategy veto = new MyVeto();
+    private final LifecycleStrategy veto = new MyVeto();
 
     @Test
-    public void testVetoCamelContextStart() throws Exception {
-        // context is veto'ed but appears as started
+    public void testVetoCamelContextStart() {
+        // context is veto'ed and appears as stopped
         assertFalse(context.getStatus().isStarted());
         assertTrue(context.getStatus().isStopped());
         assertEquals(0, context.getRoutes().size());
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("mock:result");
             }
         };

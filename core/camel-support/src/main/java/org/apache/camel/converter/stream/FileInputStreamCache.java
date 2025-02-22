@@ -19,7 +19,6 @@ package org.apache.camel.converter.stream;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -29,6 +28,8 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
@@ -48,9 +49,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A {@link StreamCache} for {@link File}s
+ * A {@link StreamCache} for {@link File}s.
+ * <p/>
+ * <b>Important:</b> All the classes from the Camel release that implements {@link StreamCache} is NOT intended for end
+ * users to create as instances, but they are part of Camels
+ * <a href="https://camel.apache.org/manual/stream-caching.html">stream-caching</a> functionality.
  */
 public final class FileInputStreamCache extends InputStream implements StreamCache {
+    private final Lock lock = new ReentrantLock();
     private InputStream stream;
     private final long length;
     private final FileInputStreamCache.TempFileManager tempFileManager;
@@ -58,11 +64,11 @@ public final class FileInputStreamCache extends InputStream implements StreamCac
     private final CipherPair ciphers;
 
     /** Only for testing purposes. */
-    public FileInputStreamCache(File file) throws FileNotFoundException {
+    public FileInputStreamCache(File file) {
         this(new TempFileManager(file, true));
     }
 
-    FileInputStreamCache(TempFileManager closer) throws FileNotFoundException {
+    FileInputStreamCache(TempFileManager closer) {
         this.file = closer.getTempFile();
         this.stream = null;
         this.ciphers = closer.getCiphers();
@@ -79,14 +85,19 @@ public final class FileInputStreamCache extends InputStream implements StreamCac
     }
 
     @Override
-    public synchronized void reset() {
-        // reset by closing and creating a new stream based on the file
-        close();
-        // reset by creating a new stream based on the file
-        stream = null;
+    public void reset() {
+        lock.lock();
+        try {
+            // reset by closing and creating a new stream based on the file
+            close();
+            // reset by creating a new stream based on the file
+            stream = null;
 
-        if (!file.exists()) {
-            throw new RuntimeCamelException("Cannot reset stream from file " + file);
+            if (!file.exists()) {
+                throw new RuntimeCamelException("Cannot reset stream from file " + file);
+            }
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -165,7 +176,7 @@ public final class FileInputStreamCache extends InputStream implements StreamCac
         return getInputStream().transferTo(out);
     }
 
-    protected InputStream getInputStream() throws IOException {
+    private InputStream getInputStream() throws IOException {
         if (stream == null) {
             stream = createInputStream(file);
         }
@@ -205,7 +216,8 @@ public final class FileInputStreamCache extends InputStream implements StreamCac
          * Indicator whether the file input stream caches are closed on completion of the exchanges.
          */
         private final boolean closedOnCompletion;
-        private AtomicInteger exchangeCounter = new AtomicInteger();
+        private final Lock lock = new ReentrantLock();
+        private final AtomicInteger exchangeCounter = new AtomicInteger();
         private File tempFile;
         private OutputStream outputStream; // file output stream
         private CipherPair ciphers;
@@ -228,11 +240,16 @@ public final class FileInputStreamCache extends InputStream implements StreamCac
          * <p>
          * Must be synchronized, because can be accessed by several threads.
          */
-        synchronized void add(FileInputStreamCache fileInputStreamCache) {
-            if (fileInputStreamCaches == null) {
-                fileInputStreamCaches = new ArrayList<>(3);
+        void add(FileInputStreamCache fileInputStreamCache) {
+            lock.lock();
+            try {
+                if (fileInputStreamCaches == null) {
+                    fileInputStreamCaches = new ArrayList<>(3);
+                }
+                fileInputStreamCaches.add(fileInputStreamCache);
+            } finally {
+                lock.unlock();
             }
-            fileInputStreamCaches.add(fileInputStreamCache);
         }
 
         void addExchange(Exchange exchange) {
@@ -332,12 +349,8 @@ public final class FileInputStreamCache extends InputStream implements StreamCac
             return out;
         }
 
-        FileInputStreamCache newStreamCache() throws IOException {
-            try {
-                return new FileInputStreamCache(this);
-            } catch (FileNotFoundException e) {
-                throw new IOException("Cached file " + tempFile + " not found", e);
-            }
+        FileInputStreamCache newStreamCache() {
+            return new FileInputStreamCache(this);
         }
 
         void closeFileInputStreams() {

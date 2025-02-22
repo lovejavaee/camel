@@ -16,8 +16,6 @@
  */
 package org.apache.camel.support.processor;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Future;
@@ -25,10 +23,13 @@ import java.util.concurrent.Future;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Message;
+import org.apache.camel.Route;
 import org.apache.camel.spi.Configurer;
 import org.apache.camel.spi.ExchangeFormatter;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
+import org.apache.camel.support.ExceptionHelper;
+import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.MessageHelper;
 import org.apache.camel.util.ObjectHelper;
 
@@ -48,6 +49,10 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
         Fixed
     }
 
+    @UriParam(label = "formatting", description = "Show route ID.")
+    private boolean showRouteId;
+    @UriParam(label = "formatting", description = "Show route Group.")
+    private boolean showRouteGroup;
     @UriParam(label = "formatting", description = "Show the unique exchange ID.")
     private boolean showExchangeId;
     @UriParam(label = "formatting",
@@ -57,6 +62,8 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
     private boolean showProperties;
     @UriParam(label = "formatting", description = "Show all the exchange properties (both internal and custom).")
     private boolean showAllProperties;
+    @UriParam(label = "formatting", description = "Show the variables.")
+    private boolean showVariables;
     @UriParam(label = "formatting", description = "Show the message headers.")
     private boolean showHeaders;
     @UriParam(label = "formatting", defaultValue = "true",
@@ -122,17 +129,38 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
     public String format(Exchange exchange) {
         Message in = exchange.getIn();
 
-        StringBuilder sb = new StringBuilder();
-
         if (plain) {
             return getBodyAsString(in);
         }
 
+        StringBuilder sb = new StringBuilder(512);
         if (showAll || showExchangeId) {
             if (multiline) {
                 sb.append(SEPARATOR);
             }
             style(sb, "Id").append(exchange.getExchangeId());
+        }
+        if (showAll || showRouteGroup) {
+            if (multiline) {
+                sb.append(SEPARATOR);
+            }
+            Route route = ExchangeHelper.getRoute(exchange);
+            String group = "";
+            if (route != null) {
+                group = route.getGroup();
+            }
+            style(sb, "RouteGroup").append(group);
+        }
+        if (showAll || showRouteId) {
+            if (multiline) {
+                sb.append(SEPARATOR);
+            }
+            Route route = ExchangeHelper.getRoute(exchange);
+            String id = "";
+            if (route != null) {
+                id = route.getRouteId();
+            }
+            style(sb, "RouteId").append(id);
         }
         if (showAll || showExchangePattern) {
             if (multiline) {
@@ -140,7 +168,6 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
             }
             style(sb, "ExchangePattern").append(exchange.getPattern());
         }
-
         if (showAll || showAllProperties) {
             if (multiline) {
                 sb.append(SEPARATOR);
@@ -151,6 +178,14 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
                 sb.append(SEPARATOR);
             }
             style(sb, "Properties").append(sortMap(filterHeaderAndProperties(exchange.getProperties())));
+        }
+        if (showAll || showVariables) {
+            if (multiline) {
+                sb.append(SEPARATOR);
+            }
+            if (exchange.hasVariables()) {
+                style(sb, "Variables").append(sortMap(filterHeaderAndProperties(exchange.getVariables())));
+            }
         }
         if (showAll || showHeaders) {
             if (multiline) {
@@ -198,16 +233,15 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
                     style(sb, "ExceptionMessage").append(exception.getMessage());
                 }
                 if (showAll || showStackTrace) {
-                    StringWriter sw = new StringWriter();
-                    exception.printStackTrace(new PrintWriter(sw));
-                    style(sb, "StackTrace").append(sw);
+                    final String stackTrace = ExceptionHelper.stackTraceToString(exception);
+                    style(sb, "StackTrace").append(stackTrace);
                 }
             }
         }
 
         // only cut if we hit max-chars limit (or are using multiline
         if (multiline || maxChars > 0 && sb.length() > maxChars) {
-            StringBuilder answer = new StringBuilder();
+            StringBuilder answer = new StringBuilder(sb.length());
             for (String s : sb.toString().split(SEPARATOR)) {
                 if (s != null) {
                     if (s.length() > maxChars) {
@@ -226,20 +260,16 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
             sb = answer;
         }
 
-        if (multiline) {
-            sb.insert(0, "Exchange[");
-            sb.append("]");
-            return sb.toString();
-        } else {
+        if (!multiline) {
             // get rid of the leading comma space if needed
             if (sb.length() > 1 && sb.charAt(0) == ',' && sb.charAt(1) == ' ') {
                 sb.replace(0, 2, "");
             }
-            sb.insert(0, "Exchange[");
-            sb.append("]");
 
-            return sb.toString();
         }
+        sb.insert(0, "Exchange[");
+        sb.append("]");
+        return sb.toString();
     }
 
     /**
@@ -247,6 +277,28 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
      */
     protected Map<String, Object> filterHeaderAndProperties(Map<String, Object> map) {
         return map;
+    }
+
+    public boolean isShowRouteId() {
+        return showRouteId;
+    }
+
+    /**
+     * Shows the route id (if exchange is being processed in routes)
+     */
+    public void setShowRouteId(boolean showRouteId) {
+        this.showRouteId = showRouteId;
+    }
+
+    /**
+     * Shows the route group (if exchange is being processed in routes)
+     */
+    public boolean isShowRouteGroup() {
+        return showRouteGroup;
+    }
+
+    public void setShowRouteGroup(boolean showRouteGroup) {
+        this.showRouteGroup = showRouteGroup;
     }
 
     public boolean isShowExchangeId() {
@@ -280,6 +332,17 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
      */
     public void setShowAllProperties(boolean showAllProperties) {
         this.showAllProperties = showAllProperties;
+    }
+
+    public boolean isShowVariables() {
+        return showVariables;
+    }
+
+    /**
+     * Show the variables.
+     */
+    public void setShowVariables(boolean showVariables) {
+        this.showVariables = showVariables;
     }
 
     public boolean isShowHeaders() {
@@ -510,7 +573,9 @@ public class DefaultExchangeFormatter implements ExchangeFormatter {
 
     private static Map<String, Object> sortMap(Map<String, Object> map) {
         Map<String, Object> answer = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        answer.putAll(map);
+        if (map != null && !map.isEmpty()) {
+            answer.putAll(map);
+        }
         return answer;
     }
 

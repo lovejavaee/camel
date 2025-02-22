@@ -22,7 +22,6 @@ import jakarta.xml.ws.BindingProvider;
 
 import javax.xml.namespace.QName;
 
-import org.apache.camel.CamelContext;
 import org.apache.camel.component.cxf.common.CXFTestSupport;
 import org.apache.camel.non_wrapper.Person;
 import org.apache.camel.non_wrapper.PersonService;
@@ -31,25 +30,17 @@ import org.apache.camel.non_wrapper.types.GetPerson;
 import org.apache.camel.non_wrapper.types.GetPersonResponse;
 import org.apache.camel.test.spring.junit5.CamelSpringTestSupport;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfNonWrapperTest extends CamelSpringTestSupport {
     int port1 = CXFTestSupport.getPort1();
 
     @Override
     protected ClassPathXmlApplicationContext createApplicationContext() {
         return new ClassPathXmlApplicationContext("org/apache/camel/component/cxf/nonWrapperProcessor.xml");
-    }
-
-    @Override
-    protected void assertValidContext(CamelContext context) {
-        assertNotNull(context, "No context found!");
     }
 
     @Test

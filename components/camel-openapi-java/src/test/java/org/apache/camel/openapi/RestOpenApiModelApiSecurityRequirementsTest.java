@@ -16,15 +16,12 @@
  */
 package org.apache.camel.openapi;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import io.apicurio.datamodels.Library;
-import io.apicurio.datamodels.openapi.models.OasDocument;
+import io.swagger.v3.oas.models.OpenAPI;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.impl.engine.DefaultClassResolver;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,8 +51,9 @@ public class RestOpenApiModelApiSecurityRequirementsTest extends CamelTestSuppor
         };
     }
 
-    @Test
-    public void testReaderRead() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = { "3.1", "3.0" })
+    public void testReaderReadV3(String version) throws Exception {
         BeanConfig config = new BeanConfig();
         config.setHost("localhost:8080");
         config.setSchemes(new String[] { "http" });
@@ -63,52 +61,14 @@ public class RestOpenApiModelApiSecurityRequirementsTest extends CamelTestSuppor
         config.setTitle("Camel User store");
         config.setLicense("Apache 2.0");
         config.setLicenseUrl("https://www.apache.org/licenses/LICENSE-2.0.html");
-        config.setVersion("2.0");
+        config.setVersion(version);
         RestOpenApiReader reader = new RestOpenApiReader();
 
-        OasDocument openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
+        OpenAPI openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
                 new DefaultClassResolver());
         assertNotNull(openApi);
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        Object dump = Library.writeNode(openApi);
-        String json = mapper.writeValueAsString(dump);
-
-        log.info(json);
-
-        assertTrue(json.contains("\"securityDefinitions\" : {"));
-        assertTrue(json.contains("\"type\" : \"oauth2\""));
-        assertTrue(json.contains("\"authorizationUrl\" : \"https://petstore.swagger.io/oauth/dialog\""));
-        assertTrue(json.contains("\"flow\" : \"implicit\""));
-        assertTrue(json.contains("\"type\" : \"apiKey\","));
-        assertTrue(json.contains("\"security\" : [ {"));
-        assertTrue(json.contains("\"petstore_auth\" : [ \"read\", \"write\" ]"));
-        assertTrue(json.contains("\"api_key\" : [ ]"));
-    }
-
-    @Test
-    public void testReaderReadV3() throws Exception {
-        BeanConfig config = new BeanConfig();
-        config.setHost("localhost:8080");
-        config.setSchemes(new String[] { "http" });
-        config.setBasePath("/api");
-        config.setTitle("Camel User store");
-        config.setLicense("Apache 2.0");
-        config.setLicenseUrl("https://www.apache.org/licenses/LICENSE-2.0.html");
-        RestOpenApiReader reader = new RestOpenApiReader();
-
-        OasDocument openApi = reader.read(context, context.getRestDefinitions(), config, context.getName(),
-                new DefaultClassResolver());
-        assertNotNull(openApi);
-
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        Object dump = Library.writeNode(openApi);
-        String json = mapper.writeValueAsString(dump);
-
+        String json = RestOpenApiSupport.getJsonFromOpenAPIAsString(openApi, config);
         log.info(json);
 
         assertTrue(json.contains("securitySchemes"));

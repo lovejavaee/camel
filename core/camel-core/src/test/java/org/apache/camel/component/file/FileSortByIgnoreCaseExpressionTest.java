@@ -21,10 +21,15 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 /**
  * Unit test for the file sort by expression
  */
+@DisabledOnOs(value = { OS.LINUX },
+              architectures = { "ppc64le" },
+              disabledReason = "This test does not run reliably multiple platforms (see CAMEL-21438)")
 public class FileSortByIgnoreCaseExpressionTest extends ContextTestSupport {
 
     private void prepareFolder(String folder) {
@@ -42,7 +47,7 @@ public class FileSortByIgnoreCaseExpressionTest extends ContextTestSupport {
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("a/?sortBy=file:name&initialDelay=250&delay=1000")).convertBodyTo(String.class).to("mock:result");
             }
         });
@@ -60,7 +65,7 @@ public class FileSortByIgnoreCaseExpressionTest extends ContextTestSupport {
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("b/?initialDelay=0&delay=10&sortBy=ignoreCase:file:name")).convertBodyTo(String.class)
                         .to("mock:nocase");
             }
@@ -79,7 +84,7 @@ public class FileSortByIgnoreCaseExpressionTest extends ContextTestSupport {
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("c/?initialDelay=0&delay=10&sortBy=reverse:ignoreCase:file:name")).convertBodyTo(String.class)
                         .to("mock:nocasereverse");
             }

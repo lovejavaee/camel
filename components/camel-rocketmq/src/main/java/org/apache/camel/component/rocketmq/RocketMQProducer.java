@@ -79,7 +79,12 @@ public class RocketMQProducer extends DefaultAsyncProducer {
             } else {
                 return processInOnly(exchange, callback);
             }
-        } catch (Throwable e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            exchange.setException(e);
+            callback.done(true);
+            return true;
+        } catch (Exception e) {
             exchange.setException(e);
             callback.done(true);
             return true;
@@ -131,7 +136,8 @@ public class RocketMQProducer extends DefaultAsyncProducer {
 
     protected void initReplyManager() {
         if (!started.get()) {
-            synchronized (this) {
+            lock.lock();
+            try {
                 if (started.get()) {
                     return;
                 }
@@ -155,6 +161,8 @@ public class RocketMQProducer extends DefaultAsyncProducer {
                     }
                 }
                 started.set(true);
+            } finally {
+                lock.unlock();
             }
         }
     }

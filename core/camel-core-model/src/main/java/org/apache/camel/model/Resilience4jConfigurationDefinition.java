@@ -29,7 +29,7 @@ import org.apache.camel.spi.Metadata;
 /**
  * Resilience4j Circuit Breaker EIP configuration
  */
-@Metadata(label = "configuration,eip")
+@Metadata(label = "configuration,eip,error")
 @XmlRootElement(name = "resilience4jConfiguration")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Configurer(extended = true)
@@ -41,8 +41,17 @@ public class Resilience4jConfigurationDefinition extends Resilience4jConfigurati
     public Resilience4jConfigurationDefinition() {
     }
 
+    public Resilience4jConfigurationDefinition(Resilience4jConfigurationDefinition source) {
+        super(source);
+        this.parent = source.parent;
+    }
+
     public Resilience4jConfigurationDefinition(CircuitBreakerDefinition parent) {
         this.parent = parent;
+    }
+
+    public Resilience4jConfigurationDefinition copyDefinition() {
+        return new Resilience4jConfigurationDefinition(this);
     }
 
     // Fluent API
@@ -252,10 +261,25 @@ public class Resilience4jConfigurationDefinition extends Resilience4jConfigurati
     }
 
     /**
-     * Configures whether cancel is called on the running future. Defaults to true.
+     * Configure a list of exceptions that are recorded as a failure and thus increase the failure rate. Any exception
+     * matching or inheriting from one of the list counts as a failure, unless explicitly ignored via ignoreExceptions.
      */
-    public Resilience4jConfigurationDefinition timeoutCancelRunningFuture(boolean timeoutCancelRunningFuture) {
-        setTimeoutCancelRunningFuture(Boolean.toString(timeoutCancelRunningFuture));
+    public Resilience4jConfigurationDefinition recordException(Throwable... exception) {
+        for (Throwable t : exception) {
+            getRecordExceptions().add(t.getClass().getName());
+        }
+        return this;
+    }
+
+    /**
+     * Configure a list of exceptions that are ignored and neither count as a failure nor success. Any exception
+     * matching or inheriting from one of the list will not count as a failure nor success, even if the exceptions is
+     * part of recordExceptions.
+     */
+    public Resilience4jConfigurationDefinition ignoreException(Throwable... exception) {
+        for (Throwable t : exception) {
+            getIgnoreExceptions().add(t.getClass().getName());
+        }
         return this;
     }
 

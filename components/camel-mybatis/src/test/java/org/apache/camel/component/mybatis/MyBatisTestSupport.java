@@ -58,9 +58,7 @@ public abstract class MyBatisTestSupport extends CamelTestSupport {
 
     @Override
     @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-
+    public void doPostSetup() throws Exception {
         try (Connection connection = createConnection();
              ResultSet checkTableExistResultSet = connection.getMetaData().getTables(null, null, getTableName(), null);
              Statement deletePreExistingTableStatement = connection.createStatement();
@@ -95,7 +93,7 @@ public abstract class MyBatisTestSupport extends CamelTestSupport {
 
     protected Connection createConnection() throws Exception {
         MyBatisComponent component = context.getComponent("mybatis", MyBatisComponent.class);
-        return component.getSqlSessionFactory().getConfiguration().getEnvironment().getDataSource().getConnection();
+        return component.createSqlSessionFactory().getConfiguration().getEnvironment().getDataSource().getConnection();
     }
 
 }

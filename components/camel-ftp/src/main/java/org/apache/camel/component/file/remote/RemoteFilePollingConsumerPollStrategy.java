@@ -19,31 +19,34 @@ package org.apache.camel.component.file.remote;
 import org.apache.camel.Consumer;
 import org.apache.camel.Endpoint;
 import org.apache.camel.support.DefaultPollingConsumerPollStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Remote file consumer polling strategy that attempts to help recovering from lost connections.
  */
 public class RemoteFilePollingConsumerPollStrategy extends DefaultPollingConsumerPollStrategy {
 
+    private static final Logger LOG = LoggerFactory.getLogger(RemoteFilePollingConsumerPollStrategy.class);
+
     @Override
     public boolean rollback(Consumer consumer, Endpoint endpoint, int retryCounter, Exception e) throws Exception {
-        if (consumer instanceof RemoteFileConsumer) {
-            RemoteFileConsumer<?> rfc = (RemoteFileConsumer<?>) consumer;
+        if (consumer instanceof RemoteFileConsumer<?> rfc) {
 
             // only try to recover if we are allowed to run
             if (rfc.isRunAllowed()) {
                 // disconnect from the server to force it to re login at next
                 // poll to recover
-                if (log.isWarnEnabled()) {
-                    log.warn("Trying to recover by force disconnecting from remote server and re-connecting at next poll: {}",
+                if (LOG.isWarnEnabled()) {
+                    LOG.warn("Trying to recover by force disconnecting from remote server and re-connecting at next poll: {}",
                             rfc.remoteServer());
                 }
                 try {
                     rfc.forceDisconnect();
-                } catch (Throwable t) {
+                } catch (Exception t) {
                     // ignore the exception
-                    if (log.isDebugEnabled()) {
-                        log.debug("Error occurred during force disconnecting from: {}. This exception will be ignored.",
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Error occurred during force disconnecting from: {}. This exception will be ignored.",
                                 rfc.remoteServer(), t);
                     }
                 }

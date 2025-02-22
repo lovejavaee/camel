@@ -27,6 +27,7 @@ import org.apache.camel.dsl.jbang.core.common.ProcessHelper;
 import org.apache.camel.support.PatternHelper;
 import org.apache.camel.util.FileUtil;
 import org.apache.camel.util.IOHelper;
+import org.apache.camel.util.StopWatch;
 import org.apache.camel.util.json.JsonObject;
 import org.apache.camel.util.json.Jsoner;
 
@@ -34,6 +35,28 @@ abstract class ActionBaseCommand extends CamelCommand {
 
     public ActionBaseCommand(CamelJBangMain main) {
         super(main);
+    }
+
+    protected static JsonObject getJsonObject(File outputFile) {
+        StopWatch watch = new StopWatch();
+        while (watch.taken() < 5000) {
+            try {
+                // give time for response to be ready
+                Thread.sleep(100);
+
+                if (outputFile.exists()) {
+                    FileInputStream fis = new FileInputStream(outputFile);
+                    String text = IOHelper.loadText(fis);
+                    IOHelper.close(fis);
+                    return (JsonObject) Jsoner.deserialize(text);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                // ignore
+            }
+        }
+        return null;
     }
 
     List<Long> findPids(String name) {
@@ -71,28 +94,10 @@ abstract class ActionBaseCommand extends CamelCommand {
 
     static long extractSince(ProcessHandle ph) {
         long since = 0;
-        if (ph.info().startInstant().isPresent()) {
+        if (ph != null && ph.info().startInstant().isPresent()) {
             since = ph.info().startInstant().get().toEpochMilli();
         }
         return since;
-    }
-
-    static String extractState(int status) {
-        if (status <= 4) {
-            return "Starting";
-        } else if (status == 5) {
-            return "Running";
-        } else if (status == 6) {
-            return "Suspending";
-        } else if (status == 7) {
-            return "Suspended";
-        } else if (status == 8) {
-            return "Terminating";
-        } else if (status == 9) {
-            return "Terminated";
-        } else {
-            return "Terminated";
-        }
     }
 
     JsonObject loadStatus(long pid) {
@@ -104,10 +109,9 @@ abstract class ActionBaseCommand extends CamelCommand {
                 IOHelper.close(fis);
                 return (JsonObject) Jsoner.deserialize(text);
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
         return null;
     }
-
 }

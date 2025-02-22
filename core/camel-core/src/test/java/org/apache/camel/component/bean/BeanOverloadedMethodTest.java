@@ -23,7 +23,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  *
@@ -39,7 +39,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedString() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello(String.class)").to("mock:result");
 
             }
@@ -57,7 +57,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedWildcard() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello(*)").to("mock:result");
 
             }
@@ -75,7 +75,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedStringString() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // START SNIPPET: e2
                 from("direct:start").bean(MyBean.class, "hello(String.class, String.class)").to("mock:result");
                 // END SNIPPET: e2
@@ -94,7 +94,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedWildcardString() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello(*, String.class)").to("mock:result");
 
             }
@@ -112,7 +112,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedWildcardWildcard() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // START SNIPPET: e3
                 from("direct:start").bean(MyBean.class, "hello(*,*)").to("mock:result");
                 // END SNIPPET: e3
@@ -131,7 +131,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedPickCamelAnnotated() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello").to("mock:result");
 
             }
@@ -149,67 +149,64 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testHelloOverloadedAmbiguousStringStringString() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello(String.class,String.class,String.class)").to("mock:result");
 
             }
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Claus", "country", "Denmark");
-            fail("Should have thrown an exception");
-        } catch (CamelExecutionException e) {
-            AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
-            assertEquals(2, cause.getMethods().size());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Claus", "country", "Denmark"),
+                "Should have thrown an exception");
+
+        AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
+        assertEquals(2, cause.getMethods().size());
     }
 
     @Test
     public void testHelloOverloadedStringInt() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello(String.class,int.class)").to("mock:result");
 
             }
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Claus", "country", "Denmark");
-            fail("Should have thrown an exception");
-        } catch (CamelExecutionException e) {
-            AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
-            assertEquals(2, cause.getMethods().size());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Claus", "country", "Denmark"),
+                "Should have thrown an exception");
+
+        AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
+        assertEquals(2, cause.getMethods().size());
     }
 
     @Test
     public void testHelloOverloadedIntString() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "hello(int.class,String.class)").to("mock:result");
 
             }
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Claus", "country", "Denmark");
-            fail("Should have thrown an exception");
-        } catch (CamelExecutionException e) {
-            AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
-            assertEquals(2, cause.getMethods().size());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Claus", "country", "Denmark"),
+                "Should have thrown an exception");
+
+        AmbiguousMethodCallException cause = assertIsInstanceOf(AmbiguousMethodCallException.class, e.getCause());
+        assertEquals(2, cause.getMethods().size());
     }
 
     @Test
     public void testTimesOverloadedStringInt() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "times(String.class,int.class)").to("mock:result");
 
             }
@@ -227,7 +224,7 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
     public void testTimesOverloadedBytesInt() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(MyBean.class, "times(byte[].class,int.class)").to("mock:result");
 
             }
@@ -237,6 +234,27 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
         getMockEndpoint("mock:result").expectedBodiesReceived("ABC,ABC,ABC");
 
         template.sendBodyAndHeader("direct:start", "ABC".getBytes(), "times", "3");
+
+        assertMockEndpointsSatisfied();
+    }
+
+    @Test
+    public void testPropertyPlaceholder() throws Exception {
+        context.getPropertiesComponent().addInitialProperty("myDestination", "Mars");
+
+        context.addRoutes(new RouteBuilder() {
+            @Override
+            public void configure() {
+                from("direct:start").bean(MyBean.class, "sendMsg(String.class ${body}, String.class {{myDestination}})")
+                        .to("mock:result");
+
+            }
+        });
+        context.start();
+
+        getMockEndpoint("mock:result").expectedBodiesReceived("Sending rockets to Mars");
+
+        template.sendBody("direct:start", "rockets");
 
         assertMockEndpointsSatisfied();
     }
@@ -281,6 +299,10 @@ public class BeanOverloadedMethodTest extends ContextTestSupport {
                 }
             }
             return sb.toString();
+        }
+
+        public String sendMsg(String message, String destination) {
+            return "Sending " + message + " to " + destination;
         }
 
     }

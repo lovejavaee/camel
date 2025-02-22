@@ -114,7 +114,7 @@ const sources = {
     },
     json: {
       source: [
-        '../components/{*,*/*,*/*/*}/src/generated/resources/org/apache/camel/**/*.json',
+        '../components/{*,*/*,*/*/*}/src/generated/resources/META-INF/org/apache/camel/**/*.json',
       ],
       destination: 'components/modules/ROOT/examples/json',
       filter: (content) => JSON.parse(content).component, // check if there is a "component" key at the root
@@ -127,8 +127,8 @@ const sources = {
     },
     json: {
       source: [
-        '../components/{*,*/*,*/*/*}/src/generated/resources/org/apache/camel/**/*.json',
-        '../core/camel-core-model/src/generated/resources/org/apache/camel/model/dataformat/*.json',
+        '../components/{*,*/*,*/*/*}/src/generated/resources/META-INF/org/apache/camel/**/*.json',
+        '../core/camel-core-model/src/generated/resources/META-INF/org/apache/camel/model/dataformat/*.json',
       ],
       destination: 'components/modules/dataformats/examples/json',
       filter: (content) => JSON.parse(content).dataformat, // check if there is a "dataformat" key at the root
@@ -147,9 +147,9 @@ const sources = {
     },
     json: {
       source: [
-        '../components/{*,*/*,*/*/*}/src/generated/resources/org/apache/camel/*/**/*.json',
-        '../core/camel-core-languages/src/generated/resources/org/apache/camel/language/**/*.json',
-        '../core/camel-core-model/src/generated/resources/org/apache/camel/model/language/*.json',
+        '../components/{*,*/*,*/*/*}/src/generated/resources/META-INF/org/apache/camel/*/**/*.json',
+        '../core/camel-core-languages/src/generated/resources/META-INF/org/apache/camel/language/**/*.json',
+        '../core/camel-core-model/src/generated/resources/META-INF/org/apache/camel/model/language/*.json',
       ],
       destination: 'components/modules/languages/examples/json',
       filter: (content) => JSON.parse(content).language, // check if there is a "language" key at the root
@@ -160,7 +160,6 @@ const sources = {
   // +** xref:groovy-dsl.adoc[Groovy Dsl]
   // +** xref:js-dsl.adoc[JavaScript Dsl]
   // +** xref:java-xml-jaxb-dsl.adoc[Jaxb XML Dsl]
-  // +** xref:kotlin-dsl.adoc[Kotlin Dsl]
   // +** xref:java-xml-io-dsl.adoc[XML Dsl]
   //These seem to have no content, just a non-xref link to the user manual,
   // where the dsls are not actually explained.  Should the sources be removed?
@@ -188,9 +187,13 @@ const sources = {
     },
   },
   eips: {
+    asciidoc: {
+      destination: '../core/camel-core-engine/src/main/docs/modules/eips/pages',
+      filter: (path) => !path.endsWith('enterprise-integration-patterns.adoc')
+    },
     json: {
       source: [
-        '../core/camel-core-model/src/generated/resources/org/apache/camel/model/**/*.json',
+        '../core/camel-core-model/src/generated/resources/META-INF/org/apache/camel/model/**/*.json',
       ],
       destination: '../core/camel-core-engine/src/main/docs/modules/eips/examples/json',
       filter: (content) => {
@@ -267,7 +270,7 @@ const tasks = Array.from(sourcesMap).flatMap(([type, definition]) => {
   // by default that's only index.adoc, index.adoc is not symlinked
   // so we don't want to remove it
   const clean = (destination, keep) => {
-    const deleteAry = [`${destination}/*`] // files in destination needs to be deleted
+    const deleteAry = [`${destination}/*`] // files in destination needs to be deleted */
     // append any exceptions, i.e. files to keep at the destination
     deleteAry.push(...(keep || ['index.adoc']).map((file) => `!${destination}/${file}`))
     return deleteAsync(deleteAry, {
@@ -304,7 +307,15 @@ const tasks = Array.from(sourcesMap).flatMap(([type, definition]) => {
 
   // generates sorted & grouped nav.adoc file from a set of .adoc
   // files at the destination
-  const createNav = (destination) => {
+  const createNav = (destination, filter) => {
+    const filterFn = through2.obj((file, enc, done) => {
+      if (filter && !filter(file.path)) {
+        done() // skip
+      } else {
+        done(null, file) // process
+      }
+    })
+
     return gulp.src(`${type}-nav.adoc.template`)
       .pipe(insertGeneratedNotice())
       .pipe(
@@ -312,7 +323,9 @@ const tasks = Array.from(sourcesMap).flatMap(([type, definition]) => {
           gulp.src([
             `${destination}/**/*.adoc`,
             `!${destination}/index.adoc`,
-          ]).pipe(sort(compare)),
+          ])
+          .pipe(filterFn)
+          .pipe(sort(compare)),
           {
             removeTags: true,
             transform: (filename, file) => {
@@ -332,7 +345,7 @@ const tasks = Array.from(sourcesMap).flatMap(([type, definition]) => {
 
   // creates symlinks from source to destination for every example
   // file referenced from .adoc file in the source maintaining the
-  // basedir from the file path, i.e. symlinking from a deep hiearchy
+  // basedir from the file path, i.e. symlinking from a deep hierarchy
   const createExampleSymlinks = (source, destination) => {
     const extractExamples = function (file, enc, done) {
       const asciidoc = file.contents.toString()
@@ -400,7 +413,7 @@ const tasks = Array.from(sourcesMap).flatMap(([type, definition]) => {
   // accumulates all tasks performed per _kind_.
   const allTasks = []
 
-  if (asciidoc) {
+  if (asciidoc && asciidoc.source) {
     allTasks.push(
       gulp.series(
         named(`clean:asciidoc:${type}`, clean, asciidoc.destination, asciidoc.keep),
@@ -429,11 +442,19 @@ const tasks = Array.from(sourcesMap).flatMap(([type, definition]) => {
   }
 
   if (json) {
-    allTasks.push(
-      gulp.series(
-        named(`clean:json:${type}`, clean, json.destination, json.keep),
-        named(`symlink:json:${type}`, createSymlinks, json.source, json.destination, json.filter)
+    let tasks = [
+      named(`clean:json:${type}`, clean, json.destination, json.keep),
+      named(`symlink:json:${type}`, createSymlinks, json.source, json.destination, json.filter)
+    ]
+
+    if (asciidoc && !asciidoc.source) {
+      tasks.push(
+        named(`nav:asciidoc:${type}`, createNav, asciidoc.destination, asciidoc.filter)
       )
+    }
+
+    allTasks.push(
+      gulp.series(tasks)
     )
   }
 

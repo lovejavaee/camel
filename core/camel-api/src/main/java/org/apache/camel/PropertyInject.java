@@ -37,8 +37,14 @@ public @interface PropertyInject {
     String value();
 
     /**
-     * Default value to use if the property does not exists or has no value
+     * Default value to use if the property does not exist or has no value
      */
     String defaultValue() default "";
+
+    /**
+     * Used for splitting the property value into an array/list of values. For example to use comma to separate the
+     * values.
+     */
+    String separator() default "";
 
 }

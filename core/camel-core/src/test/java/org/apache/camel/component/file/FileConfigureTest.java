@@ -27,8 +27,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class FileConfigureTest extends ContextTestSupport {
 
@@ -37,13 +37,13 @@ public class FileConfigureTest extends ContextTestSupport {
     private static final String EXPECT_FILE = "some" + File.separator + "nested" + File.separator + "filename.txt";
 
     private static final Processor DUMMY_PROCESSOR = new Processor() {
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             // Do nothing here
         }
     };
 
     @Test
-    public void testUriConfigurations() throws Exception {
+    public void testUriConfigurations() {
         assertFileEndpoint("file://target/data/FileConfigureTest/bar", EXPECT_PATH, false);
         assertFileEndpoint("file://target/data/FileConfigureTest/bar?delete=true", EXPECT_PATH, false);
         assertFileEndpoint("file:target/data/FileConfigureTest/bar?delete=true", EXPECT_PATH, false);
@@ -98,27 +98,25 @@ public class FileConfigureTest extends ContextTestSupport {
         assertNotNull(endpoint, "Could not find endpoint: file://target/data/FileConfigureTest/bar?charset=UTF-8");
         assertEquals("UTF-8", endpoint.getCharset(), "Get a wrong charset");
 
-        try {
-            resolveMandatoryEndpoint("file://target/data/FileConfigureTest/bar?charset=ASSI", FileEndpoint.class);
-            // The charset is wrong
-            fail("Expect a configure exception here");
-        } catch (Exception ex) {
-            boolean b = ex instanceof ResolveEndpointFailedException;
-            assertTrue(b, "Get the wrong exception type here");
-        }
+        Exception ex = assertThrows(Exception.class,
+                () -> resolveMandatoryEndpoint("file://target/data/FileConfigureTest/bar?charset=ASSI", FileEndpoint.class),
+                "Expect a configure exception here");
+
+        boolean b = ex instanceof ResolveEndpointFailedException;
+        assertTrue(b, "Get the wrong exception type here");
     }
 
     @Test
     public void testConsumerConfigurations() throws Exception {
         FileConsumer consumer = createFileConsumer("file://target/data/FileConfigureTest/bar?recursive=true");
         assertNotNull(consumer);
-        try {
-            createFileConsumer("file://target/data/FileConfigureTest/bar?recursiv=true");
-            fail("Expect a configure exception here");
-        } catch (Exception ex) {
-            boolean b = ex instanceof ResolveEndpointFailedException;
-            assertTrue(b, "Get the wrong exception type here");
-        }
+
+        Exception ex = assertThrows(Exception.class,
+                () -> createFileConsumer("file://target/data/FileConfigureTest/bar?recursiv=true"),
+                "Expect a configure exception here");
+
+        boolean b = ex instanceof ResolveEndpointFailedException;
+        assertTrue(b, "Get the wrong exception type here");
     }
 
     private FileConsumer createFileConsumer(String endpointUri) throws Exception {

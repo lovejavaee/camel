@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.CamelContextAware;
@@ -45,6 +47,7 @@ import org.apache.camel.spi.RoutePolicy;
 import org.apache.camel.spi.StartupStepRecorder;
 import org.apache.camel.support.ChildServiceSupport;
 import org.apache.camel.support.EventHelper;
+import org.apache.camel.support.PatternHelper;
 import org.apache.camel.support.service.ServiceHelper;
 import org.slf4j.MDC;
 
@@ -61,6 +64,7 @@ public class RouteService extends ChildServiceSupport {
     private final Route route;
     private boolean removingRoutes;
     private Consumer input;
+    private final Lock lock = new ReentrantLock();
     private final AtomicBoolean setUpDone = new AtomicBoolean();
     private final AtomicBoolean warmUpDone = new AtomicBoolean();
     private final AtomicBoolean endpointDone = new AtomicBoolean();
@@ -93,8 +97,8 @@ public class RouteService extends ChildServiceSupport {
         Set<Endpoint> answer = new LinkedHashSet<>();
         Set<Service> services = gatherChildServices();
         for (Service service : services) {
-            if (service instanceof EndpointAware) {
-                Endpoint endpoint = ((EndpointAware) service).getEndpoint();
+            if (service instanceof EndpointAware endpointAware) {
+                Endpoint endpoint = endpointAware.getEndpoint();
                 if (endpoint != null) {
                     answer.add(endpoint);
                 }
@@ -119,7 +123,7 @@ public class RouteService extends ChildServiceSupport {
         try {
             doWarmUp();
         } catch (Exception e) {
-            throw new FailedToStartRouteException(getId(), route.getDescription(), e);
+            throw new FailedToStartRouteException(getId(), e.getLocalizedMessage(), e);
         }
     }
 
@@ -128,7 +132,7 @@ public class RouteService extends ChildServiceSupport {
             try {
                 doSetup();
             } catch (Exception e) {
-                throw new FailedToStartRouteException(getId(), route.getDescription(), e);
+                throw new FailedToStartRouteException(getId(), e.getLocalizedMessage(), e);
             }
         }
     }
@@ -137,74 +141,95 @@ public class RouteService extends ChildServiceSupport {
         if (!getCamelContext().isAutoStartup()) {
             return false;
         }
-        return getRoute().isAutoStartup();
-    }
-
-    protected synchronized void doSetup() throws Exception {
-        // to setup we initialize the services
-        ServiceHelper.initService(route.getEndpoint());
-
-        try (MDCHelper mdcHelper = new MDCHelper(route.getId())) {
-
-            // ensure services are initialized first
-            route.initializeServices();
-            List<Service> services = route.getServices();
-
-            // split into consumers and child services as we need to start the consumers
-            // afterwards to avoid them being active while the others start
-            List<Service> list = new ArrayList<>();
-            for (Service service : services) {
-
-                // inject the route
-                if (service instanceof RouteAware) {
-                    ((RouteAware) service).setRoute(route);
-                }
-                if (service instanceof RouteIdAware) {
-                    ((RouteIdAware) service).setRouteId(route.getId());
-                }
-                // inject camel context
-                CamelContextAware.trySetCamelContext(service, camelContext);
-
-                if (service instanceof Consumer) {
-                    this.input = (Consumer) service;
-                } else {
-                    list.add(service);
-                }
+        if (!getRoute().isAutoStartup()) {
+            return false;
+        }
+        if (getCamelContext().getAutoStartupExcludePattern() != null) {
+            String[] patterns = getCamelContext().getAutoStartupExcludePattern().split(",");
+            String id = getRoute().getRouteId();
+            String url = getRoute().getEndpoint().getEndpointUri();
+            if (PatternHelper.matchPatterns(id, patterns) || PatternHelper.matchPatterns(url, patterns)) {
+                return false;
             }
-            initChildServices(list);
         }
+        return true;
     }
 
-    protected synchronized void doWarmUp() throws Exception {
-        if (endpointDone.compareAndSet(false, true)) {
-            // endpoints should only be started once as they can be reused on other routes
-            // and whatnot, thus their lifecycle is to start once, and only to stop when Camel shutdown
-            // ensure endpoint is started first (before the route services, such as the consumer)
-            ServiceHelper.startService(route.getEndpoint());
-        }
-
-        if (warmUpDone.compareAndSet(false, true)) {
+    protected void doSetup() throws Exception {
+        lock.lock();
+        try {
+            // to setup we initialize the services
+            ServiceHelper.initService(route.getEndpoint());
 
             try (MDCHelper mdcHelper = new MDCHelper(route.getId())) {
-                // warm up the route first
-                route.warmUp();
 
-                startChildServices(route, childServices);
+                // ensure services are initialized first
+                route.initializeServices();
+                List<Service> services = route.getServices();
 
-                // fire event
-                EventHelper.notifyRouteAdded(camelContext, route);
+                // split into consumers and child services as we need to start the consumers
+                // afterwards to avoid them being active while the others start
+                List<Service> list = new ArrayList<>();
+                for (Service service : services) {
+
+                    // inject the route
+                    if (service instanceof RouteAware routeAware) {
+                        routeAware.setRoute(route);
+                    }
+                    if (service instanceof RouteIdAware routeIdAware) {
+                        routeIdAware.setRouteId(route.getId());
+                    }
+                    // inject camel context
+                    CamelContextAware.trySetCamelContext(service, camelContext);
+
+                    if (service instanceof Consumer consumer) {
+                        this.input = consumer;
+                    } else {
+                        list.add(service);
+                    }
+                }
+                initChildServices(list);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    protected void doWarmUp() throws Exception {
+        lock.lock();
+        try {
+            if (endpointDone.compareAndSet(false, true)) {
+                // endpoints should only be started once as they can be reused on other routes
+                // and whatnot, thus their lifecycle is to start once, and only to stop when Camel shutdown
+                // ensure endpoint is started first (before the route services, such as the consumer)
+                ServiceHelper.startService(route.getEndpoint());
             }
 
-            // ensure lifecycle strategy is invoked which among others enlist the route in JMX
-            for (LifecycleStrategy strategy : camelContext.getLifecycleStrategies()) {
-                strategy.onRoutesAdd(Collections.singletonList(route));
+            if (warmUpDone.compareAndSet(false, true)) {
+
+                try (MDCHelper mdcHelper = new MDCHelper(route.getId())) {
+                    // warm up the route first
+                    route.warmUp();
+
+                    startChildServices(route, childServices);
+
+                    // fire event
+                    EventHelper.notifyRouteAdded(camelContext, route);
+                }
+
+                // ensure lifecycle strategy is invoked which among others enlist the route in JMX
+                for (LifecycleStrategy strategy : camelContext.getLifecycleStrategies()) {
+                    strategy.onRoutesAdd(Collections.singletonList(route));
+                }
+
+                // add routes to camel context
+                camelContext.getCamelContextExtension().addRoute(route);
+
+                // add the routes to the inflight registry so they are pre-installed
+                camelContext.getInflightRepository().addRoute(route.getId());
             }
-
-            // add routes to camel context
-            camelContext.getCamelContextExtension().addRoute(route);
-
-            // add the routes to the inflight registry so they are pre-installed
-            camelContext.getInflightRepository().addRoute(route.getId());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -356,8 +381,8 @@ public class RouteService extends ChildServiceSupport {
         Class<?> type = service instanceof Processor ? Processor.class : Service.class;
         description = description + " " + service.getClass().getSimpleName();
         String id = null;
-        if (service instanceof IdAware) {
-            id = ((IdAware) service).getId();
+        if (service instanceof IdAware idAware) {
+            id = idAware.getId();
         }
         return startupStepRecorder.beginStep(type, id, description);
     }
@@ -366,9 +391,9 @@ public class RouteService extends ChildServiceSupport {
         for (Service service : services) {
             StartupStep step = null;
             // skip internal services / route pipeline (starting point for route)
-            boolean record
+            boolean shouldRecord
                     = !(service instanceof InternalProcessor || "RoutePipeline".equals(service.getClass().getSimpleName()));
-            if (record) {
+            if (shouldRecord) {
                 step = beginStep(service, "Init");
             }
             ServiceHelper.initService(service);
@@ -384,9 +409,9 @@ public class RouteService extends ChildServiceSupport {
         for (Service service : services) {
             StartupStep step = null;
             // skip internal services / route pipeline (starting point for route)
-            boolean record
+            boolean shouldRecord
                     = !(service instanceof InternalProcessor || "RoutePipeline".equals(service.getClass().getSimpleName()));
-            if (record) {
+            if (shouldRecord) {
                 step = beginStep(service, "Start");
             }
             for (LifecycleStrategy strategy : camelContext.getLifecycleStrategies()) {
@@ -436,10 +461,10 @@ public class RouteService extends ChildServiceSupport {
         // only include error handlers if they are route scoped
         List<Service> extra = new ArrayList<>();
         for (Service service : services) {
-            if (service instanceof Channel) {
-                Processor eh = ((Channel) service).getErrorHandler();
-                if (eh instanceof Service) {
-                    extra.add((Service) eh);
+            if (service instanceof Channel channel) {
+                Processor eh = channel.getErrorHandler();
+                if (eh instanceof Service s) {
+                    extra.add(s);
                 }
             }
         }
@@ -453,13 +478,13 @@ public class RouteService extends ChildServiceSupport {
      */
     protected void doGetRouteServices(List<Service> services) {
         for (Processor proc : getRoute().getOnExceptions()) {
-            if (proc instanceof Service) {
-                services.add((Service) proc);
+            if (proc instanceof Service service) {
+                services.add(service);
             }
         }
         for (Processor proc : getRoute().getOnCompletions()) {
-            if (proc instanceof Service) {
-                services.add((Service) proc);
+            if (proc instanceof Service service) {
+                services.add(service);
             }
         }
     }

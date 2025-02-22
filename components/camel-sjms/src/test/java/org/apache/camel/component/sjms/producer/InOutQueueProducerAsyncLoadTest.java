@@ -39,38 +39,29 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class InOutQueueProducerAsyncLoadTest extends JmsTestSupport {
 
-    private static final String TEST_DESTINATION_NAME = "in.out.queue.producer.test";
+    private static final String TEST_DESTINATION_NAME = "in.out.queue.producer.test.InOutQueueProducerAsyncLoadTest";
     private MessageConsumer mc1;
     private MessageConsumer mc2;
 
     public InOutQueueProducerAsyncLoadTest() {
     }
 
-    @Override
-    protected boolean useJmx() {
-        return false;
-    }
-
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void setupConsumers() throws Exception {
         mc1 = createQueueConsumer(TEST_DESTINATION_NAME + ".request");
         mc2 = createQueueConsumer(TEST_DESTINATION_NAME + ".request");
         mc1.setMessageListener(new MyMessageListener());
         mc2.setMessageListener(new MyMessageListener());
     }
 
-    @Override
     @AfterEach
-    public void tearDown() throws Exception {
+    public void cleanupConsumers() throws JMSException {
         MyMessageListener l1 = (MyMessageListener) mc1.getMessageListener();
         l1.close();
         mc1.close();
         MyMessageListener l2 = (MyMessageListener) mc2.getMessageListener();
         l2.close();
         mc2.close();
-        super.tearDown();
     }
 
     /**

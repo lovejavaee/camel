@@ -28,42 +28,51 @@ public class EventbridgeConfiguration implements Cloneable {
 
     private String eventbusName = "default";
     @UriParam
-    @Metadata(autowired = true)
+    @Metadata(label = "advanced", autowired = true)
     private EventBridgeClient eventbridgeClient;
     @UriParam(label = "security", secret = true)
     private String accessKey;
     @UriParam(label = "security", secret = true)
     private String secretKey;
+    @UriParam(label = "security", secret = true)
+    private String sessionToken;
     @UriParam
     @Metadata(required = true, defaultValue = "putRule")
     private EventbridgeOperations operation = EventbridgeOperations.putRule;
-    @UriParam(enums = "HTTP,HTTPS", defaultValue = "HTTPS")
+    @UriParam(label = "proxy", enums = "HTTP,HTTPS", defaultValue = "HTTPS")
     private Protocol proxyProtocol = Protocol.HTTPS;
-    @UriParam
+    @UriParam(label = "proxy")
     private String proxyHost;
-    @UriParam
+    @UriParam(label = "proxy")
     private Integer proxyPort;
-    @UriParam
+    @UriParam(enums = "ap-south-2,ap-south-1,eu-south-1,eu-south-2,us-gov-east-1,me-central-1,il-central-1,ca-central-1,eu-central-1,us-iso-west-1,eu-central-2,eu-isoe-west-1,us-west-1,us-west-2,af-south-1,eu-north-1,eu-west-3,eu-west-2,eu-west-1,ap-northeast-3,ap-northeast-2,ap-northeast-1,me-south-1,sa-east-1,ap-east-1,cn-north-1,ca-west-1,us-gov-west-1,ap-southeast-1,ap-southeast-2,us-iso-east-1,ap-southeast-3,ap-southeast-4,us-east-1,us-east-2,cn-northwest-1,us-isob-east-1,aws-global,aws-cn-global,aws-us-gov-global,aws-iso-global,aws-iso-b-global")
     private String region;
-    @UriParam(defaultValue = "false")
+    @UriParam
     private boolean pojoRequest;
-    @UriParam(defaultValue = "false")
+    @UriParam(label = "security")
     private boolean trustAllCertificates;
     @UriParam
+    @Metadata(supportFileReference = true)
     private String eventPatternFile;
-    @UriParam(defaultValue = "false")
+    @UriParam
     private boolean overrideEndpoint;
     @UriParam
     private String uriEndpointOverride;
-    @UriParam(defaultValue = "false")
+    @UriParam(label = "security")
     private boolean useDefaultCredentialsProvider;
+    @UriParam(label = "security")
+    private boolean useProfileCredentialsProvider;
+    @UriParam(label = "security")
+    private boolean useSessionCredentials;
+    @UriParam(label = "security")
+    private String profileCredentialsName;
 
     public EventBridgeClient getEventbridgeClient() {
         return eventbridgeClient;
     }
 
     /**
-     * To use a existing configured AWS Eventbridge as client
+     * To use an existing configured AWS Eventbridge client
      */
     public void setEventbridgeClient(EventBridgeClient eventbridgeClient) {
         this.eventbridgeClient = eventbridgeClient;
@@ -89,6 +98,17 @@ public class EventbridgeConfiguration implements Cloneable {
      */
     public void setSecretKey(String secretKey) {
         this.secretKey = secretKey;
+    }
+
+    public String getSessionToken() {
+        return sessionToken;
+    }
+
+    /**
+     * Amazon AWS Session Token used when the user needs to assume an IAM role
+     */
+    public void setSessionToken(String sessionToken) {
+        this.sessionToken = sessionToken;
     }
 
     public EventbridgeOperations getOperation() {
@@ -140,8 +160,9 @@ public class EventbridgeConfiguration implements Cloneable {
     }
 
     /**
-     * The region in which Eventbridge client needs to work. When using this parameter, the configuration will expect
-     * the lowercase name of the region (for example ap-east-1) You'll need to use the name Region.EU_WEST_1.id()
+     * The region in which the Eventbridge client needs to work. When using this parameter, the configuration will
+     * expect the lowercase name of the region (for example, ap-east-1) You'll need to use the name
+     * Region.EU_WEST_1.id()
      */
     public void setRegion(String region) {
         this.region = region;
@@ -185,7 +206,7 @@ public class EventbridgeConfiguration implements Cloneable {
     }
 
     /**
-     * The eventbus name, the default value is default and this means it will be the AWS event bus of your account.
+     * The eventbus name, the default value is default, and this means it will be the AWS event bus of your account.
      */
     public void setEventbusName(String eventbusName) {
         this.eventbusName = eventbusName;
@@ -196,8 +217,8 @@ public class EventbridgeConfiguration implements Cloneable {
     }
 
     /**
-     * Set the need for overidding the endpoint. This option needs to be used in combination with uriEndpointOverride
-     * option
+     * Set the need for overriding the endpoint. This option needs to be used in combination with the
+     * uriEndpointOverride option
      */
     public void setOverrideEndpoint(boolean overrideEndpoint) {
         this.overrideEndpoint = overrideEndpoint;
@@ -224,6 +245,40 @@ public class EventbridgeConfiguration implements Cloneable {
 
     public Boolean isUseDefaultCredentialsProvider() {
         return useDefaultCredentialsProvider;
+    }
+
+    public boolean isUseProfileCredentialsProvider() {
+        return useProfileCredentialsProvider;
+    }
+
+    /**
+     * Set whether the Eventbridge client should expect to load credentials through a profile credentials provider.
+     */
+    public void setUseProfileCredentialsProvider(boolean useProfileCredentialsProvider) {
+        this.useProfileCredentialsProvider = useProfileCredentialsProvider;
+    }
+
+    public boolean isUseSessionCredentials() {
+        return useSessionCredentials;
+    }
+
+    /**
+     * Set whether the Eventbridge client should expect to use Session Credentials. This is useful in a situation in
+     * which the user needs to assume an IAM role for doing operations in Eventbridge.
+     */
+    public void setUseSessionCredentials(boolean useSessionCredentials) {
+        this.useSessionCredentials = useSessionCredentials;
+    }
+
+    public String getProfileCredentialsName() {
+        return profileCredentialsName;
+    }
+
+    /**
+     * If using a profile credentials provider this parameter will set the profile name
+     */
+    public void setProfileCredentialsName(String profileCredentialsName) {
+        this.profileCredentialsName = profileCredentialsName;
     }
     // *************************************************
     //

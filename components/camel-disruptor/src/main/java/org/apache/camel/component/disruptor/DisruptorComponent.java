@@ -23,6 +23,7 @@ import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
 import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.util.StringHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,8 +90,8 @@ public class DisruptorComponent extends DefaultComponent {
             }
         }
 
-        // Check if the pollTimeout argument is set (may be the case if Disruptor component is used as drop-in
-        // replacement for the SEDA component.
+        // Check if the pollTimeout argument is set (maybe the case if the Disruptor component is used as drop-in
+        // replacement for the SEDA component).
         if (parameters.containsKey("pollTimeout")) {
             throw new IllegalArgumentException("The 'pollTimeout' argument is not supported by the Disruptor component");
         }
@@ -132,7 +133,8 @@ public class DisruptorComponent extends DefaultComponent {
         }
         sizeToUse = powerOfTwo(sizeToUse);
 
-        synchronized (this) {
+        lock.lock();
+        try {
             DisruptorReference ref = getDisruptors().get(key);
             if (ref == null) {
                 LOGGER.debug("Creating new disruptor for key {}", key);
@@ -150,6 +152,8 @@ public class DisruptorComponent extends DefaultComponent {
             }
 
             return ref;
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -165,17 +169,16 @@ public class DisruptorComponent extends DefaultComponent {
     }
 
     public static String getDisruptorKey(String uri) {
-        if (uri.contains("?")) {
-            // strip parameters
-            uri = uri.substring(0, uri.indexOf('?'));
-        }
-        return uri;
+        return StringHelper.before(uri, "?", uri);
     }
 
     @Override
     protected void doStop() throws Exception {
-        synchronized (this) {
+        lock.lock();
+        try {
             getDisruptors().clear();
+        } finally {
+            lock.unlock();
         }
         super.doStop();
     }

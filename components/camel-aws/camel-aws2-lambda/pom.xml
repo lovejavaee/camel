@@ -23,17 +23,18 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-aws-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-aws2-lambda</artifactId>
     <packaging>jar</packaging>
 
     <name>Camel :: AWS2 Lambda</name>
-    <description>A Camel Amazon Lambda We Service Component Version 2</description>
+    <description>Execute different operations on Amazon Lambda service</description>
 
     <properties>
         <camel.surefire.forkTimeout>1200</camel.surefire.forkTimeout>
+        <camel.surefire.fork.additional-vmargs>-Xmx2G</camel.surefire.fork.additional-vmargs>
     </properties>
 
     <dependencies>
@@ -64,7 +65,7 @@
         </dependency>
 
         <!-- test infra -->
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-aws-v2</artifactId>
             <version>${project.version}</version>
@@ -72,16 +73,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>${camel.surefire.fork.vmargs} -Xmx2G</argLine>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

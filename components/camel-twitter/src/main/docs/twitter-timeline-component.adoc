@@ -5,6 +5,7 @@
 :description: Send tweets and receive tweets from user's timeline.
 :since: 2.10
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: twitter
@@ -13,8 +14,15 @@
 
 *{component-header}*
 
-The Twitter Timeline component consumes twitter timeline or update the status of specific user.
-The timelineType can be one of: public, home, user, mentions or retweetsofme.
+The Twitter Timeline component consumes twitter timeline or updates the status of specific user.
+
+The `timelineType` can be one of:
+
+* `public`
+* `home`
+* `user`
+* `mentions`
+* `retweetsofme`
 
 // component-configure options: START
 

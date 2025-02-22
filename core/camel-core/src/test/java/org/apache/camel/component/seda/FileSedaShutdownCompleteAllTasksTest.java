@@ -31,10 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FileSedaShutdownCompleteAllTasksTest extends ContextTestSupport {
 
-    private String url = fileUri("?initialDelay=0&delay=10");
-
     @Test
     public void testShutdownCompleteAllTasks() throws Exception {
+        String url = fileUri("?initialDelay=0&delay=10");
+
         // prepare 5 files to begin with
         template.sendBodyAndHeader(url, "A", Exchange.FILE_NAME, "a.txt");
         template.sendBodyAndHeader(url, "B", Exchange.FILE_NAME, "b.txt");
@@ -46,7 +46,7 @@ public class FileSedaShutdownCompleteAllTasksTest extends ContextTestSupport {
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(url).routeId("route1")
                         // let it complete all tasks during shutdown
                         .shutdownRunningTask(ShutdownRunningTask.CompleteAllTasks).to("log:delay").to("seda:foo");

@@ -19,11 +19,14 @@ package org.apache.camel.impl.cloud;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.apache.camel.cloud.ServiceDefinition;
 import org.apache.camel.cloud.ServiceDiscovery;
 
+/**
+ * @deprecated since 4.7
+ */
+@Deprecated(since = "4.7")
 public class CombinedServiceDiscovery implements ServiceDiscovery {
     private final List<ServiceDiscovery> delegates;
 
@@ -39,7 +42,7 @@ public class CombinedServiceDiscovery implements ServiceDiscovery {
     public List<ServiceDefinition> getServices(String name) {
         return delegates.stream()
                 .flatMap(d -> d.getServices(name).stream())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     // **********************

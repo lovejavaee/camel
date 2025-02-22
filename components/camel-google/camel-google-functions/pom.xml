@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-google-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-google-functions</artifactId>
@@ -34,26 +34,8 @@
 
     <properties>
         <firstVersion>3.9.0</firstVersion>
+        <camel.surefire.forkTimeout>300</camel.surefire.forkTimeout>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <!-- Override the android JDK 7 guava in libraries-bom -->
-            <dependency>
-                <groupId>com.google.guava</groupId>
-                <artifactId>guava</artifactId>
-                <version>${google-cloud-guava-version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.cloud</groupId>
-                <artifactId>google-cloud-functions-bom</artifactId>
-                <version>${google-cloud-functions-bom-version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-
-    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -62,18 +44,9 @@
         </dependency>
 
         <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.google.code.findbugs</groupId>
-                    <artifactId>jsr305</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
             <groupId>com.google.cloud</groupId>
             <artifactId>google-cloud-functions</artifactId>
+            <version>${google-cloud-functions-version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.google.code.findbugs</groupId>
@@ -84,6 +57,7 @@
         <dependency>
             <groupId>com.google.api.grpc</groupId>
             <artifactId>grpc-google-cloud-functions-v1</artifactId>
+            <version>${google-cloud-functions-version}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -96,7 +70,7 @@
             <groupId>com.google.api</groupId>
             <artifactId>gax-grpc</artifactId>
             <classifier>testlib</classifier>
-            <version>${google-cloud-functions-gax-grpc-version}</version>
+            <version>${google-cloud-functions-version}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -111,26 +85,5 @@
             <artifactId>camel-test-junit5</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>${mockito-version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <childDelegation>false</childDelegation>
-                    <useFile>true</useFile>
-                    <forkCount>1</forkCount>
-                    <reuseForks>true</reuseForks>
-                    <forkedProcessTimeoutInSeconds>300</forkedProcessTimeoutInSeconds>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

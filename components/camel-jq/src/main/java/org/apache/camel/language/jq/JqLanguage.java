@@ -16,15 +16,38 @@
  */
 package org.apache.camel.language.jq;
 
+import net.thisptr.jackson.jq.Scope;
+import net.thisptr.jackson.jq.module.loaders.BuiltinModuleLoader;
 import org.apache.camel.Expression;
-import org.apache.camel.Predicate;
 import org.apache.camel.StaticService;
 import org.apache.camel.spi.annotations.Language;
-import org.apache.camel.support.ExpressionToPredicateAdapter;
+import org.apache.camel.support.CamelContextHelper;
 import org.apache.camel.support.SingleInputTypedLanguageSupport;
+import org.apache.camel.util.ObjectHelper;
 
 @Language("jq")
 public class JqLanguage extends SingleInputTypedLanguageSupport implements StaticService {
+
+    private Scope rootScope;
+
+    @Override
+    public void init() {
+        ObjectHelper.notNull(getCamelContext(), "CamelContext", this);
+
+        this.rootScope = CamelContextHelper.findSingleByType(getCamelContext(), Scope.class);
+        if (this.rootScope == null) {
+            this.rootScope = Scope.newEmptyScope();
+            this.rootScope.setModuleLoader(BuiltinModuleLoader.getInstance());
+            JqFunctions.load(getCamelContext(), rootScope);
+        }
+
+        JqFunctions.loadFromRegistry(getCamelContext(), rootScope);
+        JqFunctions.loadLocal(rootScope);
+    }
+
+    public Scope getRootScope() {
+        return rootScope;
+    }
 
     @Override
     public void start() {
@@ -37,32 +60,14 @@ public class JqLanguage extends SingleInputTypedLanguageSupport implements Stati
     }
 
     @Override
-    public Predicate createPredicate(String expression) {
-        return ExpressionToPredicateAdapter.toPredicate(createExpression(expression));
-    }
-
-    @Override
-    public Predicate createPredicate(String expression, Object[] properties) {
-        return ExpressionToPredicateAdapter.toPredicate(createExpression(expression, properties));
-    }
-
-    @Override
-    public Expression createExpression(String expression) {
-        JqExpression answer = new JqExpression(expression);
-        answer.setResultType(getResultType());
-        answer.setHeaderName(getHeaderName());
-        answer.setPropertyName(getPropertyName());
-        answer.init(getCamelContext());
+    public Expression createExpression(Expression source, String expression, Object[] properties) {
+        JqExpression answer = new JqExpression(Scope.newChildScope(rootScope), expression);
+        answer.setResultType(property(Class.class, properties, 0, null));
+        answer.setSource(source);
+        if (getCamelContext() != null) {
+            answer.init(getCamelContext());
+        }
         return answer;
     }
 
-    @Override
-    public Expression createExpression(String expression, Object[] properties) {
-        JqExpression answer = new JqExpression(expression);
-        answer.setResultType(property(Class.class, properties, 0, getResultType()));
-        answer.setHeaderName(property(String.class, properties, 1, getHeaderName()));
-        answer.setPropertyName(property(String.class, properties, 2, getPropertyName()));
-        answer.init(getCamelContext());
-        return answer;
-    }
 }

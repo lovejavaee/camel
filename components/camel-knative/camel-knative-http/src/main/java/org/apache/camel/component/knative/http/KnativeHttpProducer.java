@@ -27,6 +27,7 @@ import io.vertx.core.http.HttpHeaders;
 import io.vertx.ext.web.client.HttpResponse;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.WebClientOptions;
+import io.vertx.ext.web.client.impl.WebClientBase;
 import org.apache.camel.AsyncCallback;
 import org.apache.camel.CamelException;
 import org.apache.camel.Endpoint;
@@ -34,6 +35,8 @@ import org.apache.camel.Exchange;
 import org.apache.camel.InvalidPayloadException;
 import org.apache.camel.Message;
 import org.apache.camel.RuntimeCamelException;
+import org.apache.camel.api.management.ManagedAttribute;
+import org.apache.camel.api.management.ManagedResource;
 import org.apache.camel.component.knative.spi.KnativeResource;
 import org.apache.camel.spi.HeaderFilterStrategy;
 import org.apache.camel.support.DefaultAsyncProducer;
@@ -43,6 +46,7 @@ import org.apache.camel.util.URISupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@ManagedResource(description = "Managed KnativeHttpProducer")
 public class KnativeHttpProducer extends DefaultAsyncProducer {
     private static final Logger LOGGER = LoggerFactory.getLogger(KnativeHttpProducer.class);
 
@@ -68,23 +72,25 @@ public class KnativeHttpProducer extends DefaultAsyncProducer {
         this.headerFilterStrategy = new KnativeHttpHeaderFilterStrategy();
     }
 
+    @ManagedAttribute(description = "Url for calling the Knative HTTP service")
+    public String getUrl() {
+        return uri;
+    }
+
     @Override
     public boolean process(Exchange exchange, AsyncCallback callback) {
         if (exchange.getMessage().getBody() == null) {
             exchange.setException(new IllegalArgumentException("body must not be null"));
             callback.done(true);
-
             return true;
         }
 
         final byte[] payload;
-
         try {
             payload = exchange.getMessage().getMandatoryBody(byte[].class);
         } catch (InvalidPayloadException e) {
             exchange.setException(e);
             callback.done(true);
-
             return true;
         }
 
@@ -142,6 +148,14 @@ public class KnativeHttpProducer extends DefaultAsyncProducer {
                             exceptionMessage += " with statusCode: " + response.result().statusCode();
                         }
 
+                        if (response.cause() != null) {
+                            exceptionMessage += " caused by: " + response.cause().getMessage();
+
+                            if (response.cause().getCause() != null) {
+                                exceptionMessage += ", " + response.cause().getCause().getMessage();
+                            }
+                        }
+
                         exchange.setException(new CamelException(exceptionMessage));
                     }
 
@@ -153,17 +167,21 @@ public class KnativeHttpProducer extends DefaultAsyncProducer {
 
     @Override
     protected void doInit() throws Exception {
+        super.doInit();
         this.uri = getUrl(serviceDefinition);
         this.host = getHost(serviceDefinition);
         this.client = WebClient.create(vertx, clientOptions);
 
-        super.doInit();
+        if (clientOptions instanceof KnativeOidcClientOptions oidcClientOptions) {
+            if (oidcClientOptions.isOidcEnabled()) {
+                ((WebClientBase) this.client).addInterceptor(new KnativeOidcInterceptor(oidcClientOptions));
+            }
+        }
     }
 
     @Override
     protected void doStop() throws Exception {
         super.doStop();
-
         if (this.client != null) {
             LOGGER.debug("Shutting down client: {}", client);
             this.client.close();
@@ -194,7 +212,6 @@ public class KnativeHttpProducer extends DefaultAsyncProducer {
 
     private String getHost(KnativeResource definition) {
         String url = getUrl(definition);
-
         try {
             return new URL(url).getHost();
         } catch (MalformedURLException e) {

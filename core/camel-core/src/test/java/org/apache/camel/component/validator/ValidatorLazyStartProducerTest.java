@@ -22,7 +22,7 @@ import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ValidatorLazyStartProducerTest extends ContextTestSupport {
 
@@ -30,14 +30,11 @@ public class ValidatorLazyStartProducerTest extends ContextTestSupport {
     public void testLazyStartProducerFail() throws Exception {
         getMockEndpoint("mock:result").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:fail",
-                    "<mail xmlns='http://foo.com/bar'><subject>Hey</subject><body>Hello world!</body></mail>");
-            fail("Should throw exception");
-        } catch (Exception e) {
-            assertIsInstanceOf(FileNotFoundException.class, e.getCause());
-        }
+        Exception e = assertThrows(Exception.class, () -> template.sendBody("direct:fail",
+                "<mail xmlns='http://foo.com/bar'><subject>Hey</subject><body>Hello world!</body></mail>"),
+                "Should throw exception");
 
+        assertIsInstanceOf(FileNotFoundException.class, e.getCause());
         assertMockEndpointsSatisfied();
     }
 
@@ -52,10 +49,10 @@ public class ValidatorLazyStartProducerTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:fail").to("validator:org/apache/camel/component/validator/unknown.xsd?lazyStartProducer=true")
                         .to("mock:result");
 

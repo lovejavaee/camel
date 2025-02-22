@@ -16,8 +16,6 @@
  */
 package org.apache.camel.component.http;
 
-import java.io.IOException;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.component.http.handler.BasicValidationHandler;
 import org.apache.camel.http.base.HttpOperationFailedException;
@@ -29,8 +27,6 @@ import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.io.HttpRequestHandler;
 import org.apache.hc.core5.http.protocol.HttpContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -45,10 +41,10 @@ public class HttpRedirectTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/someplaceelse", new BasicValidationHandler(GET.name(), null, null, "Bye World"))
@@ -56,14 +52,10 @@ public class HttpRedirectTest extends BaseHttpTest {
                 .register("/testPost", new RedirectPostHandler(308))
                 .register("/test", new RedirectHandler(HttpStatus.SC_MOVED_PERMANENTLY)).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -71,7 +63,7 @@ public class HttpRedirectTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpRedirectFalse() throws Exception {
+    public void httpRedirectFalse() {
 
         String uri = "http://localhost:" + localServer.getLocalPort()
                      + "/test?httpClient.redirectsEnabled=false&httpClient.responseTimeout=60000&httpClient.connectTimeout=60000"
@@ -90,7 +82,7 @@ public class HttpRedirectTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpHandleRedirect() throws Exception {
+    public void httpHandleRedirect() {
 
         String uri = "http://localhost:" + localServer.getLocalPort()
                      + "/test?httpClient.responseTimeout=60000&httpClient.connectTimeout=60000"
@@ -106,7 +98,7 @@ public class HttpRedirectTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpHandleFollowRedirect() throws Exception {
+    public void httpHandleFollowRedirect() {
 
         String uri = "http://localhost:" + localServer.getLocalPort()
                      + "/testPost?httpClient.responseTimeout=60000&httpClient.connectTimeout=60000"
@@ -153,7 +145,7 @@ public class HttpRedirectTest extends BaseHttpTest {
 
         @Override
         public void handle(ClassicHttpRequest request, ClassicHttpResponse response, HttpContext context)
-                throws HttpException, IOException {
+                throws HttpException {
             response.setHeader("location", "http://localhost:"
                                            + localServer.getLocalPort() + "/someplaceelse");
             response.setCode(code);
@@ -170,7 +162,7 @@ public class HttpRedirectTest extends BaseHttpTest {
 
         @Override
         public void handle(ClassicHttpRequest request, ClassicHttpResponse response, HttpContext context)
-                throws HttpException, IOException {
+                throws HttpException {
             response.setHeader("location", "http://localhost:"
                                            + localServer.getLocalPort() + "/redirectplace");
             response.setCode(code);

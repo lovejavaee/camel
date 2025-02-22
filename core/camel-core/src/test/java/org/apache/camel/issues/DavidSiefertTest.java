@@ -24,10 +24,10 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DavidSiefertTest extends ContextTestSupport {
-    protected static Object expectedBody = "Some Output";
+    protected static final Object expectedBody = "Some Output";
 
     @Test
     public void testWorks() throws Exception {
@@ -40,22 +40,21 @@ public class DavidSiefertTest extends ContextTestSupport {
     }
 
     @Test
-    public void testHeaderPredicateFails() throws Exception {
+    public void testHeaderPredicateFails() {
         MockEndpoint result = getMockEndpoint("mock:result");
         result.message(0).header("sample.name").isEqualTo("shouldNotMatch");
         template.sendBody("direct:start", "<sample><name>value</name></sample>");
-        try {
-            result.assertIsSatisfied();
-            fail("Should have failed this test!");
-        } catch (AssertionError e) {
-            log.info("Caught expected assertion failure: {}", e, e);
-        }
+
+        AssertionError e = assertThrows(AssertionError.class, result::assertIsSatisfied,
+                "Should have failed this test!");
+
+        log.info("Caught expected assertion failure: {}", e, e);
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").process(new MyProcessor()).to("mock:result");
             }
         };
@@ -63,7 +62,7 @@ public class DavidSiefertTest extends ContextTestSupport {
 
     public static class MyProcessor implements Processor {
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             exchange.getIn().getBody(String.class);
 
             Message output = exchange.getMessage();

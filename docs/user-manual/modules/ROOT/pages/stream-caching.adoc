@@ -19,6 +19,12 @@ In order to determine if a message payload requires caching, then Camel uses
 the xref:type-converter.adoc[Type Converter] functionality, to determine if
 the message payload type can be converted into an `org.apache.camel.StreamCache` instance.
 
+[IMPORTANT]
+====
+All the classes from the Camel release that implements `org.apache.camel.StreamCache` is NOT intended for end users
+to create as instances, but they are part of Camels stream-caching functionality.
+====
+
 == Configuring Stream Caching
 
 Stream caching is configured using `org.apache.camel.spi.StreamCachingStrategy`.
@@ -31,6 +37,10 @@ The strategy has the following options:
 
 | enabled | true
 | Whether stream caching is enabled
+
+| allowClasses | | To filter stream caching of a given set of allowed/denied classes. By default, all classes that are `java.io.InputStream` is allowed. Multiple class names can be separated by comma.
+
+| denyClasses | | To filter stream caching of a given set of allowed/denied classes. By default, all classes that are `java.io.InputStream` is allowed. Multiple class names can be separated by comma.
 
 | spoolEnabled | false
 | Whether spool to disk is enabled
@@ -211,3 +221,13 @@ Using the spoolRules attribute on `<streamCaching>`. if you have more rules, the
 <streamCaching id="myCacheConfig" spoolEnabled="true" spoolDirectory="/tmp/cachedir" spoolRules="mySpoolRule,myOtherSpoolRule"/>
 ----
 
+== Using StreamCachingProcessor
+
+Since Camel 4.11 this processor can be used to convert the current message body to a `StreamCache`. This allows the body to be re-read multiple times and can be placed at any point in a Camel route.
+
+[source, java]
+----
+from("direct:start")
+    .process(new StreamCachingProcessor())
+    .to("log:cached");
+----

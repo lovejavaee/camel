@@ -26,11 +26,11 @@ import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.model.Message;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class SqsConsumerExtendMessageVisibilityTest extends CamelTestSupport {
 
-    private static final int TIMEOUT = 2; // 2 seconds.
+    private static final int TIMEOUT_IN_SECONDS = 2; // 2 seconds.
     private static final String RECEIPT_HANDLE = "0NNAq8PwvXsyZkR6yu4nQ07FGxNmOBWi5";
 
     @EndpointInject("mock:result")
@@ -46,7 +46,7 @@ public class SqsConsumerExtendMessageVisibilityTest extends CamelTestSupport {
             @Override
             public void process(Exchange exchange) throws Exception {
                 // Simulate message that takes a while to receive.
-                Thread.sleep(TIMEOUT * 1500L); // 150% of TIMEOUT.
+                Thread.sleep(TIMEOUT_IN_SECONDS * 1500L); // 150% of TIMEOUT.
             }
         });
 
@@ -55,13 +55,12 @@ public class SqsConsumerExtendMessageVisibilityTest extends CamelTestSupport {
         message.md5OfBody("6a1559560f67c5e7a7d5d838bf0272ee");
         message.messageId("f6fb6f99-5eb2-4be4-9b15-144774141458");
         message.receiptHandle(RECEIPT_HANDLE);
-        this.client.messages.add(message.build());
+        this.client.addMessage(message.build());
 
         // Wait for message to arrive.
         MockEndpoint.assertIsSatisfied(context);
 
-        assertTrue(this.client.changeMessageVisibilityRequests.size() >= 1);
-        assertTrue(this.client.changeMessageVisibilityRequests.size() <= 3);
+        assertThat(this.client.getChangeMessageVisibilityBatchRequests()).hasSizeBetween(1, 3);
     }
 
     @Override
@@ -69,7 +68,7 @@ public class SqsConsumerExtendMessageVisibilityTest extends CamelTestSupport {
         return new RouteBuilder() {
             @Override
             public void configure() {
-                from("aws2-sqs://MyQueue?amazonSQSClient=#amazonSQSClient&visibilityTimeout=" + TIMEOUT
+                from("aws2-sqs://MyQueue?amazonSQSClient=#amazonSQSClient&visibilityTimeout=" + TIMEOUT_IN_SECONDS
                      + "&extendMessageVisibility=true").to("mock:result");
             }
         };

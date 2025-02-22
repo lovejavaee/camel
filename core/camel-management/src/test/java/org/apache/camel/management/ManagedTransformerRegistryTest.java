@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -85,25 +86,25 @@ public class ManagedTransformerRegistryTest extends ManagementTestSupport {
         TabularData data = (TabularData) mbeanServer.invoke(on, "listTransformers", null, null);
         for (Object row : data.values()) {
             CompositeData composite = (CompositeData) row;
-            String scheme = (String) composite.get("scheme");
+            String name = (String) composite.get("name");
             String from = (String) composite.get("from");
             String to = (String) composite.get("to");
             String description = (String) composite.get("description");
             boolean isStatic = (boolean) composite.get("static");
             boolean isDynamic = (boolean) composite.get("dynamic");
-            LOG.info("[{}][{}][{}][{}][{}][{}]", scheme, from, to, isStatic, isDynamic, description);
+            LOG.info("[{}][{}][{}][{}][{}][{}]", name, from, to, isStatic, isDynamic, description);
             if (description.startsWith("ProcessorTransformer")) {
-                assertEquals(null, scheme);
+                assertNull(name);
                 assertEquals("xml:foo", from);
                 assertEquals("json:bar", to);
             } else if (description.startsWith("DataFormatTransformer")) {
-                assertEquals(null, scheme);
+                assertNull(name);
                 assertEquals("java:" + ManagedTransformerRegistryTest.class.getName(), from);
                 assertEquals("xml:test", to);
             } else if (description.startsWith("MyTransformer")) {
-                assertEquals("custom", scheme);
-                assertEquals(null, from);
-                assertEquals(null, to);
+                assertEquals("custom", name);
+                assertEquals("camel:any", from);
+                assertEquals("camel:any", to);
             } else {
                 fail("Unexpected transformer:" + description);
             }
@@ -112,16 +113,16 @@ public class ManagedTransformerRegistryTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 transformer()
                         .fromType("xml:foo")
                         .toType("json:bar")
                         .withUri("direct:transformer");
                 transformer()
-                        .scheme("custom")
+                        .name("custom")
                         .withJava(MyTransformer.class);
 
                 from("direct:start").to("mock:result");
@@ -131,7 +132,7 @@ public class ManagedTransformerRegistryTest extends ManagementTestSupport {
 
     public static class MyTransformer extends Transformer {
         @Override
-        public void transform(Message message, DataType from, DataType to) throws Exception {
+        public void transform(Message message, DataType from, DataType to) {
             // empty
         }
     }

@@ -38,6 +38,9 @@ public interface ManagedBacklogDebuggerMBean {
     @ManagedAttribute(description = "Is debugger enabled")
     boolean isEnabled();
 
+    @ManagedAttribute(description = "Is debugger standby")
+    boolean isStandby();
+
     @ManagedOperation(description = "Enable the debugger")
     void enableDebugger();
 
@@ -83,11 +86,17 @@ public interface ManagedBacklogDebuggerMBean {
     @ManagedOperation(description = "Starts single step debugging from the suspended breakpoint at the given node id")
     void stepBreakpoint(String nodeId);
 
+    @ManagedAttribute(description = "Suspended mode will suspend all exchanges until a remote debugger is attached")
+    boolean isSuspendedMode();
+
     @ManagedAttribute(description = "Whether currently in step mode")
     boolean isSingleStepMode();
 
-    @ManagedOperation(description = "Steps to next node in step mode")
+    @ManagedOperation(description = "Steps (into) to next node in step mode")
     void step();
+
+    @ManagedOperation(description = "Steps over the next node in step mode")
+    void stepOver();
 
     @ManagedOperation(description = "Return the node ids which has breakpoints")
     Set<String> breakpoints();
@@ -125,8 +134,27 @@ public interface ManagedBacklogDebuggerMBean {
     @ManagedAttribute(description = "Whether to include file based message body in the trace message.")
     void setBodyIncludeFiles(boolean bodyIncludeFiles);
 
-    @ManagedOperation(description = "Dumps the messages in xml format from the suspended breakpoint at the given node, optionally including the exchange properties")
+    @ManagedAttribute(description = "Whether to include exchange properties in the trace message.")
+    boolean isIncludeExchangeProperties();
+
+    @ManagedAttribute(description = "Whether to include exchange properties in the trace message.")
+    void setIncludeExchangeProperties(boolean includeExchangeProperties);
+
+    @ManagedAttribute(description = "Whether to include exchange variables in the trace message.")
+    boolean isIncludeExchangeVariables();
+
+    @ManagedAttribute(description = "Whether to include exchange variables in the trace message.")
+    void setIncludeExchangeVariables(boolean includeExchangeVariables);
+
+    @ManagedOperation(description = "Dumps the messages in XML format from the suspended breakpoint at the given node.")
+    String dumpTracedMessagesAsXml(String nodeId);
+
+    @ManagedOperation(description = "Dumps the messages in XML format from the suspended breakpoint at the given node.")
+    @Deprecated(since = "4.2.0")
     String dumpTracedMessagesAsXml(String nodeId, boolean includeExchangeProperties);
+
+    @ManagedOperation(description = "Dumps the messages in JSon format from the suspended breakpoint at the given node.")
+    String dumpTracedMessagesAsJSon(String nodeId);
 
     @ManagedAttribute(description = "Number of total debugged messages")
     long getDebugCounter();
@@ -143,14 +171,23 @@ public interface ManagedBacklogDebuggerMBean {
     @ManagedOperation(description = "Evaluates the expression at a given breakpoint node id and returns the result as String")
     String evaluateExpressionAtBreakpoint(String nodeId, String language, String expression);
 
-    @ManagedOperation(description = "Updates/adds the exchange property (uses same type as old exchange property  value) on the suspended breakpoint at the given node id")
+    @ManagedOperation(description = "Updates/adds the exchange property (uses same type as old exchange property value) on the suspended breakpoint at the given node id")
     void setExchangePropertyOnBreakpoint(String nodeId, String exchangePropertyName, Object value);
+
+    @ManagedOperation(description = "Updates/adds the exchange property (with a new type) on the suspended breakpoint at the given node id")
+    void setExchangePropertyOnBreakpoint(String nodeId, String exchangePropertyName, Object value, String type);
 
     @ManagedOperation(description = "Removes the exchange property on the suspended breakpoint at the given node id")
     void removeExchangePropertyOnBreakpoint(String nodeId, String exchangePropertyName);
 
-    @ManagedOperation(description = "Updates/adds the exchange property (with a new type) on the suspended breakpoint at the given node id")
-    void setExchangePropertyOnBreakpoint(String nodeId, String exchangePropertyName, Object value, String type);
+    @ManagedOperation(description = "Updates/adds the exchange variable (uses same type as old variableName value) on the suspended breakpoint at the given node id")
+    void setExchangeVariableOnBreakpoint(String nodeId, String variableName, Object value);
+
+    @ManagedOperation(description = "Updates/adds the exchange variable (with a new type) on the suspended breakpoint at the given node id")
+    void setExchangeVariableOnBreakpoint(String nodeId, String variableName, Object value, String type);
+
+    @ManagedOperation(description = "Removes the exchange variable on the suspended breakpoint at the given node id")
+    void removeExchangeVariableOnBreakpoint(String nodeId, String variableName);
 
     @ManagedOperation(description = "Returns the message history at the given node id as XML")
     String messageHistoryOnBreakpointAsXml(String nodeId);

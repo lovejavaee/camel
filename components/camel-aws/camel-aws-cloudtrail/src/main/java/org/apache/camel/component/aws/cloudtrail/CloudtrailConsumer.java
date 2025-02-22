@@ -26,41 +26,17 @@ import java.util.Queue;
 import org.apache.camel.AsyncCallback;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
-import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.health.WritableHealthCheckRepository;
 import org.apache.camel.support.ScheduledBatchPollingConsumer;
 import org.apache.camel.util.CastUtils;
 import org.apache.camel.util.ObjectHelper;
 import software.amazon.awssdk.services.cloudtrail.CloudTrailClient;
-import software.amazon.awssdk.services.cloudtrail.model.Event;
-import software.amazon.awssdk.services.cloudtrail.model.LookupAttribute;
-import software.amazon.awssdk.services.cloudtrail.model.LookupAttributeKey;
-import software.amazon.awssdk.services.cloudtrail.model.LookupEventsRequest;
-import software.amazon.awssdk.services.cloudtrail.model.LookupEventsResponse;
+import software.amazon.awssdk.services.cloudtrail.model.*;
 
 public class CloudtrailConsumer extends ScheduledBatchPollingConsumer {
     private static Instant lastTime;
 
-    private WritableHealthCheckRepository healthCheckRepository;
-    private CloudtrailConsumerHealthCheck consumerHealthCheck;
-
     public CloudtrailConsumer(CloudtrailEndpoint endpoint, Processor processor) {
         super(endpoint, processor);
-    }
-
-    @Override
-    protected void doStart() throws Exception {
-        super.doStart();
-
-        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(
-                getEndpoint().getCamelContext(),
-                "components",
-                WritableHealthCheckRepository.class);
-
-        if (healthCheckRepository != null) {
-            consumerHealthCheck = new CloudtrailConsumerHealthCheck(this, getRouteId());
-            healthCheckRepository.addHealthCheck(consumerHealthCheck);
-        }
     }
 
     @Override
@@ -68,7 +44,7 @@ public class CloudtrailConsumer extends ScheduledBatchPollingConsumer {
         LookupEventsRequest.Builder eventsRequestBuilder
                 = LookupEventsRequest.builder().maxResults(getEndpoint().getConfiguration().getMaxResults());
 
-        List<LookupAttribute> attributes = new ArrayList<LookupAttribute>();
+        List<LookupAttribute> attributes = new ArrayList<>();
         if (ObjectHelper.isNotEmpty(getEndpoint().getConfiguration().getEventSource())) {
             LookupAttribute eventSource = LookupAttribute.builder().attributeKey(LookupAttributeKey.EVENT_SOURCE)
                     .attributeValue(getEndpoint().getConfiguration().getEventSource()).build();
@@ -82,6 +58,9 @@ public class CloudtrailConsumer extends ScheduledBatchPollingConsumer {
         }
 
         LookupEventsResponse response = getClient().lookupEvents(eventsRequestBuilder.build());
+
+        // okay we have some response from aws so lets mark the consumer as ready
+        forceConsumerAsReady();
 
         if (!response.events().isEmpty()) {
             lastTime = response.events().get(0).eventTime();
@@ -105,15 +84,6 @@ public class CloudtrailConsumer extends ScheduledBatchPollingConsumer {
         return processedExchanges;
     }
 
-    @Override
-    protected void doStop() throws Exception {
-        if (healthCheckRepository != null && consumerHealthCheck != null) {
-            healthCheckRepository.removeHealthCheck(consumerHealthCheck);
-            consumerHealthCheck = null;
-        }
-        super.doStop();
-    }
-
     private CloudTrailClient getClient() {
         return getEndpoint().getClient();
     }
@@ -133,7 +103,11 @@ public class CloudtrailConsumer extends ScheduledBatchPollingConsumer {
 
     protected Exchange createExchange(Event event) {
         Exchange exchange = createExchange(true);
-        exchange.getIn().setBody(event.cloudTrailEvent().getBytes(StandardCharsets.UTF_8));
+        exchange.getMessage().setBody(event.cloudTrailEvent().getBytes(StandardCharsets.UTF_8));
+        exchange.getMessage().setHeader(CloudtrailConstants.EVENT_ID, event.eventId());
+        exchange.getMessage().setHeader(CloudtrailConstants.EVENT_NAME, event.eventName());
+        exchange.getMessage().setHeader(CloudtrailConstants.EVENT_SOURCE, event.eventSource());
+        exchange.getMessage().setHeader(CloudtrailConstants.USERNAME, event.username());
         return exchange;
     }
 }

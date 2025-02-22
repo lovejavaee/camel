@@ -17,7 +17,9 @@
 package org.apache.camel.component.aws2.lambda.client;
 
 import org.apache.camel.component.aws2.lambda.Lambda2Configuration;
+import org.apache.camel.component.aws2.lambda.client.impl.Lambda2ClientIAMProfileOptimizedImpl;
 import org.apache.camel.component.aws2.lambda.client.impl.Lambda2ClientOptimizedImpl;
+import org.apache.camel.component.aws2.lambda.client.impl.Lambda2ClientSessionTokenImpl;
 import org.apache.camel.component.aws2.lambda.client.impl.Lambda2ClientStandardImpl;
 
 /**
@@ -35,7 +37,14 @@ public final class Lambda2ClientFactory {
      * @return               LambdaClient
      */
     public static Lambda2InternalClient getLambdaClient(Lambda2Configuration configuration) {
-        return Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())
-                ? new Lambda2ClientOptimizedImpl(configuration) : new Lambda2ClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new Lambda2ClientOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new Lambda2ClientIAMProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new Lambda2ClientSessionTokenImpl(configuration);
+        } else {
+            return new Lambda2ClientStandardImpl(configuration);
+        }
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.camel.impl;
 
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.ConsumerTemplate;
@@ -25,6 +26,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.impl.engine.DefaultConsumerTemplate;
 import org.apache.camel.support.DefaultExchange;
+import org.apache.camel.util.StopWatch;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,10 +36,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class DefaultConsumerTemplateTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME = "hello" + UUID.randomUUID() + ".txt";
+    private static final String TEST_SEDA_CONSUMER = "foo" + UUID.randomUUID();
 
     private DefaultConsumerTemplate consumer;
 
@@ -57,10 +61,10 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testConsumeReceive() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceive() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        Exchange out = consumer.receive("seda:foo");
+        Exchange out = consumer.receive("seda:" + TEST_SEDA_CONSUMER);
         assertNotNull(out);
         assertEquals("Hello", out.getIn().getBody());
 
@@ -68,29 +72,29 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testConsumeTwiceReceive() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeTwiceReceive() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        Exchange out = consumer.receive("seda:foo");
+        Exchange out = consumer.receive("seda:" + TEST_SEDA_CONSUMER);
         assertNotNull(out);
         assertEquals("Hello", out.getIn().getBody());
 
-        template.sendBody("seda:foo", "Bye");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Bye");
 
-        out = consumer.receive("seda:foo");
+        out = consumer.receive("seda:" + TEST_SEDA_CONSUMER);
         assertNotNull(out);
         assertEquals("Bye", out.getIn().getBody());
     }
 
     @Test
-    public void testConsumeReceiveNoWait() throws Exception {
-        Exchange out = consumer.receiveNoWait("seda:foo");
+    public void testConsumeReceiveNoWait() {
+        Exchange out = consumer.receiveNoWait("seda:" + TEST_SEDA_CONSUMER);
         assertNull(out);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         await().atMost(1, TimeUnit.SECONDS).until(() -> {
-            Exchange foo = consumer.receiveNoWait("seda:foo");
+            Exchange foo = consumer.receiveNoWait("seda:" + TEST_SEDA_CONSUMER);
             if (foo != null) {
                 assertEquals("Hello", foo.getIn().getBody());
             }
@@ -99,118 +103,118 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testConsumeReceiveTimeout() throws Exception {
-        long start = System.currentTimeMillis();
-        Exchange out = consumer.receive("seda:foo", 1000);
+    public void testConsumeReceiveTimeout() {
+        StopWatch watch = new StopWatch();
+        Exchange out = consumer.receive("seda:" + TEST_SEDA_CONSUMER, 1000);
         assertNull(out);
-        long delta = System.currentTimeMillis() - start;
+        long delta = watch.taken();
         assertTrue(delta < 1500, "Should take about 1 sec: " + delta);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        out = consumer.receive("seda:foo");
+        out = consumer.receive("seda:" + TEST_SEDA_CONSUMER);
         assertEquals("Hello", out.getIn().getBody());
     }
 
     @Test
-    public void testConsumeReceiveBody() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveBody() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        Object body = consumer.receiveBody("seda:foo");
+        Object body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeTwiceReceiveBody() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeTwiceReceiveBody() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        Object body = consumer.receiveBody("seda:foo");
+        Object body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER);
         assertEquals("Hello", body);
 
-        template.sendBody("seda:foo", "Bye");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Bye");
 
-        body = consumer.receiveBody("seda:foo");
+        body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER);
         assertEquals("Bye", body);
     }
 
     @Test
-    public void testConsumeReceiveBodyNoWait() throws Exception {
-        Object body = consumer.receiveBodyNoWait("seda:foo");
+    public void testConsumeReceiveBodyNoWait() {
+        Object body = consumer.receiveBodyNoWait("seda:" + TEST_SEDA_CONSUMER);
         assertNull(body);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> {
-            Object foo = consumer.receiveBodyNoWait("seda:foo");
+            Object foo = consumer.receiveBodyNoWait("seda:" + TEST_SEDA_CONSUMER);
             assertEquals("Hello", foo);
         });
     }
 
     @Test
-    public void testConsumeReceiveBodyString() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveBodyString() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        String body = consumer.receiveBody("seda:foo", String.class);
+        String body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER, String.class);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeTwiceReceiveBodyString() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeTwiceReceiveBodyString() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        String body = consumer.receiveBody("seda:foo", String.class);
+        String body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER, String.class);
         assertEquals("Hello", body);
 
-        template.sendBody("seda:foo", "Bye");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Bye");
 
-        body = consumer.receiveBody("seda:foo", String.class);
+        body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER, String.class);
         assertEquals("Bye", body);
     }
 
     @Test
-    public void testConsumeReceiveBodyStringNoWait() throws Exception {
-        String body = consumer.receiveBodyNoWait("seda:foo", String.class);
+    public void testConsumeReceiveBodyStringNoWait() {
+        String body = consumer.receiveBodyNoWait("seda:" + TEST_SEDA_CONSUMER, String.class);
         assertNull(body);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> {
-            String foo = consumer.receiveBodyNoWait("seda:foo", String.class);
+            String foo = consumer.receiveBodyNoWait("seda:" + TEST_SEDA_CONSUMER, String.class);
             assertEquals("Hello", foo);
         });
     }
 
     @Test
-    public void testConsumeReceiveEndpoint() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveEndpoint() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         Exchange out = consumer.receive(endpoint);
         assertEquals("Hello", out.getIn().getBody());
     }
 
     @Test
-    public void testConsumeReceiveEndpointTimeout() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveEndpointTimeout() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         Exchange out = consumer.receive(endpoint, 1000);
         assertEquals("Hello", out.getIn().getBody());
     }
 
     @Test
-    public void testConsumeReceiveEndpointNoWait() throws Exception {
+    public void testConsumeReceiveEndpointNoWait() {
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         Exchange out = consumer.receiveNoWait(endpoint);
         assertNull(out);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         await().atMost(1, TimeUnit.SECONDS).until(() -> {
             Exchange foo = consumer.receiveNoWait(endpoint);
@@ -222,66 +226,66 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testConsumeReceiveEndpointBody() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveEndpointBody() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         Object body = consumer.receiveBody(endpoint);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeReceiveEndpointBodyTimeout() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveEndpointBodyTimeout() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         Object body = consumer.receiveBody(endpoint, 1000);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeReceiveEndpointBodyType() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveEndpointBodyType() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         String body = consumer.receiveBody(endpoint, String.class);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeReceiveEndpointBodyTimeoutType() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveEndpointBodyTimeoutType() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         String body = consumer.receiveBody(endpoint, 1000, String.class);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeReceiveBodyTimeoutType() throws Exception {
-        template.sendBody("seda:foo", "Hello");
+    public void testConsumeReceiveBodyTimeoutType() {
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
-        String body = consumer.receiveBody("seda:foo", 1000, String.class);
+        String body = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER, 1000, String.class);
         assertEquals("Hello", body);
     }
 
     @Test
-    public void testConsumeReceiveEndpointBodyTypeNoWait() throws Exception {
+    public void testConsumeReceiveEndpointBodyTypeNoWait() {
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         String out = consumer.receiveBodyNoWait(endpoint, String.class);
         assertNull(out);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> {
             String foo = consumer.receiveBodyNoWait(endpoint, String.class);
@@ -290,14 +294,14 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testConsumeReceiveEndpointBodyNoWait() throws Exception {
+    public void testConsumeReceiveEndpointBodyNoWait() {
         assertNotNull(consumer.getCamelContext());
-        Endpoint endpoint = context.getEndpoint("seda:foo");
+        Endpoint endpoint = context.getEndpoint("seda:" + TEST_SEDA_CONSUMER);
 
         Object out = consumer.receiveBodyNoWait(endpoint);
         assertNull(out);
 
-        template.sendBody("seda:foo", "Hello");
+        template.sendBody("seda:" + TEST_SEDA_CONSUMER, "Hello");
 
         await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> {
             Object foo = consumer.receiveBodyNoWait(endpoint);
@@ -306,35 +310,34 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testReceiveException() throws Exception {
+    public void testReceiveException() {
         Exchange exchange = new DefaultExchange(context);
         exchange.setException(new IllegalArgumentException("Damn"));
 
-        Exchange out = template.send("seda:foo", exchange);
+        Exchange out = template.send("seda:" + TEST_SEDA_CONSUMER, exchange);
         assertTrue(out.isFailed());
         assertNotNull(out.getException());
 
-        try {
-            consumer.receiveBody("seda:foo", String.class);
-            fail("Should have thrown an exception");
-        } catch (RuntimeCamelException e) {
-            assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertEquals("Damn", e.getCause().getMessage());
-        }
+        RuntimeCamelException e = assertThrows(RuntimeCamelException.class,
+                () -> consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER, String.class),
+                "Should have thrown an exception");
+
+        assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertEquals("Damn", e.getCause().getMessage());
     }
 
     @Test
-    public void testReceiveOut() throws Exception {
+    public void testReceiveOut() {
         Exchange exchange = new DefaultExchange(context);
         exchange.getMessage().setBody("Bye World");
-        template.send("seda:foo", exchange);
+        template.send("seda:" + TEST_SEDA_CONSUMER, exchange);
 
-        String out = consumer.receiveBody("seda:foo", String.class);
+        String out = consumer.receiveBody("seda:" + TEST_SEDA_CONSUMER, String.class);
         assertEquals("Bye World", out);
     }
 
     @Test
-    public void testCacheConsumers() throws Exception {
+    public void testCacheConsumers() {
         ConsumerTemplate template = new DefaultConsumerTemplate(context);
         template.setMaximumCacheSize(500);
         template.start();
@@ -361,7 +364,7 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testCacheConsumersFromContext() throws Exception {
+    public void testCacheConsumersFromContext() {
         ConsumerTemplate template = context.createConsumerTemplate(500);
 
         assertEquals(0, template.getCurrentCacheSize(), "Size should be 0");
@@ -386,19 +389,19 @@ public class DefaultConsumerTemplateTest extends ContextTestSupport {
     }
 
     @Test
-    public void testDoneUoW() throws Exception {
-        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, "hello.txt");
+    public void testDoneUoW() {
+        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
 
         Exchange exchange = consumer.receive(fileUri("?initialDelay=0&delay=10&delete=true"));
         assertNotNull(exchange);
         assertEquals("Hello World", exchange.getIn().getBody(String.class));
 
         // file should still exists
-        assertFileExists(testFile("hello.txt"));
+        assertFileExists(testFile(TEST_FILE_NAME));
 
         // done the exchange
         consumer.doneUoW(exchange);
 
-        assertFileNotExists(testFile("hello.txt"));
+        assertFileNotExists(testFile(TEST_FILE_NAME));
     }
 }

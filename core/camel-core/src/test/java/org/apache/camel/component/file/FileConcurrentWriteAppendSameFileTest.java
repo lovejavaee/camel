@@ -16,33 +16,67 @@
  */
 package org.apache.camel.component.file;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+@Isolated
 public class FileConcurrentWriteAppendSameFileTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME = "input" + UUID.randomUUID() + ".txt";
+    private static final String TEST_FILE_NAME_RESULT = "result" + UUID.randomUUID() + ".txt";
+    private static final Logger LOG = LoggerFactory.getLogger(FileConcurrentWriteAppendSameFileTest.class);
 
     private final int size = 100;
+    private String data;
 
-    @Test
-    public void testConcurrentAppend() throws Exception {
+    @BeforeEach
+    void setUpData() {
         // create file with many lines
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < size; i++) {
             sb.append("Line ").append(i).append(LS);
         }
 
-        template.sendBodyAndHeader(fileUri(), sb.toString(), Exchange.FILE_NAME, "input.txt");
+        data = sb.toString();
+    }
+
+    private boolean fileIsOk() {
+        final Path path = testFile("outbox/" + TEST_FILE_NAME_RESULT);
+        if (Files.exists(path)) {
+            try {
+                final long expectedSize = 1790;
+
+                return Files.size(path) == expectedSize;
+            } catch (IOException e) {
+                LOG.error("IOException: {}", e.getMessage(), e);
+            }
+        }
+
+        return false;
+    }
+
+    @Test
+    public void testConcurrentAppend() throws Exception {
+        template.sendBodyAndHeader(fileUri(), data, Exchange.FILE_NAME, TEST_FILE_NAME);
 
         // start route
         MockEndpoint mock = getMockEndpoint("mock:result");
@@ -50,15 +84,16 @@ public class FileConcurrentWriteAppendSameFileTest extends ContextTestSupport {
         mock.expectsNoDuplicates(body());
         mock.setResultWaitTime(30000);
 
+        context.getRouteController().startRoute("foo");
+
         // we need to wait a bit for our slow CI server to make sure the entire
         // file is written on disc
-        Thread.sleep(500);
-        context.getRouteController().startRoute("foo");
+        Awaitility.await().atMost(1000, TimeUnit.MILLISECONDS).until(this::fileIsOk);
 
         assertMockEndpointsSatisfied();
 
         // check the file has correct number of lines
-        String txt = new String(Files.readAllBytes(testFile("outbox/result.txt")));
+        String txt = new String(Files.readAllBytes(testFile("outbox/" + TEST_FILE_NAME_RESULT)));
         assertNotNull(txt);
 
         String[] lines = txt.split(LS);
@@ -72,14 +107,14 @@ public class FileConcurrentWriteAppendSameFileTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
-                from(fileUri("?initialDelay=0&delay=10")).routeId("foo").noAutoStartup()
+            public void configure() {
+                from(fileUri("?initialDelay=0&delay=10")).routeId("foo").autoStartup(false)
                         .split(body().tokenize(LS)).parallelProcessing().streaming()
                         .setBody(body().append(":Status=OK").append(LS))
-                        .to(fileUri("outbox?fileExist=Append&fileName=result.txt")).to("mock:result").end();
+                        .to(fileUri("outbox?fileExist=Append&fileName=" + TEST_FILE_NAME_RESULT)).to("mock:result").end();
             }
         };
     }

@@ -21,12 +21,14 @@ import java.util.regex.Pattern;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
+import org.apache.camel.component.file.AntFilter;
 import org.apache.camel.component.file.FileComponent;
 import org.apache.camel.component.file.GenericFile;
 import org.apache.camel.component.file.GenericFileEndpoint;
 import org.apache.camel.component.file.GenericFileExclusiveReadLockStrategy;
 import org.apache.camel.component.file.GenericFileFilter;
 import org.apache.camel.component.file.GenericFileOperations;
+import org.apache.camel.spi.CamelLogger;
 import org.apache.camel.util.FileUtil;
 import org.apache.camel.util.StopWatch;
 import org.apache.camel.util.StringHelper;
@@ -57,7 +59,9 @@ public class MarkerFileExclusiveReadLockStrategy implements GenericFileExclusive
             String endpointPath = endpoint.getConfiguration().getDirectory();
 
             StopWatch watch = new StopWatch();
-            deleteLockFiles(file, endpoint.isRecursive(), endpointPath, endpoint.getFilter(), endpoint.getAntFilter(),
+            deleteLockFiles(file, endpoint.isRecursive(), endpoint.getMinDepth(), endpoint.getMaxDepth(), 1,
+                    endpoint.isHiddenFilesEnabled(), endpointPath, endpoint.getFilter(),
+                    endpoint.getAntFilter(),
                     excludePattern, includePattern);
 
             // log anything that takes more than a second
@@ -168,10 +172,17 @@ public class MarkerFileExclusiveReadLockStrategy implements GenericFileExclusive
         this.deleteOrphanLockFiles = deleteOrphanLockFiles;
     }
 
-    private static void deleteLockFiles(
-            File dir, boolean recursive, String endpointPath, GenericFileFilter filter, GenericFileFilter antFilter,
+    private static <T> void deleteLockFiles(
+            File dir, boolean recursive, int minDepth, int maxDepth, int depth, boolean hiddenFilesEnabled, String endpointPath,
+            GenericFileFilter<T> filter,
+            AntFilter antFilter,
             Pattern excludePattern,
             Pattern includePattern) {
+
+        if (recursive) {
+            LOG.trace("checking: depth {}, minDepth {}, maxDepth {}, directory: {}", depth, minDepth, maxDepth, dir);
+        }
+
         File[] files = dir.listFiles();
         if (files == null || files.length == 0) {
             return;
@@ -179,7 +190,7 @@ public class MarkerFileExclusiveReadLockStrategy implements GenericFileExclusive
 
         for (File file : files) {
 
-            if (file.getName().startsWith(".")) {
+            if (!hiddenFilesEnabled && file.getName().startsWith(".")) {
                 // files starting with dot should be skipped
                 continue;
             }
@@ -208,20 +219,23 @@ public class MarkerFileExclusiveReadLockStrategy implements GenericFileExclusive
                 }
             }
 
-            if (file.getName().endsWith(FileComponent.DEFAULT_LOCK_FILE_POSTFIX)) {
+            if (file.getName().endsWith(FileComponent.DEFAULT_LOCK_FILE_POSTFIX) && (depth >= minDepth)) {
                 LOG.warn("Deleting orphaned lock file: {}", file);
                 FileUtil.deleteFile(file);
-            } else if (recursive && file.isDirectory()) {
-                deleteLockFiles(file, true, endpointPath, filter, antFilter, excludePattern, includePattern);
+            } else if (recursive && file.isDirectory() && (depth < maxDepth)) {
+                deleteLockFiles(file, true, minDepth, maxDepth, depth + 1, hiddenFilesEnabled, endpointPath, filter,
+                        antFilter,
+                        excludePattern,
+                        includePattern);
             }
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static boolean acceptFile(
-            File file, String endpointPath, GenericFileFilter filter, GenericFileFilter antFilter, Pattern excludePattern,
+    private static <T> boolean acceptFile(
+            File file, String endpointPath, GenericFileFilter<T> filter, AntFilter antFilter, Pattern excludePattern,
             Pattern includePattern) {
-        GenericFile gf = new GenericFile();
+        GenericFile gf = new GenericFile<>();
         gf.setEndpointPath(endpointPath);
         gf.setFile(file);
         gf.setFileNameOnly(file.getName());
@@ -273,7 +287,7 @@ public class MarkerFileExclusiveReadLockStrategy implements GenericFileExclusive
         }
 
         if (antFilter != null) {
-            if (!antFilter.accept(gf)) {
+            if (!antFilter.accept(gf.isDirectory(), gf.getRelativeFilePath())) {
                 return false;
             }
         }
@@ -306,6 +320,18 @@ public class MarkerFileExclusiveReadLockStrategy implements GenericFileExclusive
         String path
                 = file.getCopyFromAbsoluteFilePath() != null ? file.getCopyFromAbsoluteFilePath() : file.getAbsoluteFilePath();
         return path + "-" + key;
+    }
+
+    protected static boolean isTimedOut(StopWatch watch, File target, long timeout, LoggingLevel readLockLoggingLevel) {
+        long delta = watch.taken();
+        if (delta > timeout) {
+            CamelLogger.log(LOG, readLockLoggingLevel,
+                    "Cannot acquire read lock within " + timeout + " millis. Will skip the file: " + target);
+            // we could not get the lock within the timeout period,
+            // so return false
+            return true;
+        }
+        return false;
     }
 
 }

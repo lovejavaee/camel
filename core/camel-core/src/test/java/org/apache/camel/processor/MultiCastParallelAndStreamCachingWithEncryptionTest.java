@@ -35,10 +35,10 @@ import org.junit.jupiter.api.Test;
 public class MultiCastParallelAndStreamCachingWithEncryptionTest extends ContextTestSupport {
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.setStreamCaching(true);
                 context.getStreamCachingStrategy().setEnabled(true);
                 context.getStreamCachingStrategy().setSpoolDirectory(testDirectory().toFile());
@@ -66,9 +66,10 @@ public class MultiCastParallelAndStreamCachingWithEncryptionTest extends Context
         public void process(Exchange exchange) throws Exception {
 
             Object body = exchange.getIn().getBody();
-            if (body instanceof InputStream) {
+            if (body instanceof InputStream inputStream) {
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
-                IOHelper.copy((InputStream) body, output);
+
+                inputStream.transferTo(output);
                 exchange.getMessage().setBody(output.toByteArray());
             } else {
                 throw new RuntimeException("Type " + body.getClass().getName() + " not supported");

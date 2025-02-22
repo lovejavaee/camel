@@ -43,11 +43,11 @@ public class ManagedInterceptTest extends ManagementTestSupport {
         MBeanServer mbeanServer = getMBeanServer();
 
         ObjectName name = getCamelObjectName(TYPE_ENDPOINT, "mock://result");
-        Long queueSize = (Long) mbeanServer.invoke(name, "queueSize", null, null);
+        Integer queueSize = (Integer) mbeanServer.invoke(name, "queueSize", null, null);
         assertEquals(1, queueSize.intValue());
 
         name = getCamelObjectName(TYPE_ENDPOINT, "mock://intercept");
-        queueSize = (Long) mbeanServer.invoke(name, "queueSize", null, null);
+        queueSize = (Integer) mbeanServer.invoke(name, "queueSize", null, null);
         assertEquals(2, queueSize.intValue());
 
         name = getCamelObjectName(TYPE_PROCESSOR, "log-foo");
@@ -58,10 +58,10 @@ public class ManagedInterceptTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 intercept().to("mock:intercept");
 
                 from("direct:start").routeId("foo")

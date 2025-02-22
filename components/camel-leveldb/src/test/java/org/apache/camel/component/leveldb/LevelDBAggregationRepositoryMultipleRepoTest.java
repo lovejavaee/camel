@@ -21,13 +21,12 @@ import java.io.File;
 import org.apache.camel.Exchange;
 import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.test.junit5.params.Test;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @DisabledOnOs({ OS.AIX, OS.OTHER })
 public class LevelDBAggregationRepositoryMultipleRepoTest extends LevelDBTestSupport {
@@ -35,9 +34,7 @@ public class LevelDBAggregationRepositoryMultipleRepoTest extends LevelDBTestSup
     private LevelDBFile levelDBFile;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() {
         deleteDirectory("target/data");
         File file = new File("target/data/leveldb.dat");
         levelDBFile = new LevelDBFile();
@@ -46,10 +43,8 @@ public class LevelDBAggregationRepositoryMultipleRepoTest extends LevelDBTestSup
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
+    public void doPostTearDown() {
         levelDBFile.stop();
-        super.tearDown();
     }
 
     @Test
@@ -66,21 +61,21 @@ public class LevelDBAggregationRepositoryMultipleRepoTest extends LevelDBTestSup
 
         // Can't get something we have not put in...
         Exchange actual = repo1.get(context, "missing");
-        assertEquals(null, actual);
+        assertNull(actual);
 
         actual = repo2.get(context, "missing");
-        assertEquals(null, actual);
+        assertNull(actual);
 
         // Store it..
         Exchange exchange1 = new DefaultExchange(context);
         exchange1.getIn().setBody("counter:1");
         actual = repo1.add(context, "foo", exchange1);
-        assertEquals(null, actual);
+        assertNull(actual);
 
         // Get it back..
         actual = repo1.get(context, "foo");
         assertEquals("counter:1", actual.getIn().getBody());
-        assertEquals(null, repo2.get(context, "foo"));
+        assertNull(repo2.get(context, "foo"));
 
         // Change it..
         Exchange exchange2 = new DefaultExchange(context);
@@ -93,17 +88,17 @@ public class LevelDBAggregationRepositoryMultipleRepoTest extends LevelDBTestSup
         Exchange exchange3 = new DefaultExchange(context);
         exchange3.getIn().setBody("Hello World");
         actual = repo2.add(context, "bar", exchange3);
-        assertEquals(null, actual);
-        assertEquals(null, repo1.get(context, "bar"));
+        assertNull(actual);
+        assertNull(repo1.get(context, "bar"));
 
         // Get it back..
         actual = repo1.get(context, "foo");
         assertEquals("counter:2", actual.getIn().getBody());
-        assertEquals(null, repo2.get(context, "foo"));
+        assertNull(repo2.get(context, "foo"));
 
         actual = repo2.get(context, "bar");
         assertEquals("Hello World", actual.getIn().getBody());
-        assertEquals(null, repo1.get(context, "bar"));
+        assertNull(repo1.get(context, "bar"));
     }
 
     @Test

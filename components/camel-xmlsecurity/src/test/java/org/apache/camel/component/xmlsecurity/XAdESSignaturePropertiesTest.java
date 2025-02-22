@@ -63,14 +63,13 @@ import org.apache.camel.component.xmlsecurity.api.XmlSignatureHelper;
 import org.apache.camel.component.xmlsecurity.api.XmlSignatureProperties;
 import org.apache.camel.component.xmlsecurity.util.TestKeystore;
 import org.apache.camel.spi.Registry;
-import org.apache.camel.support.SimpleRegistry;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.apache.camel.test.junit5.TestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.xmlsecurity.XmlSignatureTest.checkThrownException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -92,15 +91,7 @@ public class XAdESSignaturePropertiesTest extends CamelTestSupport {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        disableJMX();
-        super.setUp();
-    }
-
-    @Override
-    protected Registry createCamelRegistry() throws Exception {
-        Registry registry = new SimpleRegistry();
+    protected void bindToRegistry(Registry registry) throws Exception {
         registry.bind("keyAccessorDefault", TestKeystore.getKeyAccessor("bob"));
         registry.bind("xmlSignatureProperties", getXmlSignatureProperties("bob"));
 
@@ -108,8 +99,6 @@ public class XAdESSignaturePropertiesTest extends CamelTestSupport {
         List<XPathFilterParameterSpec> xpaths = Collections
                 .singletonList(XmlSignatureHelper.getXpathFilter("/ns:root/a/@ID", namespaceMap));
         registry.bind("xpathsToIdAttributes", xpaths);
-
-        return registry;
     }
 
     @Override
@@ -967,7 +956,7 @@ public class XAdESSignaturePropertiesTest extends CamelTestSupport {
         if (startsWith) {
             assertTrue(result.startsWith(expectedResult));
         } else if (NOT_EMPTY.equals(expectedResult)) {
-            assertTrue(!result.isEmpty(), "Not empty result for xpath " + xpathString + " expected");
+            assertFalse(result.isEmpty(), "Not empty result for xpath " + xpathString + " expected");
         } else {
             assertEquals(expectedResult, result);
         }
@@ -991,9 +980,8 @@ public class XAdESSignaturePropertiesTest extends CamelTestSupport {
         XPath xpath = xpathFactory.newXPath();
         NamespaceContext nc = new NamespaceContext() {
 
-            @SuppressWarnings("rawtypes")
             @Override
-            public Iterator getPrefixes(String namespaceURI) {
+            public Iterator<String> getPrefixes(String namespaceURI) {
                 return null;
             }
 

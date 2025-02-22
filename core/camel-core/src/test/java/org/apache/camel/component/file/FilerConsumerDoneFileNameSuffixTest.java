@@ -16,9 +16,12 @@
  */
 package org.apache.camel.component.file;
 
+import java.util.concurrent.TimeUnit;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -34,9 +37,8 @@ public class FilerConsumerDoneFileNameSuffixTest extends ContextTestSupport {
 
         // wait a bit and it should not pickup the written file as there are no
         // done file
-        Thread.sleep(250);
+        Awaitility.await().pollDelay(250, TimeUnit.MILLISECONDS).untilAsserted(() -> assertMockEndpointsSatisfied());
 
-        assertMockEndpointsSatisfied();
         resetMocks();
         oneExchangeDone.reset();
 
@@ -53,10 +55,10 @@ public class FilerConsumerDoneFileNameSuffixTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("?doneFileName=${file:name}.ready&initialDelay=0&delay=10")).to("mock:result");
             }
         };

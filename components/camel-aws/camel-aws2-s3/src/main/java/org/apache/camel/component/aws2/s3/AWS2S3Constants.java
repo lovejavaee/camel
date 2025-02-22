@@ -24,12 +24,19 @@ import org.apache.camel.spi.Metadata;
  */
 public interface AWS2S3Constants {
 
-    @Metadata(description = "The bucket Name which this object will be stored or which will be used for the current operation or in which this object is contained.",
+    @Metadata(description = "The bucket Name (can be dynamic using the simple language in the producer) which this object will be stored or which will be used for the current operation or in which this object is contained.",
               javaType = "String")
     String BUCKET_NAME = "CamelAwsS3BucketName";
+    @Metadata(label = "producer",
+              description = "The computed bucket name that was used by the producer such as to get or put an s3 object",
+              javaType = "String")
+    String PRODUCED_BUCKET_NAME = "CamelAwsS3ProducedBucketName";
     @Metadata(label = "producer", description = "The bucket Destination Name which will be used for the current operation",
               javaType = "String")
     String BUCKET_DESTINATION_NAME = "CamelAwsS3BucketDestinationName";
+    @Metadata(description = "Whether the bucket exists when using the headBucket operation",
+              javaType = "boolean")
+    String BUCKET_EXISTS = "CamelAwsS3BucketExists";
     @Metadata(description = "The *optional* Cache-Control HTTP header which allows the user to\n" +
                             "specify caching behavior along the HTTP request/reply chain.",
               javaType = "String")
@@ -66,9 +73,12 @@ public interface AWS2S3Constants {
                             "data received by the caller is the same data that was sent by Amazon S3.",
               javaType = "String")
     String E_TAG = "CamelAwsS3ETag";
-    @Metadata(description = "The key under which this object is stored or will be stored or which will be used for the current operation",
+    @Metadata(description = "The key (can be dynamic using the simple language in the producer) under which this object is stored or will be stored or which will be used for the current operation",
               javaType = "String")
     String KEY = "CamelAwsS3Key";
+    @Metadata(label = "producer", description = "The computed key that was used for retrieving this object",
+              javaType = "String")
+    String PRODUCED_KEY = "CamelAwsS3ProducedKey";
     @Metadata(label = "producer", description = "The Destination key which will be used for the current operation",
               javaType = "String")
     String DESTINATION_KEY = "CamelAwsS3DestinationKey";
@@ -135,4 +145,20 @@ public interface AWS2S3Constants {
     @Metadata(description = "The delimiter which is used in the com.amazonaws.services.s3.model.ListObjectsRequest to only list objects we are interested in",
               javaType = "String")
     String DELIMITER = "CamelAwsS3Delimiter";
+    @Metadata(description = "Return/copy the object only if its entity tag (ETag) is the same as the one specified in this header.",
+              javaType = "String")
+    String IF_MATCH_CONDITION = "CamelAwsS3IfMatchCondition";
+    @Metadata(description = "Return/copy the object only if it has been modified since the specified time; otherwise, return a 304 Not Modified error.",
+              javaType = "String")
+    String IF_MODIFIED_SINCE_CONDITION = "CamelAwsS3IfModifiedSinceCondition";
+    @Metadata(description = "Return/copy the object only if its entity tag (ETag) is different from the one specified in this header.",
+              javaType = "String")
+    String IF_NONE_MATCH_CONDITION = "CamelAwsS3IfNoneMatchCondition";
+    @Metadata(description = "Return/copy the object only if it has not been modified since the specified time.",
+              javaType = "String")
+    String IF_UNMODIFIED_SINCE_CONDITION = "CamelAwsS3IfUnmodifiedSinceCondition";
+    @Metadata(description = "The bucket Name to override (can be dynamic using the simple language in the producer) which this object will be stored or which will be used for the current operation or in which this object is contained.",
+              javaType = "String")
+    String OVERRIDE_BUCKET_NAME = "CamelAwsS3OverrideBucketName";
+
 }

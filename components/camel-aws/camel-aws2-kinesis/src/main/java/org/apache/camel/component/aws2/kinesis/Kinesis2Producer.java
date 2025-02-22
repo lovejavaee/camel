@@ -16,19 +16,39 @@
  */
 package org.apache.camel.component.aws2.kinesis;
 
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.support.DefaultProducer;
+import org.apache.camel.util.ObjectHelper;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.PutRecordRequest;
 import software.amazon.awssdk.services.kinesis.model.PutRecordResponse;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsRequest;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsResponse;
 
 public class Kinesis2Producer extends DefaultProducer {
 
+    // Maximum number of records that can be sent in a single PutRecords request
+    private static final int MAX_BATCH_SIZE = 500;
+
+    private KinesisConnection connection;
+
     public Kinesis2Producer(Kinesis2Endpoint endpoint) {
         super(endpoint);
+    }
+
+    public KinesisConnection getConnection() {
+        return connection;
+    }
+
+    public void setConnection(KinesisConnection connection) {
+        this.connection = connection;
     }
 
     @Override
@@ -37,22 +57,92 @@ public class Kinesis2Producer extends DefaultProducer {
     }
 
     @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+
+        ObjectHelper.notNull(connection, "connection", this);
+    }
+
+    @Override
     public void process(Exchange exchange) throws Exception {
+        Object body = exchange.getIn().getBody();
+        if (body instanceof Iterable) {
+            sendBatchRecords(exchange);
+        } else {
+            sendSingleRecord(exchange);
+        }
+    }
+
+    private void sendBatchRecords(Exchange exchange) {
+        Object partitionKey = exchange.getIn().getHeader(Kinesis2Constants.PARTITION_KEY);
+        ensurePartitionKeyNotNull(partitionKey);
+        List<List<PutRecordsRequestEntry>> requestBatchList = createRequestBatchList(exchange, partitionKey);
+        for (List<PutRecordsRequestEntry> requestBatch : requestBatchList) {
+            PutRecordsRequest putRecordsRequest = PutRecordsRequest.builder()
+                    .streamName(getEndpoint().getConfiguration().getStreamName())
+                    .records(requestBatch)
+                    .build();
+            PutRecordsResponse putRecordsResponse = connection.getClient(getEndpoint()).putRecords(putRecordsRequest);
+            if (putRecordsResponse.failedRecordCount() > 0) {
+                throw new RuntimeException(
+                        "Failed to send records " + putRecordsResponse.failedRecordCount() + " of "
+                                           + putRecordsResponse.records().size());
+            }
+        }
+    }
+
+    private List<List<PutRecordsRequestEntry>> createRequestBatchList(Exchange exchange, Object partitionKey) {
+        List<List<PutRecordsRequestEntry>> requestBatchList = new ArrayList<>();
+        List<PutRecordsRequestEntry> requestBatch = new ArrayList<>(MAX_BATCH_SIZE);
+        for (Object record : exchange.getIn().getBody(Iterable.class)) {
+            SdkBytes sdkBytes;
+            if (record instanceof byte[] bytes) {
+                sdkBytes = SdkBytes.fromByteArray(bytes);
+            } else if (record instanceof ByteBuffer bf) {
+                sdkBytes = SdkBytes.fromByteBuffer(bf);
+            } else if (record instanceof InputStream is) {
+                sdkBytes = SdkBytes.fromInputStream(is);
+            } else if (record instanceof String str) {
+                sdkBytes = SdkBytes.fromUtf8String(str);
+            } else {
+                throw new IllegalArgumentException(
+                        "Record type not supported. Must be byte[], ByteBuffer, InputStream or UTF-8 String");
+            }
+
+            PutRecordsRequestEntry putRecordsRequestEntry = PutRecordsRequestEntry.builder()
+                    .data(sdkBytes)
+                    .partitionKey(partitionKey.toString())
+                    .build();
+            requestBatch.add(putRecordsRequestEntry);
+            if (requestBatch.size() == MAX_BATCH_SIZE) {
+                requestBatchList.add(requestBatch);
+                requestBatch = new ArrayList<>(MAX_BATCH_SIZE);
+            }
+        }
+        if (!requestBatch.isEmpty()) {
+            requestBatchList.add(requestBatch);
+        }
+
+        return requestBatchList;
+    }
+
+    private void sendSingleRecord(Exchange exchange) {
         PutRecordRequest request = createRequest(exchange);
-        PutRecordResponse putRecordResult = getEndpoint().getClient().putRecord(request);
-        Message message = getMessageForResponse(exchange);
+        PutRecordResponse putRecordResult = connection.getClient(getEndpoint()).putRecord(request);
+        Message message = exchange.getMessage();
         message.setHeader(Kinesis2Constants.SEQUENCE_NUMBER, putRecordResult.sequenceNumber());
         message.setHeader(Kinesis2Constants.SHARD_ID, putRecordResult.shardId());
     }
 
     private PutRecordRequest createRequest(Exchange exchange) {
-        ByteBuffer body = exchange.getIn().getBody(ByteBuffer.class);
+        byte[] body = exchange.getIn().getBody(byte[].class);
         Object partitionKey = exchange.getIn().getHeader(Kinesis2Constants.PARTITION_KEY);
         Object sequenceNumber = exchange.getIn().getHeader(Kinesis2Constants.SEQUENCE_NUMBER);
 
         PutRecordRequest.Builder putRecordRequest = PutRecordRequest.builder();
-        putRecordRequest.data(SdkBytes.fromByteBuffer(body));
+        putRecordRequest.data(SdkBytes.fromByteArray(body));
         putRecordRequest.streamName(getEndpoint().getConfiguration().getStreamName());
+        ensurePartitionKeyNotNull(partitionKey);
         putRecordRequest.partitionKey(partitionKey.toString());
         if (sequenceNumber != null) {
             putRecordRequest.sequenceNumberForOrdering(sequenceNumber.toString());
@@ -60,7 +150,9 @@ public class Kinesis2Producer extends DefaultProducer {
         return putRecordRequest.build();
     }
 
-    public static Message getMessageForResponse(final Exchange exchange) {
-        return exchange.getMessage();
+    private void ensurePartitionKeyNotNull(Object partitionKey) {
+        if (partitionKey == null) {
+            throw new IllegalArgumentException("Partition key must be specified");
+        }
     }
 }

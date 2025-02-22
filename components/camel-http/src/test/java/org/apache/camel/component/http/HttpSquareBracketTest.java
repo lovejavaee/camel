@@ -20,8 +20,6 @@ import org.apache.camel.Exchange;
 import org.apache.camel.component.http.handler.BasicValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -32,12 +30,10 @@ public class HttpSquareBracketTest extends BaseHttpTest {
 
     private String baseUrl;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        super.setUp();
-
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/",
@@ -50,10 +46,8 @@ public class HttpSquareBracketTest extends BaseHttpTest {
         baseUrl = "http://localhost:" + localServer.getLocalPort();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -61,7 +55,7 @@ public class HttpSquareBracketTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpSquare() throws Exception {
+    public void httpSquare() {
         Exchange exchange = template.request(baseUrl + "/?country=dk&filter[start-date]=2022-01-01&filter[end-date]=2022-12-31",
                 exchange1 -> {
                 });

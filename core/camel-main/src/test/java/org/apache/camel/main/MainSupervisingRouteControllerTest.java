@@ -31,8 +31,8 @@ import org.apache.camel.spi.SupervisingRouteController;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MainSupervisingRouteControllerTest {
 
@@ -41,13 +41,13 @@ public class MainSupervisingRouteControllerTest {
         // lets make a simple route
         Main main = new Main();
         main.configure().addRoutesBuilder(new MyRoute());
-        main.configure()
-                .withRouteControllerSuperviseEnabled(true)
-                .withRouteControllerBackOffDelay(25)
-                .withRouteControllerBackOffMaxAttempts(3)
-                .withRouteControllerInitialDelay(100)
-                .withRouteControllerThreadPoolSize(2)
-                .withRouteControllerExcludeRoutes("timer*");
+        main.configure().routeControllerConfig()
+                .withEnabled(true)
+                .withBackOffDelay(25)
+                .withBackOffMaxAttempts(3)
+                .withInitialDelay(100)
+                .withThreadPoolSize(2)
+                .withExcludeRoutes("timer*");
         main.start();
 
         MockEndpoint mock = main.getCamelContext().getEndpoint("mock:foo", MockEndpoint.class);
@@ -74,7 +74,7 @@ public class MainSupervisingRouteControllerTest {
         Throwable e = src.getRestartException("cake");
         assertNotNull(e);
         assertEquals("Cannot start", e.getMessage());
-        assertTrue(e instanceof IllegalArgumentException);
+        assertInstanceOf(IllegalArgumentException.class, e);
 
         // bar is no auto startup
         assertEquals("Stopped", main.camelContext.getRouteController().getRouteStatus("bar").toString());
@@ -87,11 +87,11 @@ public class MainSupervisingRouteControllerTest {
         // lets make a simple route
         Main main = new Main();
         main.configure().addRoutesBuilder(new MyRoute());
-        main.configure().setRouteControllerSuperviseEnabled(true);
-        main.configure().setRouteControllerBackOffDelay(25);
-        main.configure().setRouteControllerBackOffMaxAttempts(10);
-        main.configure().setRouteControllerInitialDelay(100);
-        main.configure().setRouteControllerThreadPoolSize(2);
+        main.configure().routeControllerConfig().setEnabled(true);
+        main.configure().routeControllerConfig().setBackOffDelay(25);
+        main.configure().routeControllerConfig().setBackOffMaxAttempts(10);
+        main.configure().routeControllerConfig().setInitialDelay(100);
+        main.configure().routeControllerConfig().setThreadPoolSize(2);
 
         main.start();
 
@@ -119,9 +119,49 @@ public class MainSupervisingRouteControllerTest {
         main.stop();
     }
 
-    private class MyRoute extends RouteBuilder {
+    @Test
+    public void testMainApplicationProperties() throws Exception {
+        // lets make a simple route
+        Main main = new Main();
+        main.setDefaultPropertyPlaceholderLocation("classpath:route-controller.properties");
+        main.configure().addRoutesBuilder(new MyRoute());
+        main.start();
+
+        MockEndpoint mock = main.getCamelContext().getEndpoint("mock:foo", MockEndpoint.class);
+        mock.expectedMinimumMessageCount(3);
+
+        MockEndpoint mock2 = main.getCamelContext().getEndpoint("mock:cheese", MockEndpoint.class);
+        mock2.expectedMessageCount(0);
+
+        MockEndpoint mock3 = main.getCamelContext().getEndpoint("mock:cake", MockEndpoint.class);
+        mock3.expectedMessageCount(0);
+
+        MockEndpoint mock4 = main.getCamelContext().getEndpoint("mock:bar", MockEndpoint.class);
+        mock4.expectedMessageCount(0);
+
+        MockEndpoint.assertIsSatisfied(5, TimeUnit.SECONDS, mock, mock2, mock3, mock4);
+
+        assertEquals("Started", main.camelContext.getRouteController().getRouteStatus("foo").toString());
+        // cheese was not able to start
+        assertEquals("Stopped", main.camelContext.getRouteController().getRouteStatus("cheese").toString());
+        // cake was not able to start
+        assertEquals("Stopped", main.camelContext.getRouteController().getRouteStatus("cake").toString());
+
+        SupervisingRouteController src = (SupervisingRouteController) main.camelContext.getRouteController();
+        Throwable e = src.getRestartException("cake");
+        assertNotNull(e);
+        assertEquals("Cannot start", e.getMessage());
+        assertInstanceOf(IllegalArgumentException.class, e);
+
+        // bar is no auto startup
+        assertEquals("Stopped", main.camelContext.getRouteController().getRouteStatus("bar").toString());
+
+        main.stop();
+    }
+
+    private static class MyRoute extends RouteBuilder {
         @Override
-        public void configure() throws Exception {
+        public void configure() {
             getContext().addComponent("jms", new MyJmsComponent());
 
             from("timer:foo").to("mock:foo").routeId("foo");
@@ -130,28 +170,28 @@ public class MainSupervisingRouteControllerTest {
 
             from("jms:cake").to("mock:cake").routeId("cake");
 
-            from("seda:bar").routeId("bar").noAutoStartup().to("mock:bar");
+            from("seda:bar").routeId("bar").autoStartup(false).to("mock:bar");
         }
     }
 
-    private class MyJmsComponent extends SedaComponent {
+    private static class MyJmsComponent extends SedaComponent {
 
         @Override
-        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
             return new MyJmsEndpoint(remaining);
         }
     }
 
-    private class MyJmsEndpoint extends SedaEndpoint {
+    private static class MyJmsEndpoint extends SedaEndpoint {
 
-        private String name;
+        private final String name;
 
         public MyJmsEndpoint(String name) {
             this.name = name;
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return new MyJmsConsumer(this, processor);
         }
 
@@ -161,7 +201,7 @@ public class MainSupervisingRouteControllerTest {
         }
     }
 
-    private class MyJmsConsumer extends SedaConsumer {
+    private static class MyJmsConsumer extends SedaConsumer {
 
         private int counter;
 
@@ -170,7 +210,7 @@ public class MainSupervisingRouteControllerTest {
         }
 
         @Override
-        protected void doStart() throws Exception {
+        protected void doStart() {
             if (counter++ < 5) {
                 throw new IllegalArgumentException("Cannot start");
             }

@@ -25,7 +25,9 @@ import org.apache.camel.builder.ProxyBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BeanProxyTest extends ContextTestSupport {
 
@@ -91,12 +93,9 @@ public class BeanProxyTest extends ContextTestSupport {
         Endpoint endpoint = context.getEndpoint("direct:start");
         OrderService service = ProxyHelper.createProxy(endpoint, OrderService.class);
 
-        try {
-            service.submitOrderStringReturnString("Hello World");
-            fail("Should have thrown exception");
-        } catch (Exception e) {
-            // expected
-        }
+        assertThrows(Exception.class,
+                () -> service.submitOrderStringReturnString("Hello World"),
+                "Should have thrown exception");
     }
 
     @Test
@@ -112,14 +111,12 @@ public class BeanProxyTest extends ContextTestSupport {
         Endpoint endpoint = context.getEndpoint("direct:start");
         OrderService service = ProxyHelper.createProxy(endpoint, OrderService.class);
 
-        try {
-            service.invalidReturnType("<order type=\"beer\">Carlsberg</order>");
-            fail("Should have thrown exception");
-        } catch (Exception e) {
-            // expected
-            InvalidPayloadException cause = assertIsInstanceOf(InvalidPayloadException.class, e.getCause());
-            assertEquals(Integer.class, cause.getType());
-        }
+        Exception e = assertThrows(Exception.class,
+                () -> service.invalidReturnType("<order type=\"beer\">Carlsberg</order>"),
+                "Should have thrown exception");
+
+        InvalidPayloadException cause = assertIsInstanceOf(InvalidPayloadException.class, e.getCause());
+        assertEquals(Integer.class, cause.getType());
     }
 
     @Test
@@ -186,10 +183,10 @@ public class BeanProxyTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // START SNIPPET: e1
                 from("direct:start").choice().when(xpath("/order/@type = 'book'")).to("direct:book").otherwise()
                         .to("direct:other").end();

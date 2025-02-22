@@ -64,11 +64,13 @@ public abstract class AbstractApiConsumer<E extends Enum<E> & ApiName, T>
         interceptProperties(args);
 
         try {
-
             Object result = doInvokeMethod(args);
-            return ApiConsumerHelper.getResultsProcessed(this, result, isSplitResult());
 
-        } catch (Throwable t) {
+            // okay we have some response so lets mark the consumer as ready
+            forceConsumerAsReady();
+
+            return ApiConsumerHelper.getResultsProcessed(this, result, isSplitResult());
+        } catch (Exception t) {
             throw RuntimeCamelException.wrapRuntimeCamelException(t);
         }
     }

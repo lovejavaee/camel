@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class KafkaTransactionIT extends BaseEmbeddedKafkaTestSupport {
+public class KafkaTransactionIT extends BaseKafkaTestSupport {
     public static final String SEQUENTIAL_TRANSACTION_URI = "direct:startTransaction";
     public static final String CONCURRENT_TRANSACTION_URI = "seda:startTransaction";
 
@@ -71,14 +71,14 @@ public class KafkaTransactionIT extends BaseEmbeddedKafkaTestSupport {
     protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(SEQUENTIAL_TRANSACTION_URI).to("kafka:" + TOPIC_TRANSACTION + "?requestRequiredAcks=-1"
                                                     + "&additional-properties[transactional.id]=1234"
                                                     + "&additional-properties[enable.idempotence]=true"
                                                     + "&additional-properties[retries]=5")
                         .process(new Processor() {
                             @Override
-                            public void process(Exchange exchange) throws Exception {
+                            public void process(Exchange exchange) {
                                 String body = exchange.getIn().getBody(String.class);
                                 if (body.contains("fail")) {
                                     throw new RuntimeException("fail process message " + body);
@@ -163,7 +163,7 @@ public class KafkaTransactionIT extends BaseEmbeddedKafkaTestSupport {
         for (Exchange exchange : exchangeList) {
             @SuppressWarnings("unchecked")
             List<RecordMetadata> recordMetaData1
-                    = (List<RecordMetadata>) (exchange.getIn().getHeader(KafkaConstants.KAFKA_RECORDMETA));
+                    = (List<RecordMetadata>) (exchange.getIn().getHeader(KafkaConstants.KAFKA_RECORD_META));
             assertEquals(1, recordMetaData1.size(), "One RecordMetadata is expected.");
             assertTrue(recordMetaData1.get(0).offset() >= 0, "Offset is positive");
             assertTrue(recordMetaData1.get(0).topic().startsWith("transaction"), "Topic Name start with 'transaction'");

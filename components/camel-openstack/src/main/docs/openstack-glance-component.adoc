@@ -5,6 +5,7 @@
 :description: Manage VM images and metadata definitions in OpenStack Glance.
 :since: 2.19
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :group: OpenStack
@@ -18,10 +19,9 @@ The Openstack Glance component allows messages to be sent to an OpenStack image 
 
 == Dependencies
 
-Maven users will need to add the following dependency to their pom.xml.
+Maven users will need to add the following dependency to their `pom.xml`.
 
-*pom.xml*
-
+.pom.xml
 [source,xml]
 ---------------------------------------
 <dependency>
@@ -65,7 +65,7 @@ include::partial$component-endpoint-headers.adoc[]
 
 |`reserve` | Reserve image.
 
-|`create` | Create new image.
+|`create` | Create a new image.
 
 |`update` | Update image.
 
@@ -73,7 +73,7 @@ include::partial$component-endpoint-headers.adoc[]
 
 |`get` | Get the image.
 
-|`getAll` | Get all image.
+|`getAll` | Get all images.
 
 |`delete` | Delete the image.
 |=========================================================================

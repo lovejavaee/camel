@@ -24,7 +24,7 @@
     <parent>
         <artifactId>components</artifactId>
         <groupId>org.apache.camel</groupId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-pulsar</artifactId>
@@ -32,8 +32,15 @@
     <name>Camel :: Pulsar</name>
     <description>Camel Apache Pulsar Component</description>
 
-    <dependencies>
+    <properties>
+        <!-- Pulsar container is only available on x86 -->
+        <skipITs.ppc64le>true</skipITs.ppc64le>
+        <skipITs.s390x>true</skipITs.s390x>
+        <skipITs.aarch64>true</skipITs.aarch64>
+        <camel.surefire.fork.additional-vmargs>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-exports=java.base/sun.net=ALL-UNNAMED</camel.surefire.fork.additional-vmargs>
+    </properties>
 
+    <dependencies>
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-support</artifactId>
@@ -69,7 +76,7 @@
         </dependency>
 
         <!-- test infra -->
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-pulsar</artifactId>
             <version>${project.version}</version>
@@ -84,31 +91,4 @@
             <scope>test</scope>
     	</dependency>
     </dependencies>
-
-
-    <build>
-        <plugins>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <childDelegation>false</childDelegation>
-                    <useFile>true</useFile>
-                    <forkCount>1</forkCount>
-                    <reuseForks>true</reuseForks>
-                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
-                    <systemProperties>
-                        <pulsar.container>apachepulsar/pulsar:${pulsar-version}</pulsar.container>
-                    </systemProperties>
-                    <argLine>--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-exports=java.base/sun.net=ALL-UNNAMED</argLine>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <configuration>
-                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

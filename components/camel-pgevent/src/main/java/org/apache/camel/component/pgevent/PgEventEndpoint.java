@@ -17,6 +17,7 @@
 package org.apache.camel.component.pgevent;
 
 import java.sql.DriverManager;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -27,6 +28,7 @@ import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.spi.ClassResolver;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -42,8 +44,8 @@ import org.slf4j.LoggerFactory;
  */
 @UriEndpoint(firstVersion = "2.15.0", scheme = "pgevent", title = "PostgresSQL Event",
              syntax = "pgevent:host:port/database/channel",
-             category = { Category.DATABASE, Category.SQL }, headersClass = PgEventConstants.class)
-public class PgEventEndpoint extends DefaultEndpoint {
+             category = { Category.DATABASE }, headersClass = PgEventConstants.class)
+public class PgEventEndpoint extends DefaultEndpoint implements EndpointServiceLocation {
 
     private static final Logger LOG = LoggerFactory.getLogger(PgEventEndpoint.class);
 
@@ -66,12 +68,10 @@ public class PgEventEndpoint extends DefaultEndpoint {
     private String user = "postgres";
     @UriParam(label = "security", secret = true)
     private String pass;
-    @UriParam
+    @UriParam(label = "advanced")
     private DataSource datasource;
 
     private final String uri;
-
-    private PGConnection dbConnection;
 
     public PgEventEndpoint(String uri, PgEventComponent component) {
         super(uri, component);
@@ -84,6 +84,27 @@ public class PgEventEndpoint extends DefaultEndpoint {
         this.uri = uri;
         this.datasource = dataSource;
         parseUri();
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (host != null) {
+            return host + ":" + port;
+        }
+        return null;
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (user != null) {
+            return Map.of("username", user);
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "jdbc";
     }
 
     public final PGConnection initJdbc() throws Exception {
@@ -146,7 +167,7 @@ public class PgEventEndpoint extends DefaultEndpoint {
     }
 
     private void validateInputs() throws IllegalArgumentException {
-        if (getChannel() == null || getChannel().length() == 0) {
+        if (getChannel() == null || getChannel().isEmpty()) {
             throw new IllegalArgumentException("A required parameter was not set when creating this Endpoint (channel)");
         }
 

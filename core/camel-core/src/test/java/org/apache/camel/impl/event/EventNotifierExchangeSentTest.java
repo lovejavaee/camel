@@ -38,20 +38,20 @@ public class EventNotifierExchangeSentTest extends ContextTestSupport {
     protected final List<CamelEvent> events = new ArrayList<>();
 
     @BeforeEach
-    public void clearEvents() throws Exception {
+    public void clearEvents() {
         events.clear();
     }
 
     @Override
     protected CamelContext createCamelContext() throws Exception {
-        DefaultCamelContext context = new DefaultCamelContext(createRegistry());
+        DefaultCamelContext context = new DefaultCamelContext(createCamelRegistry());
         context.getManagementStrategy().addEventNotifier(new EventNotifierSupport() {
-            public void notify(CamelEvent event) throws Exception {
+            public void notify(CamelEvent event) {
                 events.add(event);
             }
 
             @Override
-            protected void doStart() throws Exception {
+            protected void doStart() {
                 // filter out unwanted events
                 setIgnoreCamelContextEvents(true);
                 setIgnoreServiceEvents(true);
@@ -157,14 +157,12 @@ public class EventNotifierExchangeSentTest extends ContextTestSupport {
         boolean found = false;
         boolean found2 = false;
         for (CamelEvent event : events) {
-            if (event instanceof ExchangeSendingEvent) {
-                ExchangeSendingEvent sending = (ExchangeSendingEvent) event;
+            if (event instanceof ExchangeSendingEvent sending) {
                 String uri = sending.getEndpoint().getEndpointUri();
                 if ("log://foo".equals(uri)) {
                     found = true;
                 }
-            } else if (event instanceof ExchangeSentEvent) {
-                ExchangeSentEvent sent = (ExchangeSentEvent) event;
+            } else if (event instanceof ExchangeSentEvent sent) {
                 String uri = sent.getEndpoint().getEndpointUri();
                 if ("log://foo".equals(uri)) {
                     found2 = true;
@@ -177,10 +175,10 @@ public class EventNotifierExchangeSentTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("log:foo").to("direct:bar").to("mock:result");
 
                 from("direct:bar").delay(500);

@@ -5,6 +5,7 @@
 :description: Perform searches on LDAP servers.
 :since: 1.5
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: ldap
@@ -38,7 +39,7 @@ ldap:ldapServerBean[?options]
 -----------------------------
 
 The _ldapServerBean_ portion of the URI refers to a
-http://java.sun.com/j2se/1.4.2/docs/api/javax/naming/directory/DirContext.html[DirContext]
+https://docs.oracle.com/en/java/javase/17/docs/api/java.naming/javax/naming/directory/DirContext.html[DirContext]
 bean in the registry. The LDAP component only supports producer
 endpoints, which means that an `ldap` URI cannot appear in the `from` at
 the start of a route.
@@ -57,15 +58,41 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
-== Result
+== Usage
+
+=== Result
 
 The result is returned to Out body as a `List<javax.naming.directory.SearchResult>` object.
 
-== DirContext
+=== DirContext
 
-The URI, `ldap:ldapserver`, references a Spring bean with the ID,
+The URI, `ldap:ldapserver`, references a bean with the ID 
 `ldapserver`. The `ldapserver` bean may be defined as follows:
 
+[tabs]
+====
+Java (Quarkus)::
++
+[source,java]
+----
+public class LdapServerProducer {
+
+    @Produces
+    @Dependent
+    @Named("ldapserver")
+    public DirContext createLdapServer() throws Exception {
+        Hashtable<String, String> env = new Hashtable<>();
+        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
+        env.put(Context.PROVIDER_URL, "ldap://localhost:10389");
+        env.put(Context.SECURITY_AUTHENTICATION, "none");
+
+        return new InitialDirContext(env);
+    }
+}
+----
+
+XML (Spring)::
++
 [source,xml]
 -----------------------------------------------------------------------------------------
 <bean id="ldapserver" class="javax.naming.directory.InitialDirContext" scope="prototype">
@@ -78,23 +105,21 @@ The URI, `ldap:ldapserver`, references a Spring bean with the ID,
   </constructor-arg>
 </bean>
 -----------------------------------------------------------------------------------------
+====
 
-The preceding example declares a regular Sun based LDAP `DirContext`
+The preceding example declares a regular Sun-based LDAP `DirContext`
 that connects anonymously to a locally hosted LDAP server.
 
 [NOTE]
 ====
-`DirContext` objects are *not* required to support concurrency by
-contract. It is therefore important that the directory context is
-declared with the setting, `scope="prototype"`, in the `bean` definition
-or that the context supports concurrency. In the Spring framework,
-`prototype` scoped objects are instantiated each time they are looked
-up.
+`DirContext` objects are *not* required to support concurrency by contract. It is therefore important to manage the directory context's lifecycle appropriately. In the Spring framework, `prototype` scoped objects are instantiated each time they are looked up to ensure concurrency and avoid sharing the same context between multiple threads.
+
+For Camel Quarkus applications, you can achieve similar behavior by using the `@Dependent` annotation. When you annotate a component or bean with `@Dependent`, a new instance of the component is created for each injection point or usage, which effectively provides the same concurrency guarantees as Spring's `prototype` scope. This ensures that each part of your application interacts with a separate and isolated `DirContext` instance, preventing unintended thread interference.
 ====
 
-== Security concerns related to LDAP injection
+=== Security concerns related to LDAP injection
 
-IMPORTANT: The camel-ldap component uses the message body as filter the search results.
+IMPORTANT: The camel-ldap component uses the message body to filter the search results.
 Therefore, the message body should be protected from LDAP injection. To assist with this,
 you can use `org.apache.camel.component.ldap.LdapHelper` utility class that has method(s)
 to escape string values to be LDAP injection safe.
@@ -102,9 +127,9 @@ to escape string values to be LDAP injection safe.
 See the following link
 for information about https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html[LDAP Injection].
 
-== Samples
+== Examples
 
-Following on from the Spring configuration above, the code sample below
+Following on from the configuration above, the code sample below
 sends an LDAP request to filter search a group for a member. The Common
 Name is then extracted from the response.
 
@@ -112,14 +137,14 @@ Name is then extracted from the response.
 ----------------------------------------------------------
 ProducerTemplate template = exchange.getContext().createProducerTemplate();
 
-Collection results = template.sendBody(
+Collection<SearchResult> results = template.requestBody(
     "ldap:ldapserver?base=ou=mygroup,ou=groups,ou=system",
     "(member=uid=huntc,ou=users,ou=system)", Collection.class);
 
 if (results.size() > 0) {
   // Extract what we need from the device's profile
 
-  Iterator> resultIter = results.iterator();
+  Iterator<SearchResult> resultIter = results.iterator();
   SearchResult searchResult = (SearchResult) resultIter.next();
   Attributes attributes = searchResult.getAttributes();
   Attribute deviceCNAttr = attributes.get("cn");
@@ -128,9 +153,9 @@ if (results.size() > 0) {
 }
 ----------------------------------------------------------
 
-If no specific filter is required - for example, you just need to look
-up a single entry - specify a wildcard filter expression. For example,
-if the LDAP entry has a Common Name, use a filter expression like:
+If no specific filter is required (for example, you need to look
+up a single entry), specify a wildcard filter expression.
+If the LDAP entry has a Common Name, use a filter expression like:
 
 ------
 (cn=*)
@@ -152,12 +177,13 @@ props.setProperty(Context.SECURITY_AUTHENTICATION, "simple");
 props.setProperty(Context.SECURITY_PRINCIPAL, "cn=Manager");
 props.setProperty(Context.SECURITY_CREDENTIALS, "secret");
 
-SimpleRegistry reg = new SimpleRegistry();
-reg.put("myldap", new InitialLdapContext(props, null));
+DefaultRegistry reg = new DefaultRegistry();
+reg.bind("myldap", new InitialLdapContext(props, null));
 
 CamelContext context = new DefaultCamelContext(reg);
 context.addRoutes(
     new RouteBuilder() {
+        @Override
         public void configure() throws Exception { 
             from("direct:start").to("ldap:myldap?base=ou=test");
         }
@@ -172,80 +198,203 @@ Exchange exchange = endpoint.createExchange();
 exchange.getIn().setBody("(uid=test)");
 Exchange out = template.send(endpoint, exchange);
 
-Collection<SearchResult> data = out.getOut().getBody(Collection.class);
+Collection<SearchResult> data = out.getMessage().getBody(Collection.class);
 assert data != null;
 assert !data.isEmpty();
 
-System.out.println(out.getOut().getBody());
+System.out.println(out.getMessage().getBody());
 
 context.stop();
 ---------------------------------------------------------------------------------------
 
 == Configuring SSL
 
-All required is to create a custom socket factory and reference it in
-the InitialDirContext bean - see below sample.
+All that is required is to create a custom socket factory and reference it in
+the `InitialDirContext` bean.
+See the sample below.
 
 *SSL Configuration*
 
+[tabs]
+====
+Java (Quarkus)::
++
+[source,java]
+----
+public class LdapServerProducer {
+
+    @Produces
+    @Dependent
+    @Named("ldapserver")
+    public DirContext createLdapServer() throws Exception {
+        Hashtable<String, String> env = new Hashtable<>();
+        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
+        env.put(Context.PROVIDER_URL, "ldaps://" + InetAddress.getLocalHost().getCanonicalHostName() + ":10636");
+        env.put(Context.SECURITY_AUTHENTICATION, "none");
+        env.put("java.naming.ldap.factory.socket", CustomSSLSocketFactory.class.getName());
+
+        return new InitialDirContext(env);
+    }
+}
+----
+
+XML (Spring)::
++
 [source,xml]
 ----------------------------------------------------------------------------------------------------------------------------------
 <?xml version="1.0" encoding="UTF-8"?>
-<blueprint xmlns="http://www.osgi.org/xmlns/blueprint/v1.0.0"
-           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="http://www.osgi.org/xmlns/blueprint/v1.0.0 http://www.osgi.org/xmlns/blueprint/v1.0.0/blueprint.xsd
-                 http://camel.apache.org/schema/blueprint http://camel.apache.org/schema/blueprint/camel-blueprint.xsd">
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+    http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
 
-    <sslContextParameters xmlns="http://camel.apache.org/schema/blueprint"
-                          id="sslContextParameters">
-        <keyManagers
-                keyPassword="{{keystore.pwd}}">
-            <keyStore
-                    resource="{{keystore.url}}"
-                    password="{{keystore.pwd}}"/>
+    <sslContextParameters xmlns="http://camel.apache.org/schema/spring" id="sslContextParameters" >
+        <keyManagers keyPassword="{{keystore.pwd}}">
+            <keyStore resource="{{keystore.url}}" password="{{keystore.pwd}}"/>
         </keyManagers>
     </sslContextParameters>
 
-    <bean id="customSocketFactory" class="zotix.co.util.CustomSocketFactory">
-        <argument ref="sslContextParameters" />
+    <bean id="customSocketFactory" class="com.example.ldap.CustomSocketFactory">
+        <constructor-arg index="0" ref="sslContextParameters"/>
     </bean>
+
     <bean id="ldapserver" class="javax.naming.directory.InitialDirContext" scope="prototype">
-        <argument>
+        <constructor-arg>
             <props>
-                <prop key="java.naming.factory.initial" value="com.sun.jndi.ldap.LdapCtxFactory"/>
-                <prop key="java.naming.provider.url" value="ldaps://lab.zotix.co:636"/>
-                <prop key="java.naming.security.protocol" value="ssl"/>
-                <prop key="java.naming.security.authentication" value="simple" />
-                <prop key="java.naming.security.principal" value="cn=Manager,dc=example,dc=com"/>
-                <prop key="java.naming.security.credentials" value="passw0rd"/>
-                <prop key="java.naming.ldap.factory.socket"
-                      value="zotix.co.util.CustomSocketFactory"/>
+                <prop key="java.naming.factory.initial">com.sun.jndi.ldap.LdapCtxFactory</prop>
+                <prop key="java.naming.provider.url">ldaps://127.0.0.1:10636</prop>
+                <prop key="java.naming.security.protocol">ssl</prop>
+                <prop key="java.naming.security.authentication">none</prop>
+                <prop key="java.naming.ldap.factory.socket">com.example.ldap.CustomSocketFactory</prop>
             </props>
-        </argument>
+        </constructor-arg>
     </bean>
-</blueprint>
+</beans>
 ----------------------------------------------------------------------------------------------------------------------------------
+====
 
 *Custom Socket Factory*
 
+[tabs]
+====
+Java (Quarkus)::
++
 [source,java]
------------------------------------------------------------------------------------------------------
-import org.apache.camel.support.jsse.SSLContextParameters;
+----
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.security.KeyStore;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
+
+import org.eclipse.microprofile.config.ConfigProvider;
+
+public class CustomSSLSocketFactory extends SSLSocketFactory {
+
+    private SSLSocketFactory delegate;
+
+    public CustomSSLSocketFactory() throws Exception {
+        String trustStoreFilename = ConfigProvider.getConfig().getValue("ldap.trustStore", String.class);
+        String trustStorePassword = ConfigProvider.getConfig().getValue("ldap.trustStorePassword", String.class);
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        try (InputStream in = new FileInputStream(trustStoreFilename)) {
+            keyStore.load(in, trustStorePassword.toCharArray());
+        }
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+        tmf.init(keyStore);
+        SSLContext ctx = SSLContext.getInstance("TLS");
+        ctx.init(null, tmf.getTrustManagers(), null);
+        delegate = ctx.getSocketFactory();
+    }
+
+    public static SocketFactory getDefault() {
+        try {
+            return new CustomSSLSocketFactory();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    @Override
+    public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws IOException {
+        return delegate.createSocket(s, host, port, autoClose);
+    }
+
+    @Override
+    public String[] getDefaultCipherSuites() {
+        return delegate.getDefaultCipherSuites();
+    }
+
+    @Override
+    public String[] getSupportedCipherSuites() {
+        return delegate.getSupportedCipherSuites();
+    }
+
+    @Override
+    public Socket createSocket(String host, int port) throws IOException, UnknownHostException {
+        return delegate.createSocket(host, port);
+    }
+
+    @Override
+    public Socket createSocket(InetAddress address, int port) throws IOException {
+        return delegate.createSocket(address, port);
+    }
+
+    @Override
+    public Socket createSocket(String host, int port, InetAddress localAddress, int localPort)
+            throws IOException, UnknownHostException {
+        return delegate.createSocket(host, port, localAddress, localPort);
+    }
+
+    @Override
+    public Socket createSocket(InetAddress address, int port, InetAddress localAddress, int localPort)
+            throws IOException {
+        return delegate.createSocket(address, port, localAddress, localPort);
+    }
+}
+----
++
+The constructor uses the `ConfigProvider` to read the `ldap.trustStore` and `ldap.trustStorePassword` configuration properties, which could be specified in the `application.properties` file as follows:
++
+[source,properties]
+----
+ldap.trustStore=/path/to/truststore.jks
+ldap.trustStorePassword=secret
+----
+
+XML (Spring)::
++
+[source,java]
+-----------------------------------------------------------------------------------------------------
+package com.example.ldap;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.security.KeyStore;
 
+import javax.net.SocketFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
+
+import org.apache.camel.support.jsse.SSLContextParameters;
+
 /**
  * The CustomSocketFactory. Loads the KeyStore and creates an instance of SSLSocketFactory
  */
 public class CustomSocketFactory extends SSLSocketFactory {
-
+    
     private static SSLSocketFactory socketFactory;
 
     /**
@@ -255,7 +404,7 @@ public class CustomSocketFactory extends SSLSocketFactory {
     }
 
     /**
-     * Called by Blueprint DI to initialise an instance of SocketFactory
+     * Called by Spring Boot DI to initialize an instance of SocketFactory
      */
     public CustomSocketFactory(SSLContextParameters sslContextParameters) {
         try {
@@ -266,7 +415,7 @@ public class CustomSocketFactory extends SSLSocketFactory {
             ctx.init(null, tmf.getTrustManagers(), null);
             socketFactory = ctx.getSocketFactory();
         } catch (Exception ex) {
-            ex.printStackTrace(System.err);  /* handle exception */
+            ex.printStackTrace(System.err);
         }
     }
 
@@ -313,6 +462,6 @@ public class CustomSocketFactory extends SSLSocketFactory {
     }
 }
 -----------------------------------------------------------------------------------------------------
-
+====
 
 include::spring-boot:partial$starter.adoc[]

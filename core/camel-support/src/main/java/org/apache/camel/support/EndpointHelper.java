@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.camel.CamelContext;
@@ -119,29 +118,7 @@ public final class EndpointHelper {
         // the query parameters needs to be rebuild by removing the unresolved key=value pairs
         if (query != null && query.contains(prefix)) {
             Map<String, Object> params = URISupport.parseQuery(query);
-            Map<String, Object> keep = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> entry : params.entrySet()) {
-                String key = entry.getKey();
-                if (key.startsWith(prefix)) {
-                    continue;
-                }
-                Object value = entry.getValue();
-                if (value instanceof String) {
-                    String s = value.toString();
-                    if (s.startsWith(prefix)) {
-                        continue;
-                    }
-                    // okay the value may use a resource loader with a scheme prefix
-                    int dot = s.indexOf(':');
-                    if (dot > 0 && dot < s.length() - 1) {
-                        s = s.substring(dot + 1);
-                        if (s.startsWith(prefix)) {
-                            continue;
-                        }
-                    }
-                }
-                keep.put(key, value);
-            }
+            final Map<String, Object> keep = extractParamsToKeep(params, prefix);
             // rebuild query
             query = URISupport.createQueryString(keep);
         }
@@ -149,6 +126,32 @@ public final class EndpointHelper {
         // assemble uri as answer
         uri = query != null && !query.isEmpty() ? base + "?" + query : base;
         return uri;
+    }
+
+    private static Map<String, Object> extractParamsToKeep(Map<String, Object> params, String prefix) {
+        Map<String, Object> keep = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith(prefix)) {
+                continue;
+            }
+            Object value = entry.getValue();
+            if (value instanceof String s) {
+                if (s.startsWith(prefix)) {
+                    continue;
+                }
+                // okay the value may use a resource loader with a scheme prefix
+                int dot = s.indexOf(':');
+                if (dot > 0 && dot < s.length() - 1) {
+                    s = s.substring(dot + 1);
+                    if (s.startsWith(prefix)) {
+                        continue;
+                    }
+                }
+            }
+            keep.put(key, value);
+        }
+        return keep;
     }
 
     /**
@@ -221,7 +224,7 @@ public final class EndpointHelper {
      * @param  context the Camel context, if <tt>null</tt> then property placeholder resolution is skipped.
      * @param  uri     the endpoint uri
      * @param  pattern a pattern to match
-     * @return         <tt>true</tt> if match, <tt>false</tt> otherwise.
+     * @return         <tt>true</tt> if matched, <tt>false</tt> otherwise.
      */
     public static boolean matchEndpoint(CamelContext context, String uri, String pattern) {
         if (context != null) {
@@ -235,18 +238,31 @@ public final class EndpointHelper {
         // normalize uri so we can do endpoint hits with minor mistakes and parameters is not in the same order
         uri = normalizeEndpointUri(uri);
 
-        // we need to test with and without scheme separators (//)
-        boolean match = PatternHelper.matchPattern(toggleUriSchemeSeparators(uri), pattern);
-        match |= PatternHelper.matchPattern(uri, pattern);
-        if (!match && pattern != null && pattern.contains("?")) {
-            // try normalizing the pattern as a uri for exact matching, so parameters are ordered the same as in the endpoint uri
+        // do fast matching without regexp first
+        boolean match = doMatchEndpoint(uri, pattern, false);
+        if (!match) {
+            // this is slower as pattern is compiled as regexp
+            match = doMatchEndpoint(uri, pattern, true);
+        }
+        return match;
+    }
+
+    private static boolean doMatchEndpoint(String uri, String pattern, boolean regexp) {
+        String toggleUri = null;
+        boolean match = regexp ? PatternHelper.matchRegex(uri, pattern) : PatternHelper.matchPattern(uri, pattern);
+        if (!match) {
+            toggleUri = toggleUriSchemeSeparators(uri);
+            match = regexp ? PatternHelper.matchRegex(toggleUri, pattern) : PatternHelper.matchPattern(toggleUri, pattern);
+        }
+        if (!match && !regexp && pattern != null && pattern.contains("?")) {
+            // this is only need to be done once (in fast mode when regexp=false)
+            // try normalizing the pattern as an uri for exact matching, so parameters are ordered the same as in the endpoint uri
             try {
                 pattern = URISupport.normalizeUri(pattern);
                 // try both with and without scheme separators (//)
-                match = toggleUriSchemeSeparators(uri).equalsIgnoreCase(pattern);
-                return match || uri.equalsIgnoreCase(pattern);
+                return uri.equalsIgnoreCase(pattern) || toggleUri.equalsIgnoreCase(pattern);
             } catch (URISyntaxException e) {
-                //Can't normalize and original match failed
+                // cannot normalize and original match failed
                 return false;
             } catch (Exception e) {
                 throw new ResolveEndpointFailedException(uri, e);
@@ -278,7 +294,7 @@ public final class EndpointHelper {
      * Is the given parameter a reference parameter (starting with a # char)
      *
      * @param  parameter the parameter
-     * @return           <tt>true</tt> if its a reference parameter
+     * @return           <tt>true</tt> if it's a reference parameter
      */
     public static boolean isReferenceParameter(String parameter) {
         return parameter != null && parameter.trim().startsWith("#") && parameter.trim().length() > 1;
@@ -310,7 +326,7 @@ public final class EndpointHelper {
      * @throws NoSuchBeanException if object was not found in registry and <code>mandatory</code> is <code>true</code>.
      */
     public static <T> T resolveReferenceParameter(CamelContext context, String value, Class<T> type, boolean mandatory) {
-        Object answer = null;
+        Object answer;
         if (value.startsWith("#class:")) {
             try {
                 answer = createBean(context, value, type);
@@ -321,13 +337,7 @@ public final class EndpointHelper {
             try {
                 value = value.substring(6);
                 Class<?> clazz = context.getClassResolver().resolveMandatoryClass(value);
-                Set<?> set = context.getRegistry().findByType(clazz);
-                if (set.size() == 1) {
-                    answer = set.iterator().next();
-                } else if (set.size() > 1) {
-                    throw new NoSuchBeanException(
-                            value, "Found " + set.size() + " beans of type: " + clazz + ". Only 1 bean instance is supported.");
-                }
+                answer = context.getRegistry().mandatoryFindSingleByType(clazz);
             } catch (ClassNotFoundException e) {
                 throw new NoSuchBeanException(value, e);
             }
@@ -377,11 +387,27 @@ public final class EndpointHelper {
             className = StringHelper.before(className, "#");
         }
         Class<?> clazz = camelContext.getClassResolver().resolveMandatoryClass(className);
+        Class<?> factoryClass = null;
+        if (factoryMethod != null) {
+            String typeOrRef = StringHelper.before(factoryMethod, ":");
+            if (typeOrRef != null) {
+                // use another class with factory method
+                factoryMethod = StringHelper.after(factoryMethod, ":");
+                // special to support factory method parameters
+                Object existing = camelContext.getRegistry().lookupByName(typeOrRef);
+                if (existing != null) {
+                    factoryClass = existing.getClass();
+                } else {
+                    factoryClass = camelContext.getClassResolver().resolveMandatoryClass(typeOrRef);
+                }
+            }
+        }
 
         if (factoryMethod != null && parameters != null) {
-            answer = PropertyBindingSupport.newInstanceFactoryParameters(camelContext, clazz, factoryMethod, parameters);
+            Class<?> target = factoryClass != null ? factoryClass : clazz;
+            answer = PropertyBindingSupport.newInstanceFactoryParameters(camelContext, target, factoryMethod, parameters);
         } else if (factoryMethod != null) {
-            answer = camelContext.getInjector().newInstance(type, factoryMethod);
+            answer = camelContext.getInjector().newInstance(type, factoryClass, factoryMethod);
         } else if (parameters != null) {
             answer = PropertyBindingSupport.newInstanceConstructorParameters(camelContext, clazz, parameters);
         } else {
@@ -416,9 +442,9 @@ public final class EndpointHelper {
         List<String> elements = Arrays.asList(value.split(","));
         if (elements.size() == 1) {
             Object bean = resolveReferenceParameter(context, elements.get(0).trim(), Object.class);
-            if (bean instanceof List) {
+            if (bean instanceof List list) {
                 // The bean is a list
-                return (List) bean;
+                return list;
             } else {
                 // The bean is a list element
                 List<T> singleElementList = new ArrayList<>();
@@ -498,8 +524,8 @@ public final class EndpointHelper {
 
         // it may be a delegate endpoint, which we need to match as well
         Endpoint delegate = null;
-        if (endpoint instanceof DelegateEndpoint) {
-            delegate = ((DelegateEndpoint) endpoint).getEndpoint();
+        if (endpoint instanceof DelegateEndpoint delegateEndpoint) {
+            delegate = delegateEndpoint.getEndpoint();
         }
 
         Map<String, Endpoint> map = endpoint.getCamelContext().getRegistry().findByTypeWithName(Endpoint.class);

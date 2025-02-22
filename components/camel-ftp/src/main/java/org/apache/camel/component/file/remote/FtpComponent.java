@@ -26,6 +26,7 @@ import org.apache.camel.spi.annotations.Component;
 import org.apache.camel.support.EndpointHelper;
 import org.apache.camel.support.component.PropertyConfigurerSupport;
 import org.apache.camel.util.PropertiesHelper;
+import org.apache.camel.util.StringHelper;
 import org.apache.commons.net.ftp.FTPFile;
 
 /**
@@ -62,15 +63,11 @@ public class FtpComponent extends RemoteFileComponent<FTPFile> {
 
     /**
      * Get the base uri part before the options as they can be non URI valid such as the expression using $ chars and
-     * the URI constructor will regard $ as an illegal character and we don't want to enforce end users to to escape the
-     * $ for the expression (file language)
+     * the URI constructor will regard $ as an illegal character, and we don't want to enforce end users to escape the $
+     * for the expression (file language)
      */
     protected String getBaseUri(String uri) {
-        String baseUri = uri;
-        if (uri.indexOf('?') != -1) {
-            baseUri = uri.substring(0, uri.indexOf('?'));
-        }
-        return baseUri;
+        return StringHelper.before(uri, "?", uri);
     }
 
     /**

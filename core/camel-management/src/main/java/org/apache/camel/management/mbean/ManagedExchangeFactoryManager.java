@@ -37,7 +37,7 @@ import org.apache.camel.util.URISupport;
 @ManagedResource(description = "Managed ExchangeFactory")
 public class ManagedExchangeFactoryManager extends ManagedService implements ManagedExchangeFactoryManagerMBean {
 
-    private ExchangeFactoryManager exchangeFactoryManager;
+    private final ExchangeFactoryManager exchangeFactoryManager;
     private boolean sanitize;
 
     public ManagedExchangeFactoryManager(CamelContext context, ExchangeFactoryManager exchangeFactoryManager) {
@@ -48,7 +48,7 @@ public class ManagedExchangeFactoryManager extends ManagedService implements Man
     @Override
     public void init(ManagementStrategy strategy) {
         super.init(strategy);
-        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : false;
+        sanitize = strategy.getManagementAgent().getMask() != null ? strategy.getManagementAgent().getMask() : true;
     }
 
     @Override

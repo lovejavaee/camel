@@ -21,8 +21,6 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.handler.DrinkQueryValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.http.HttpMethods.GET;
@@ -32,23 +30,19 @@ public class HttpQueryParameterTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/moes", new DrinkQueryValidationHandler(GET.name(), null, null, "drink"))
                 .register("/joes", new DrinkQueryValidationHandler(GET.name(), null, null, "drink")).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -56,10 +50,10 @@ public class HttpQueryParameterTest extends BaseHttpTest {
     }
 
     @Override
-    protected RoutesBuilder createRouteBuilder() throws Exception {
+    protected RoutesBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:moes")
                         .to("http://localhost:" + localServer.getLocalPort()
                             + "/moes?drink=beer");
@@ -72,7 +66,7 @@ public class HttpQueryParameterTest extends BaseHttpTest {
     }
 
     @Test
-    public void testQueryParameter() throws Exception {
+    public void testQueryParameter() {
         String out = fluentTemplate.to("direct:moes").request(String.class);
         assertEquals("Drinking /moes?drink=beer", out);
 

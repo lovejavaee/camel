@@ -51,7 +51,7 @@ public class ObjectSerializationTest extends BaseNettyTest {
     public void testObjectSerializationFailureByDefault() {
         Date date = new Date();
         try {
-            template.requestBody("netty:tcp://localhost:{{port}}?sync=true&encoders=#encoder", date, Date.class);
+            Object o = template.requestBody("netty:tcp://localhost:{{port}}?sync=true&encoders=#encoder", date, Date.class);
             fail("Should have thrown exception");
         } catch (CamelExecutionException e) {
             // expected
@@ -71,8 +71,8 @@ public class ObjectSerializationTest extends BaseNettyTest {
     public Properties loadProperties() {
 
         Properties prop = new Properties();
-        prop.setProperty("port", "" + getPort());
-        prop.setProperty("port2", "" + port2);
+        prop.setProperty("port", Integer.toString(getPort()));
+        prop.setProperty("port2", Integer.toString(port2));
 
         return prop;
     }

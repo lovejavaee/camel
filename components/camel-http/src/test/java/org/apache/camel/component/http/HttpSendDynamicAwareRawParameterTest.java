@@ -22,8 +22,6 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.handler.BasicValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,10 +30,10 @@ public class HttpSendDynamicAwareRawParameterTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
+    public void setupResources() throws Exception {
         localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost")
                 .setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy())
                 .setResponseFactory(getHttpResponseFactory())
@@ -43,14 +41,10 @@ public class HttpSendDynamicAwareRawParameterTest extends BaseHttpTest {
                 .register("/dynamicAware", new BasicValidationHandler("GET", "par1=val1&par2=val2", null, null))
                 .create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -58,10 +52,10 @@ public class HttpSendDynamicAwareRawParameterTest extends BaseHttpTest {
     }
 
     @Override
-    protected RoutesBuilder createRouteBuilder() throws Exception {
+    protected RoutesBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:dynamicAwareWithRaw")
                         .toD("http://localhost:" + localServer.getLocalPort()
                              + "/dynamicAware?par1=RAW(${headers.par1})&par2=RAW{${headers.par2}}");
@@ -70,7 +64,7 @@ public class HttpSendDynamicAwareRawParameterTest extends BaseHttpTest {
     }
 
     @Test
-    public void testDynamicAwareHeadersQuery() throws Exception {
+    public void testDynamicAwareHeadersQuery() {
         Exchange e = fluentTemplate
                 .to("direct:dynamicAwareWithRaw")
                 .withHeader("par1", "val1")

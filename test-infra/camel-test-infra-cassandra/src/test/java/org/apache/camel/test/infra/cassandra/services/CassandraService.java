@@ -14,35 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.camel.test.infra.cassandra.services;
 
+import org.apache.camel.test.infra.common.services.ContainerTestService;
 import org.apache.camel.test.infra.common.services.TestService;
-import org.apache.camel.test.infra.common.services.TestServiceUtil;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
 
-/**
- * Represents an endpoint to a Cassandra instance
- */
-public interface CassandraService extends BeforeAllCallback, AfterAllCallback, TestService {
-
-    int getCQL3Port();
-
-    default String getCQL3Endpoint() {
-        return String.format("%s:%d", getCassandraHost(), getCQL3Port());
-    }
-
-    String getCassandraHost();
-
-    @Override
-    default void beforeAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryInitialize(this, extensionContext);
-    }
-
-    @Override
-    default void afterAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryShutdown(this, extensionContext);
-    }
+public interface CassandraService extends TestService, CassandraInfraService, ContainerTestService {
 }

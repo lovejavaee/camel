@@ -26,8 +26,6 @@ import org.apache.camel.component.http.handler.BasicValidationHandler;
 import org.apache.camel.component.http.handler.HeaderValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.http.ContentType.IMAGE_JPEG;
@@ -41,13 +39,13 @@ public class HttpBodyTest extends BaseHttpTest {
     private HttpServer localServer;
     private String endpointUrl;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
+    public void setupResources() throws Exception {
         Map<String, String> expectedHeaders = new HashMap<>();
         expectedHeaders.put(CONTENT_TYPE, IMAGE_JPEG.getMimeType());
 
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/post", new BasicValidationHandler(POST.name(), null, getBody(), getExpectedContent()))
@@ -57,14 +55,10 @@ public class HttpBodyTest extends BaseHttpTest {
         localServer.start();
 
         endpointUrl = getProtocolString() + "localhost:" + localServer.getLocalPort();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -80,7 +74,7 @@ public class HttpBodyTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpPostWithStringBody() throws Exception {
+    public void httpPostWithStringBody() {
         Exchange exchange = template.request(endpointUrl + "/post", exchange1 -> {
             // without this property, camel use the os default encoding
             // to create the byte array for the StringRequestEntity
@@ -92,7 +86,7 @@ public class HttpBodyTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpPostWithByteArrayBody() throws Exception {
+    public void httpPostWithByteArrayBody() {
         Exchange exchange
                 = template.request(endpointUrl + "/post", exchange1 -> exchange1.getIn().setBody(getBody().getBytes(charset)));
 
@@ -100,7 +94,7 @@ public class HttpBodyTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpPostWithInputStreamBody() throws Exception {
+    public void httpPostWithInputStreamBody() {
         Exchange exchange = template.request(endpointUrl + "/post",
                 exchange1 -> exchange1.getIn().setBody(new ByteArrayInputStream(getBody().getBytes(charset))));
 
@@ -108,7 +102,7 @@ public class HttpBodyTest extends BaseHttpTest {
     }
 
     @Test
-    public void httpPostWithImage() throws Exception {
+    public void httpPostWithImage() {
 
         Exchange exchange = template.send(endpointUrl + "/post1", exchange1 -> {
             exchange1.getIn().setBody(new File("src/test/data/logo.jpeg"));

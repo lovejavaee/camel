@@ -20,11 +20,13 @@ import java.util.Map;
 
 import org.apache.camel.AsyncProducer;
 import org.apache.camel.CamelContext;
+import org.apache.camel.Component;
 import org.apache.camel.Consumer;
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.ExchangePattern;
 import org.apache.camel.PollingConsumer;
+import org.apache.camel.Predicate;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.ShutdownableService;
@@ -38,6 +40,7 @@ public class DefaultInterceptSendToEndpoint implements InterceptSendToEndpoint, 
 
     private final CamelContext camelContext;
     private final Endpoint delegate;
+    private Predicate onWhen;
     private Processor before;
     private Processor after;
     private boolean skip;
@@ -52,6 +55,14 @@ public class DefaultInterceptSendToEndpoint implements InterceptSendToEndpoint, 
         this.camelContext = destination.getCamelContext();
         this.delegate = destination;
         this.skip = skip;
+    }
+
+    public Predicate getOnWhen() {
+        return onWhen;
+    }
+
+    public void setOnWhen(Predicate onWhen) {
+        this.onWhen = onWhen;
     }
 
     public void setBefore(Processor before) {
@@ -127,6 +138,16 @@ public class DefaultInterceptSendToEndpoint implements InterceptSendToEndpoint, 
     }
 
     @Override
+    public void setComponent(Component component) {
+        delegate.setComponent(component);
+    }
+
+    @Override
+    public Component getComponent() {
+        return delegate.getComponent();
+    }
+
+    @Override
     public Producer createProducer() throws Exception {
         return createAsyncProducer();
     }
@@ -135,7 +156,7 @@ public class DefaultInterceptSendToEndpoint implements InterceptSendToEndpoint, 
     public AsyncProducer createAsyncProducer() throws Exception {
         AsyncProducer producer = delegate.createAsyncProducer();
         return PluginHelper.getInternalProcessorFactory(camelContext)
-                .createInterceptSendToEndpointProcessor(this, delegate, producer, skip);
+                .createInterceptSendToEndpointProcessor(this, delegate, producer, skip, onWhen);
     }
 
     @Override

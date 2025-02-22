@@ -33,9 +33,10 @@ import org.apache.camel.spi.Metadata;
  * In case of failures the exchange will be tried on the next endpoint.
  */
 @Metadata(label = "eip,routing")
-@XmlRootElement(name = "failover")
+@XmlRootElement(name = "failoverLoadBalancer")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class FailoverLoadBalancerDefinition extends LoadBalancerDefinition {
+
     @XmlTransient
     private List<Class<?>> exceptionTypes = new ArrayList<>();
 
@@ -48,8 +49,26 @@ public class FailoverLoadBalancerDefinition extends LoadBalancerDefinition {
     @XmlAttribute
     @Metadata(defaultValue = "-1")
     private String maximumFailoverAttempts;
+    @XmlAttribute
+    @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "true")
+    private Boolean inheritErrorHandler;
 
     public FailoverLoadBalancerDefinition() {
+    }
+
+    protected FailoverLoadBalancerDefinition(FailoverLoadBalancerDefinition source) {
+        super(source);
+        this.exceptionTypes = new ArrayList<>(source.exceptionTypes);
+        this.exceptions = new ArrayList<>(source.exceptions);
+        this.roundRobin = source.roundRobin;
+        this.sticky = source.sticky;
+        this.maximumFailoverAttempts = source.maximumFailoverAttempts;
+        this.inheritErrorHandler = source.inheritErrorHandler;
+    }
+
+    @Override
+    public FailoverLoadBalancerDefinition copyDefinition() {
+        return new FailoverLoadBalancerDefinition(this);
     }
 
     public List<String> getExceptions() {
@@ -115,10 +134,26 @@ public class FailoverLoadBalancerDefinition extends LoadBalancerDefinition {
     /**
      * A value to indicate after X failover attempts we should exhaust (give up). Use -1 to indicate never give up and
      * continuously try to failover. Use 0 to never failover. And use e.g. 3 to failover at most 3 times before giving
-     * up. his option can be used whether or not roundRobin is enabled or not.
+     * up. This option can be used whether roundRobin is enabled or not.
      */
     public void setMaximumFailoverAttempts(String maximumFailoverAttempts) {
         this.maximumFailoverAttempts = maximumFailoverAttempts;
+    }
+
+    public Boolean getInheritErrorHandler() {
+        return inheritErrorHandler;
+    }
+
+    /**
+     * To turn off Camel error handling during load balancing.
+     * <p/>
+     * By default, Camel error handler will attempt calling a service, which means you can specify retires and other
+     * fine-grained settings. And only when Camel error handler have failed all attempts, then this load balancer will
+     * fail over to the next endpoint and try again. You can turn this off, and then this load balancer will fail over
+     * immediately on an error.
+     */
+    public void setInheritErrorHandler(Boolean inheritErrorHandler) {
+        this.inheritErrorHandler = inheritErrorHandler;
     }
 
     @Override

@@ -52,6 +52,12 @@ public final class JmxSystemPropertyKeys {
     // whether to register when starting new routes
     public static final String REGISTER_NEW_ROUTES = "org.apache.camel.jmx.registerNewRoutes";
 
+    // whether to register routes created by route templates (not kamelets)
+    public static final String REGISTER_ROUTES_CREATED_BY_TEMPLATE = "org.apache.camel.jmx.registerRoutesCreateByTemplate";
+
+    // whether to register routes created by Kamelets
+    public static final String REGISTER_ROUTES_CREATED_BY_KAMELET = "org.apache.camel.jmx.registerRoutesCreateByKamelet";
+
     // Whether to remove detected sensitive information (such as passwords) from MBean names and attributes.
     public static final String MASK = "org.apache.camel.jmx.mask";
 
@@ -63,6 +69,9 @@ public final class JmxSystemPropertyKeys {
 
     // flag to enable host ip address instead of host name
     public static final String USE_HOST_IP_ADDRESS = "org.apache.camel.jmx.useHostIPAddress";
+
+    // flag to enable updating routes via XML
+    public static final String UPDATE_ROUTE_ENABLED = "org.apache.camel.jmx.updateRouteEnabled";
 
     private JmxSystemPropertyKeys() {
         // not instantiated

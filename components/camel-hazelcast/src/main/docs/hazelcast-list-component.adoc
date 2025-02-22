@@ -5,6 +5,7 @@
 :description: Perform operations on Hazelcast distributed list.
 :since: 2.7
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: Hazelcast
@@ -14,7 +15,7 @@
 
 *{component-header}*
 
-The http://www.hazelcast.com/[Hazelcast] List component is one of Camel Hazelcast Components which allows you to access Hazelcast distributed list.
+The http://www.hazelcast.com/[Hazelcast] List component is one of Camel Hazelcast Components which allows you to access a Hazelcast distributed list.
 
 == Options
 
@@ -34,7 +35,7 @@ include::partial$component-endpoint-options.adoc[]
 
 == List producer – to(“hazelcast-list:foo”)
 
-The list producer provides 8 operations:
+The list producer provides eight operations:
 
 * add
 * addAll
@@ -49,7 +50,7 @@ The list producer provides 8 operations:
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-=== Sample for *add*:
+=== Example for *add*:
 
 [source,java]
 ------------------------------------------------------------------------------------
@@ -58,7 +59,7 @@ from("direct:add")
 .toF("hazelcast-%sbar", HazelcastConstants.LIST_PREFIX);
 ------------------------------------------------------------------------------------
 
-=== Sample for *get*:
+=== Example for *get*:
 
 [source,java]
 ------------------------------------------------------------------------------------
@@ -68,7 +69,7 @@ from("direct:get")
 .to("seda:out");
 ------------------------------------------------------------------------------------
 
-=== Sample for *setvalue*:
+=== Example for *setvalue*:
 
 [source,java]
 -----------------------------------------------------------------------------------------
@@ -77,7 +78,7 @@ from("direct:set")
 .toF("hazelcast-%sbar", HazelcastConstants.LIST_PREFIX);
 -----------------------------------------------------------------------------------------
 
-=== Sample for *removevalue*:
+=== Example for *removevalue*:
 
 [source,java]
 --------------------------------------------------------------------------------------------
@@ -92,7 +93,7 @@ purpose.
 
 == List consumer – from(“hazelcast-list:foo”)
 
-The list consumer provides 2 operations:
+The list consumer provides two operations:
 * add
 * remove
 

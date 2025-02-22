@@ -21,50 +21,39 @@ import javax.xml.xpath.XPathFactory;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.spring.junit5.CamelSpringTestSupport;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 import org.springframework.context.support.AbstractXmlApplicationContext;
 
-import static org.apache.camel.test.junit5.TestSupport.isJavaVendor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  *
  */
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
+@DisabledIfSystemProperty(named = "java.vendor", matches = ".*ibm.*")
 public class XPathLanguageTest extends CamelSpringTestSupport {
 
     private static final String KEY = XPathFactory.DEFAULT_PROPERTY_NAME + ":" + "http://java.sun.com/jaxp/xpath/dom";
-    private boolean jvmAdequate = true;
     private String oldPropertyValue;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        if (!isJavaVendor("ibm")) {
-            // Force using the JAXP default implementation, because having Saxon in the classpath will automatically make JAXP use it
-            // because of Service Provider discovery (this does not happen in OSGi because the META-INF/services package is not exported
-            oldPropertyValue = System.setProperty(KEY, "com.sun.org.apache.xpath.internal.jaxp.XPathFactoryImpl");
-        } else {
-            jvmAdequate = false;
-        }
-        super.setUp();
+    public void setupResources() {
+        // Force using the JAXP default implementation, because having Saxon in the classpath will automatically make JAXP use it
+        // because of Service Provider discovery (this does not happen in OSGi because the META-INF/services package is not exported
+        oldPropertyValue = System.setProperty(KEY, "com.sun.org.apache.xpath.internal.jaxp.XPathFactoryImpl");
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
+    public void doPostTearDown() {
         if (oldPropertyValue != null) {
             System.setProperty(KEY, oldPropertyValue);
         } else {
             System.clearProperty(KEY);
         }
-        super.tearDown();
     }
 
     @Override
@@ -74,8 +63,6 @@ public class XPathLanguageTest extends CamelSpringTestSupport {
 
     @Test
     public void testSpringDSLXPathSaxonFlag() throws Exception {
-        assumeTrue(jvmAdequate, "JVM is not adequate");
-
         MockEndpoint mockEndpoint = getMockEndpoint("mock:testSaxonWithFlagResult");
         mockEndpoint.expectedMessageCount(1);
 
@@ -89,8 +76,6 @@ public class XPathLanguageTest extends CamelSpringTestSupport {
 
     @Test
     public void testSpringDSLXPathFactory() throws Exception {
-        assumeTrue(jvmAdequate, "JVM is not adequate");
-
         MockEndpoint mockEndpoint = getMockEndpoint("mock:testSaxonWithFactoryResult");
         mockEndpoint.expectedMessageCount(1);
 
@@ -105,8 +90,6 @@ public class XPathLanguageTest extends CamelSpringTestSupport {
     @Disabled("See http://www.saxonica.com/documentation/index.html#!xpath-api/jaxp-xpath/factory")
     @Test
     public void testSpringDSLXPathObjectModel() throws Exception {
-        assumeTrue(jvmAdequate, "JVM is not adequate");
-
         MockEndpoint mockEndpoint = getMockEndpoint("mock:testSaxonWithObjectModelResult");
         mockEndpoint.expectedMessageCount(1);
 
@@ -120,8 +103,6 @@ public class XPathLanguageTest extends CamelSpringTestSupport {
 
     @Test
     public void testSpringDSLXPathSaxonFlagPredicate() throws Exception {
-        assumeTrue(jvmAdequate, "JVM is not adequate");
-
         MockEndpoint mockEndpoint = getMockEndpoint("mock:testSaxonWithFlagResultPredicate");
         mockEndpoint.expectedMessageCount(1);
 
@@ -132,8 +113,6 @@ public class XPathLanguageTest extends CamelSpringTestSupport {
 
     @Test
     public void testSpringDSLXPathFactoryPredicate() throws Exception {
-        assumeTrue(jvmAdequate, "JVM is not adequate");
-
         MockEndpoint mockEndpoint = getMockEndpoint("mock:testSaxonWithFactoryResultPredicate");
         mockEndpoint.expectedMessageCount(1);
 
@@ -145,8 +124,6 @@ public class XPathLanguageTest extends CamelSpringTestSupport {
     @Disabled("See http://www.saxonica.com/documentation/index.html#!xpath-api/jaxp-xpath/factory")
     @Test
     public void testSpringDSLXPathObjectModelPredicate() throws Exception {
-        assumeTrue(jvmAdequate, "JVM is not adequate");
-
         MockEndpoint mockEndpoint = getMockEndpoint("mock:testSaxonWithObjectModelResultPredicate");
         mockEndpoint.expectedMessageCount(1);
 

@@ -22,15 +22,23 @@ import io.micrometer.core.instrument.Gauge;
 import org.apache.camel.spi.CamelEvent;
 import org.apache.camel.spi.CamelEvent.RouteAddedEvent;
 import org.apache.camel.spi.CamelEvent.RouteEvent;
+import org.apache.camel.spi.CamelEvent.RouteReloadedEvent;
 import org.apache.camel.spi.CamelEvent.RouteRemovedEvent;
 import org.apache.camel.spi.CamelEvent.RouteStartedEvent;
 import org.apache.camel.spi.CamelEvent.RouteStoppedEvent;
+import org.apache.camel.spi.ManagementStrategy;
 
 public class MicrometerRouteEventNotifier extends AbstractMicrometerEventNotifier<RouteEvent> {
 
     private final AtomicLong routesAdded = new AtomicLong();
     private final AtomicLong routesRunning = new AtomicLong();
+    private final AtomicLong routesReloaded = new AtomicLong();
+    private Gauge gaugeAdded;
+    private Gauge gaugeRunning;
+    private Gauge gaugeReloaded;
     private MicrometerRouteEventNotifierNamingStrategy namingStrategy = MicrometerRouteEventNotifierNamingStrategy.DEFAULT;
+    boolean registerKamelets;
+    boolean registerTemplates = true;
 
     public MicrometerRouteEventNotifier() {
         super(RouteEvent.class);
@@ -45,20 +53,57 @@ public class MicrometerRouteEventNotifier extends AbstractMicrometerEventNotifie
     }
 
     @Override
+    protected void doInit() throws Exception {
+        ManagementStrategy ms = getCamelContext().getManagementStrategy();
+        if (ms != null && ms.getManagementAgent() != null) {
+            registerKamelets = ms.getManagementAgent().getRegisterRoutesCreateByKamelet();
+            registerTemplates = ms.getManagementAgent().getRegisterRoutesCreateByTemplate();
+        }
+    }
+
+    @Override
     protected void doStart() throws Exception {
         super.doStart();
-        Gauge.builder(namingStrategy.getRouteAddedName(), routesAdded, value -> (double) value.get())
+
+        gaugeAdded = Gauge.builder(namingStrategy.getRouteAddedName(), routesAdded, value -> (double) value.get())
                 .baseUnit("routes")
                 .tags(namingStrategy.getTags(getCamelContext()))
                 .register(getMeterRegistry());
-        Gauge.builder(namingStrategy.getRouteRunningName(), routesRunning, value -> (double) value.get())
+        gaugeRunning = Gauge.builder(namingStrategy.getRouteRunningName(), routesRunning, value -> (double) value.get())
+                .baseUnit("routes")
+                .tags(namingStrategy.getTags(getCamelContext()))
+                .register(getMeterRegistry());
+        gaugeReloaded = Gauge.builder(namingStrategy.getRouteReloadedName(), routesReloaded, value -> (double) value.get())
                 .baseUnit("routes")
                 .tags(namingStrategy.getTags(getCamelContext()))
                 .register(getMeterRegistry());
     }
 
     @Override
+    protected void doStop() throws Exception {
+        super.doStop();
+
+        if (gaugeAdded != null) {
+            getMeterRegistry().remove(gaugeAdded);
+        }
+        if (gaugeRunning != null) {
+            getMeterRegistry().remove(gaugeRunning);
+        }
+        if (gaugeReloaded != null) {
+            getMeterRegistry().remove(gaugeReloaded);
+        }
+    }
+
+    @Override
     public void notify(CamelEvent eventObject) {
+        if (eventObject instanceof RouteEvent re) {
+            // skip routes that should not be included
+            boolean skip = (re.getRoute().isCreatedByKamelet() && !registerKamelets)
+                    || (re.getRoute().isCreatedByRouteTemplate() && !registerTemplates);
+            if (skip) {
+                return;
+            }
+        }
         if (eventObject instanceof RouteAddedEvent) {
             routesAdded.incrementAndGet();
         } else if (eventObject instanceof RouteRemovedEvent) {
@@ -67,6 +112,8 @@ public class MicrometerRouteEventNotifier extends AbstractMicrometerEventNotifie
             routesRunning.incrementAndGet();
         } else if (eventObject instanceof RouteStoppedEvent) {
             routesRunning.decrementAndGet();
+        } else if (eventObject instanceof RouteReloadedEvent) {
+            routesReloaded.incrementAndGet();
         }
     }
 }

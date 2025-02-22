@@ -50,15 +50,15 @@ public class SedaDefaultDiscardWhenFullTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 SedaComponent seda = context.getComponent("seda", SedaComponent.class);
                 seda.setDefaultDiscardWhenFull(true);
                 seda.setQueueSize(2);
 
-                from("seda:foo").routeId("foo").noAutoStartup()
+                from("seda:foo").routeId("foo").autoStartup(false)
                         .to("mock:result");
             }
         };

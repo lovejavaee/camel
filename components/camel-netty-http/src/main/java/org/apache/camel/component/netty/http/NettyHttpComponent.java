@@ -19,6 +19,7 @@ package org.apache.camel.component.netty.http;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.Consumer;
@@ -64,8 +65,8 @@ public class NettyHttpComponent extends NettyComponent
     private static final Logger LOG = LoggerFactory.getLogger(NettyHttpComponent.class);
 
     // factories which is created by this component and therefore manage their lifecycles
-    private final Map<Integer, HttpServerConsumerChannelFactory> multiplexChannelHandlers = new HashMap<>();
-    private final Map<String, HttpServerBootstrapFactory> bootstrapFactories = new HashMap<>();
+    private final Map<Integer, HttpServerConsumerChannelFactory> multiplexChannelHandlers = new ConcurrentHashMap<>();
+    private final Map<String, HttpServerBootstrapFactory> bootstrapFactories = new ConcurrentHashMap<>();
     @Metadata(label = "advanced")
     private NettyHttpBinding nettyHttpBinding;
     @Metadata(label = "advanced")
@@ -329,25 +330,33 @@ public class NettyHttpComponent extends NettyComponent
         this.muteException = muteException;
     }
 
-    public synchronized HttpServerConsumerChannelFactory getMultiplexChannelHandler(int port) {
-        HttpServerConsumerChannelFactory answer = multiplexChannelHandlers.get(port);
-        if (answer == null) {
-            answer = new HttpServerMultiplexChannelHandler();
-            answer.init(port);
-            multiplexChannelHandlers.put(port, answer);
-        }
+    public HttpServerConsumerChannelFactory getMultiplexChannelHandler(int port) {
+        return multiplexChannelHandlers.computeIfAbsent(port, s -> newHttpServerConsumerChannelFactory(port));
+    }
+
+    private static HttpServerConsumerChannelFactory newHttpServerConsumerChannelFactory(int port) {
+        final HttpServerConsumerChannelFactory answer = new HttpServerMultiplexChannelHandler();
+        answer.init(port);
         return answer;
     }
 
-    protected synchronized HttpServerBootstrapFactory getOrCreateHttpNettyServerBootstrapFactory(NettyHttpConsumer consumer) {
-        String key = consumer.getConfiguration().getAddress();
-        HttpServerBootstrapFactory answer = bootstrapFactories.get(key);
-        if (answer == null) {
-            HttpServerConsumerChannelFactory channelFactory = getMultiplexChannelHandler(consumer.getConfiguration().getPort());
-            answer = new HttpServerBootstrapFactory(channelFactory);
-            answer.init(getCamelContext(), consumer.getConfiguration(), new HttpServerInitializerFactory(consumer));
-            bootstrapFactories.put(key, answer);
+    protected HttpServerBootstrapFactory getOrCreateHttpNettyServerBootstrapFactory(NettyHttpConsumer consumer) {
+        String key;
+        lock.lock();
+        try {
+            key = consumer.getConfiguration().getAddress();
+        } finally {
+            lock.unlock();
         }
+        return bootstrapFactories.computeIfAbsent(key, s -> newHttpServerBootstrapFactory(consumer));
+    }
+
+    private HttpServerBootstrapFactory newHttpServerBootstrapFactory(NettyHttpConsumer consumer) {
+        final HttpServerConsumerChannelFactory channelFactory
+                = getMultiplexChannelHandler(consumer.getConfiguration().getPort());
+        final HttpServerBootstrapFactory answer = new HttpServerBootstrapFactory(channelFactory);
+
+        answer.init(getCamelContext(), consumer.getConfiguration(), new HttpServerInitializerFactory(consumer));
         return answer;
     }
 
@@ -486,7 +495,7 @@ public class NettyHttpComponent extends NettyComponent
             url = url + "?" + query;
         }
 
-        parameters = parameters != null ? new HashMap<>(parameters) : new HashMap<String, Object>();
+        parameters = parameters != null ? new HashMap<>(parameters) : new HashMap<>();
 
         // there are cases where we might end up here without component being created beforehand
         // we need to abide by the component properties specified in the parameters when creating
@@ -495,8 +504,14 @@ public class NettyHttpComponent extends NettyComponent
 
         NettyHttpEndpoint endpoint = (NettyHttpEndpoint) camelContext.getEndpoint(url, parameters);
         String path = uriTemplate != null ? uriTemplate : basePath;
-        endpoint.setHeaderFilterStrategy(new NettyHttpRestHeaderFilterStrategy(path, queryParameters));
 
+        HeaderFilterStrategy headerFilterStrategy
+                = resolveAndRemoveReferenceParameter(parameters, "headerFilterStrategy", HeaderFilterStrategy.class);
+        if (headerFilterStrategy != null) {
+            endpoint.setHeaderFilterStrategy(headerFilterStrategy);
+        } else {
+            endpoint.setHeaderFilterStrategy(new NettyHttpRestHeaderFilterStrategy(path, queryParameters));
+        }
         // the endpoint must be started before creating the producer
         ServiceHelper.startService(endpoint);
 

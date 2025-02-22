@@ -5,6 +5,7 @@
 :description: Perform DNS queries using DNSJava.
 :since: 2.7
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: dns
@@ -18,19 +19,15 @@ DNSJava. The component is a thin layer on top of
 http://www.xbill.org/dnsjava/[DNSJava].
 The component offers the following operations:
 
-* ip, to resolve a domain by its ip
-* lookup, to lookup information about the domain
-* dig, to run DNS queries
+* `ip`: to resolve a domain by its ip
+* `lookup`: to lookup information about the domain
+* `dig`: to run DNS queries
 
 [NOTE]
 ====
 *Requires SUN JVM*
 
 The DNSJava library requires running on the SUN JVM.
- If you use Apache ServiceMix or Apache Karaf, you'll need to adjust the
-`etc/jre.properties` file, to add `sun.net.spi.nameservice` to the list
-of Java platform packages exported. The server will need restarting
-before this change takes effect.
 ====
 
 Maven users will need to add the following dependency to their `pom.xml`
@@ -84,10 +81,10 @@ include::partial$component-endpoint-headers.adoc[]
 </route>
 ----
 
-This looks up a domain's IP. For example, www.example.com resolves to
-192.0.32.10. +
- The IP address to lookup must be provided in the header with key
-`"dns.domain"`.
+This looks up a domain's IP. For example, _www.example.com_ resolves to
+192.0.32.10.
+
+The IP address to lookup must be provided in the header with key `"dns.domain"`.
 
 === DNS lookup
 
@@ -118,13 +115,13 @@ Dig is a Unix command-line utility to run DNS queries.
 The query must be provided in the header with key `"dns.query"`.
 
 
-== Dns Activation Policy
+=== Dns Activation Policy
 
-DnsActivationPolicy can be used to dynamically start and stop routes based on dns state.
+The `DnsActivationPolicy` can be used to dynamically start and stop routes based on dns state.
 
-If you have instances of the same component running in different regions you can configure a route in each region to activate only if dns is pointing to its region.
+If you have instances of the same component running in different regions, you can configure a route in each region to activate only if dns is pointing to its region.
 
-i.e. You may have an instance in NYC and an instance in SFO. You would configure a service CNAME service.example.com to point to nyc-service.example.com to bring NYC instance up and SFO instance down. When you change the CNAME service.example.com to point to sfo-service.example.com -- nyc instance would stop its routes and sfo will bring its routes up. This allows you to switch regions without restarting actual components.
+For example, you may have an instance in NYC and an instance in SFO. You would configure a service CNAME service.example.com to point to nyc-service.example.com to bring NYC instance up and SFO instance down. When you change the CNAME service.example.com to point to sfo-service.example.com -- nyc instance would stop its routes and sfo will bring its routes up. This allows you to switch regions without restarting actual components.
 
 [source,xml]
 ----

@@ -24,12 +24,12 @@ import jakarta.mail.Store;
 import jakarta.mail.internet.MimeMessage;
 
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.mail.Mailbox.MailboxUser;
+import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.jvnet.mock_javamail.Mailbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -37,12 +37,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Unit test for copyTo.
  */
 public class MailCopyToTest extends CamelTestSupport {
+    private static final MailboxUser jones = Mailbox.getOrCreateUser("jones", "secret");
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         prepareMailbox();
-        super.setUp();
     }
 
     @Test
@@ -54,16 +53,16 @@ public class MailCopyToTest extends CamelTestSupport {
 
         // windows need a little slack
         Awaitility.await().atMost(500, TimeUnit.MILLISECONDS)
-                .untilAsserted(() -> assertEquals(0, Mailbox.get("jones@localhost").getNewMessageCount()));
-        assertEquals(5, Mailbox.get("backup-jones@localhost").getNewMessageCount());
+                .untilAsserted(() -> assertEquals(0, jones.getInbox().getNewMessageCount()));
+        assertEquals(5, jones.getFolder("backup").getNewMessageCount());
     }
 
     private void prepareMailbox() throws Exception {
         // connect to mailbox
         Mailbox.clearAll();
         JavaMailSender sender = new DefaultJavaMailSender();
-        Store store = sender.getSession().getStore("pop3");
-        store.connect("localhost", 25, "jones", "secret");
+        Store store = sender.getSession().getStore("imap");
+        store.connect("localhost", Mailbox.getPort(Protocol.imap), jones.getLogin(), jones.getPassword());
         Folder folder = store.getFolder("INBOX");
         folder.open(Folder.READ_WRITE);
         folder.expunge();
@@ -72,7 +71,7 @@ public class MailCopyToTest extends CamelTestSupport {
         Message[] messages = new Message[5];
         for (int i = 0; i < 5; i++) {
             messages[i] = new MimeMessage(sender.getSession());
-            messages[i].setHeader("Message-ID", "" + i);
+            messages[i].setHeader("Message-ID", Integer.toString(i));
             messages[i].setText("Message " + i);
         }
         folder.appendMessages(messages);
@@ -83,7 +82,7 @@ public class MailCopyToTest extends CamelTestSupport {
     protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             public void configure() {
-                from("imap://jones@localhost?password=secret&copyTo=backup&initialDelay=100&delay=100").to("mock:result");
+                from(jones.uriPrefix(Protocol.imap) + "&copyTo=backup&initialDelay=100&delay=100").to("mock:result");
             }
         };
     }

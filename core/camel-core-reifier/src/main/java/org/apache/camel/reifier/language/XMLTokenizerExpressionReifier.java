@@ -21,30 +21,12 @@ import org.apache.camel.Expression;
 import org.apache.camel.Predicate;
 import org.apache.camel.model.language.ExpressionDefinition;
 import org.apache.camel.model.language.XMLTokenizerExpression;
-import org.apache.camel.spi.Language;
 import org.apache.camel.spi.NamespaceAware;
-import org.apache.camel.support.ExpressionToPredicateAdapter;
 
-public class XMLTokenizerExpressionReifier extends ExpressionReifier<XMLTokenizerExpression> {
+public class XMLTokenizerExpressionReifier extends SingleInputTypedExpressionReifier<XMLTokenizerExpression> {
 
     public XMLTokenizerExpressionReifier(CamelContext camelContext, ExpressionDefinition definition) {
-        super(camelContext, (XMLTokenizerExpression) definition);
-    }
-
-    @Override
-    public Predicate createPredicate() {
-        Expression exp = createExpression();
-        return ExpressionToPredicateAdapter.toPredicate(exp);
-    }
-
-    @Override
-    protected Expression createExpression(Language language, String exp) {
-        return language.createExpression(exp, createProperties());
-    }
-
-    @Override
-    protected Predicate createPredicate(Language language, String exp) {
-        return language.createPredicate(exp, createProperties());
+        super(camelContext, definition);
     }
 
     @Override
@@ -58,19 +40,18 @@ public class XMLTokenizerExpressionReifier extends ExpressionReifier<XMLTokenize
     }
 
     protected void configureNamespaceAware(Object builder) {
-        if (definition.getNamespaces() != null && builder instanceof NamespaceAware) {
-            NamespaceAware namespaceAware = (NamespaceAware) builder;
+        if (definition.getNamespaces() != null && builder instanceof NamespaceAware namespaceAware) {
             namespaceAware.setNamespaces(definition.getNamespaces());
         }
     }
 
     protected Object[] createProperties() {
         Object[] properties = new Object[5];
-        properties[0] = parseString(definition.getHeaderName());
-        properties[1] = parseString(definition.getMode());
-        properties[2] = parseInt(definition.getGroup());
-        properties[3] = definition.getNamespaces();
-        properties[4] = parseString(definition.getPropertyName());
+        properties[0] = asResultType();
+        properties[1] = parseString(definition.getSource());
+        properties[2] = parseString(definition.getMode());
+        properties[3] = parseInt(definition.getGroup());
+        properties[4] = definition.getNamespaces();
         return properties;
     }
 

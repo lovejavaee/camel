@@ -5,6 +5,7 @@
 :description: Execute commands on remote hosts using SSH.
 :since: 2.10
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: ssh
@@ -14,7 +15,7 @@
 *{component-header}*
 
 The SSH component enables access to SSH servers such that you can send
-an SSH command, and process the response.
+an SSH command and process the response.
 
 Maven users will need to add the following dependency to their `pom.xml`
 for this component:
@@ -53,7 +54,9 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Usage as a Producer endpoint
+== Usage
+
+=== Usage as a Producer endpoint
 
 When the SSH Component is used as a Producer (`.to("ssh://...")`), it
 will send the message body as the command to execute on the remote SSH
@@ -69,12 +72,12 @@ an XML encoded newline (`+&#10;+`).
   <setBody>
     <constant>features:list&#10;</constant>
   </setBody>
-  <to uri="ssh://karaf:karaf@localhost:8101"/>
+  <to uri="ssh://user:pass@localhost:8101"/>
   <log message="${body}"/>
 </route>
 ----------------------------------------------
 
-== Authentication
+=== Authentication
 
 The SSH Component can authenticate against the remote SSH server using
 one of two mechanisms: Public Key certificate or username/password.
@@ -86,7 +89,7 @@ set, and if so, use it to locate the referenced Public Key certificate
 and use that for authentication.
 2.  If `certResource` is not set, it will look to see if a
 `keyPairProvider` has been set, and if so, it will use that for
-certificate based authentication.
+certificate-based authentication.
 3.  If neither `certResource` nor `keyPairProvider` are set, it will use
 the `username` and `password` options for authentication. Even though the `username` 
 and `password` are provided in the endpoint configuration and headers set with 
@@ -119,10 +122,11 @@ An example of using Public Key authentication is provided in
 `examples/camel-example-ssh-security`.
 
 [[SSH-CertificateDependencies]]
-== Certificate Dependencies
+=== Certificate Dependencies
 
 You will need to add some additional runtime dependencies if you use
-certificate based authentication. You may need to use later versions depending what version
+certificate-based authentication.
+You may need to use later versions depending on what version
 of Camel you are using.
 
 The component uses `sshd-core` library which is based on either `bouncycastle` or `eddsa` security providers. `camel-ssh` is picking explicitly `bouncycastle` as security provider.

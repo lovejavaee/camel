@@ -27,6 +27,11 @@ public interface NamedNode extends LineNumberAware {
     String getId();
 
     /**
+     * Gets the node prefix id.
+     */
+    String getNodePrefixId();
+
+    /**
      * Returns a short name for this node which can be useful for ID generation or referring to related resources like
      * images
      *
@@ -48,5 +53,16 @@ public interface NamedNode extends LineNumberAware {
      * Returns the parent
      */
     NamedNode getParent();
+
+    /**
+     * Whether this node can accept debugging the current exchange. This allows flexibility for some EIPs that need to
+     * compute whether to accept debugging or not
+     *
+     * @param  exchange the current exchange
+     * @return          true to accept debugging this node, or false to skip
+     */
+    default boolean acceptDebugger(Exchange exchange) {
+        return true;
+    }
 
 }

@@ -17,6 +17,7 @@
 package org.apache.camel.component.aws2.s3.utils;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -24,9 +25,12 @@ import org.apache.camel.Exchange;
 import org.apache.camel.StreamCache;
 import org.apache.camel.component.aws2.s3.AWS2S3Configuration;
 import org.apache.camel.component.aws2.s3.AWS2S3Constants;
+import org.apache.camel.spi.Language;
 import org.apache.camel.util.ObjectHelper;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
+
+import static org.apache.camel.support.LanguageSupport.hasSimpleFunction;
 
 public final class AWS2S3Utils {
 
@@ -43,16 +47,18 @@ public final class AWS2S3Utils {
      * @throws IllegalArgumentException if the header could not be determined.
      */
     public static String determineBucketName(final Exchange exchange, AWS2S3Configuration configuration) {
-        String bucketName = exchange.getIn().getHeader(AWS2S3Constants.BUCKET_NAME, String.class);
-
+        String bucketName = exchange.getIn().getHeader(AWS2S3Constants.OVERRIDE_BUCKET_NAME, String.class);
         if (ObjectHelper.isEmpty(bucketName)) {
             bucketName = configuration.getBucketName();
         }
-
         if (bucketName == null) {
             throw new IllegalArgumentException("AWS S3 Bucket name header is missing or not configured.");
         }
-
+        // dynamic keys using built-in simple language
+        if (hasSimpleFunction(bucketName)) {
+            Language simple = exchange.getContext().resolveLanguage("simple");
+            bucketName = simple.createExpression(bucketName).evaluate(exchange, String.class);
+        }
         return bucketName;
     }
 
@@ -112,6 +118,19 @@ public final class AWS2S3Utils {
         return size;
     }
 
+    public static byte[] toByteArray(InputStream is, final int size) throws IOException {
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] data = new byte[4096];
+            int total = 0;
+            int n = 0;
+            while (total < size && (n = is.read(data)) != -1) {
+                output.write(data, 0, n);
+                total += n;
+            }
+            return output.toByteArray();
+        }
+    }
+
     public static String determineKey(final Exchange exchange, AWS2S3Configuration configuration) {
         String key = exchange.getIn().getHeader(AWS2S3Constants.KEY, String.class);
         if (ObjectHelper.isEmpty(key)) {
@@ -119,6 +138,11 @@ public final class AWS2S3Utils {
         }
         if (key == null) {
             throw new IllegalArgumentException("AWS S3 Key header missing.");
+        }
+        // dynamic keys using built-in simple language
+        if (hasSimpleFunction(key)) {
+            Language simple = exchange.getContext().resolveLanguage("simple");
+            key = simple.createExpression(key).evaluate(exchange, String.class);
         }
         return key;
     }

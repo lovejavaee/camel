@@ -16,6 +16,8 @@
  */
 package org.apache.camel.component.aws2.s3;
 
+import java.util.Map;
+
 import org.apache.camel.Category;
 import org.apache.camel.Component;
 import org.apache.camel.Consumer;
@@ -23,11 +25,15 @@ import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.component.aws2.s3.client.AWS2S3ClientFactory;
 import org.apache.camel.component.aws2.s3.stream.AWS2S3StreamUploadProducer;
+import org.apache.camel.spi.EndpointServiceLocation;
+import org.apache.camel.spi.IdempotentRepository;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
 import org.apache.camel.support.ScheduledPollEndpoint;
+import org.apache.camel.support.processor.idempotent.MemoryIdempotentRepository;
+import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.ObjectHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,14 +44,15 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 
 /**
- * Store and retrieve objects from AWS S3 Storage Service using AWS SDK version 2.x.
+ * Store and retrieve objects from AWS S3 Storage Service.
  */
 @UriEndpoint(firstVersion = "3.2.0", scheme = "aws2-s3", title = "AWS S3 Storage Service",
              syntax = "aws2-s3://bucketNameOrArn", category = { Category.CLOUD, Category.FILE },
              headersClass = AWS2S3Constants.class)
-public class AWS2S3Endpoint extends ScheduledPollEndpoint {
+public class AWS2S3Endpoint extends ScheduledPollEndpoint implements EndpointServiceLocation {
 
     private static final Logger LOG = LoggerFactory.getLogger(AWS2S3Endpoint.class);
+    private static final int DEFAULT_IN_PROGRESS_CACHE_SIZE = 10000;
 
     private S3Client s3Client;
 
@@ -58,10 +65,44 @@ public class AWS2S3Endpoint extends ScheduledPollEndpoint {
     private int maxMessagesPerPoll = 10;
     @UriParam(label = "consumer", defaultValue = "60")
     private int maxConnections = 50 + maxMessagesPerPoll;
+    @UriParam(label = "consumer,advanced", description = "A pluggable in-progress repository "
+                                                         + "org.apache.camel.spi.IdempotentRepository. The in-progress repository is used to account the current in "
+                                                         + "progress files being consumed. By default a memory based repository is used.")
+    private IdempotentRepository inProgressRepository
+            = MemoryIdempotentRepository.memoryIdempotentRepository(DEFAULT_IN_PROGRESS_CACHE_SIZE);
 
     public AWS2S3Endpoint(String uri, Component comp, AWS2S3Configuration configuration) {
         super(uri, comp);
         this.configuration = configuration;
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (configuration.isForcePathStyle()) {
+                return getServiceProtocol() + "." + configuration.getRegion() + "." + ".amazonaws.com" + "/"
+                       + configuration.getBucketName() + "/";
+            } else {
+                return configuration.getBucketName() + "." + configuration.getRegion() + "." + getServiceProtocol()
+                       + ".amazonaws.com/";
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "s3";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (configuration.getRegion() != null) {
+            return Map.of("region", configuration.getRegion());
+        }
+        return null;
     }
 
     @Override
@@ -79,6 +120,11 @@ public class AWS2S3Endpoint extends ScheduledPollEndpoint {
         } else {
             return new AWS2S3StreamUploadProducer(this);
         }
+    }
+
+    @Override
+    public AWS2S3Component getComponent() {
+        return (AWS2S3Component) super.getComponent();
     }
 
     @Override
@@ -103,6 +149,12 @@ public class AWS2S3Endpoint extends ScheduledPollEndpoint {
             LOG.trace("Bucket [{}] already exists", bucketName);
             return;
         } catch (AwsServiceException ase) {
+            if (ase.statusCode() == 403) { // means we can't check if the bucket exists
+                if (!getConfiguration().isAutoCreateBucket()) {
+                    // We are not requested to create it if it doesn't, so we can only assume that it does
+                    return;
+                }
+            }
             /* 404 means the bucket doesn't exist */
             if (!(ase.awsErrorDetails().sdkHttpResponse().statusCode() == 404)) {
                 throw ase;
@@ -132,6 +184,8 @@ public class AWS2S3Endpoint extends ScheduledPollEndpoint {
 
             LOG.trace("Bucket policy updated");
         }
+
+        ServiceHelper.startService(inProgressRepository);
     }
 
     @Override
@@ -141,6 +195,7 @@ public class AWS2S3Endpoint extends ScheduledPollEndpoint {
                 s3Client.close();
             }
         }
+        ServiceHelper.stopService(inProgressRepository);
         super.doStop();
     }
 
@@ -183,5 +238,13 @@ public class AWS2S3Endpoint extends ScheduledPollEndpoint {
      */
     public void setMaxConnections(int maxConnections) {
         this.maxConnections = maxConnections;
+    }
+
+    public IdempotentRepository getInProgressRepository() {
+        return inProgressRepository;
+    }
+
+    public void setInProgressRepository(IdempotentRepository inProgressRepository) {
+        this.inProgressRepository = inProgressRepository;
     }
 }

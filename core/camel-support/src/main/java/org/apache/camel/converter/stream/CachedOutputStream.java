@@ -20,11 +20,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.StreamCache;
 import org.apache.camel.converter.stream.FileInputStreamCache.TempFileManager;
 import org.apache.camel.spi.StreamCachingStrategy;
+import org.apache.camel.util.IOHelper;
 
 /**
  * This output stream will store the content into a File if the stream context size is exceed the THRESHOLD value. The
@@ -75,7 +78,11 @@ public class CachedOutputStream extends OutputStream {
 
     @Override
     public boolean equals(Object obj) {
-        return currentStream.equals(obj);
+        if (obj instanceof CachedOutputStream cos) {
+            return currentStream.equals(cos.currentStream);
+        } else {
+            return currentStream.equals(obj);
+        }
     }
 
     @Override
@@ -135,8 +142,8 @@ public class CachedOutputStream extends OutputStream {
         flush();
 
         if (inMemory) {
-            if (currentStream instanceof CachedByteArrayOutputStream) {
-                return ((CachedByteArrayOutputStream) currentStream).newInputStreamCache();
+            if (currentStream instanceof CachedByteArrayOutputStream cachedByteArrayOutputStream) {
+                return cachedByteArrayOutputStream.newInputStreamCache();
             } else {
                 throw new IllegalStateException(
                         "CurrentStream should be an instance of CachedByteArrayOutputStream but is: "
@@ -165,9 +172,11 @@ public class CachedOutputStream extends OutputStream {
     }
 
     // This class will close the CachedOutputStream when it is closed
-    private static class WrappedInputStream extends InputStream {
-        private CachedOutputStream cachedOutputStream;
-        private InputStream inputStream;
+    private static class WrappedInputStream extends InputStream implements StreamCache {
+        private final Lock lock = new ReentrantLock();
+        private final CachedOutputStream cachedOutputStream;
+        private final InputStream inputStream;
+        private long pos;
 
         WrappedInputStream(CachedOutputStream cos, InputStream is) {
             cachedOutputStream = cos;
@@ -176,6 +185,7 @@ public class CachedOutputStream extends OutputStream {
 
         @Override
         public int read() throws IOException {
+            pos++;
             return inputStream.read();
         }
 
@@ -185,8 +195,40 @@ public class CachedOutputStream extends OutputStream {
         }
 
         @Override
-        public synchronized void reset() throws IOException {
-            inputStream.reset();
+        public void reset() {
+            lock.lock();
+            try {
+                inputStream.reset();
+            } catch (IOException e) {
+                // ignore
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        @Override
+        public void writeTo(OutputStream os) throws IOException {
+            IOHelper.copy(this, os);
+        }
+
+        @Override
+        public StreamCache copy(Exchange exchange) throws IOException {
+            return cachedOutputStream.newStreamCache();
+        }
+
+        @Override
+        public boolean inMemory() {
+            return cachedOutputStream.inMemory;
+        }
+
+        @Override
+        public long length() {
+            return cachedOutputStream.totalLength;
+        }
+
+        @Override
+        public long position() {
+            return pos;
         }
 
         @Override

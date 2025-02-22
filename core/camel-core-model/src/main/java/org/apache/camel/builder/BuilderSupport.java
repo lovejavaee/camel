@@ -24,9 +24,6 @@ import org.apache.camel.Expression;
 import org.apache.camel.NoSuchEndpointException;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.model.language.DatasonnetExpression;
-import org.apache.camel.model.language.ExchangePropertyExpression;
-import org.apache.camel.model.language.HeaderExpression;
-import org.apache.camel.model.language.SimpleExpression;
 import org.apache.camel.model.language.XPathExpression;
 import org.apache.camel.spi.TransactedPolicy;
 import org.apache.camel.support.builder.Namespaces;
@@ -61,16 +58,14 @@ public abstract class BuilderSupport implements CamelContextAware {
      * Returns a value builder for the given header
      */
     public ValueBuilder header(String name) {
-        Expression exp = new HeaderExpression(name);
-        return new ValueBuilder(exp);
+        return Builder.header(name);
     }
 
     /**
      * Returns a value builder for the given exchange property
      */
     public ValueBuilder exchangeProperty(String name) {
-        Expression exp = new ExchangePropertyExpression(name);
-        return new ValueBuilder(exp);
+        return Builder.exchangeProperty(name);
     }
 
     /**
@@ -85,6 +80,13 @@ public abstract class BuilderSupport implements CamelContextAware {
      */
     public <T> ValueBuilder bodyAs(Class<T> type) {
         return Builder.bodyAs(type);
+    }
+
+    /**
+     * Returns a value builder for the given variable
+     */
+    public ValueBuilder variable(String name) {
+        return Builder.variable(name);
     }
 
     /**
@@ -124,16 +126,36 @@ public abstract class BuilderSupport implements CamelContextAware {
 
     /**
      * Returns a JOOR expression value builder
+     *
+     * @deprecated use java instead
      */
+    @Deprecated(since = "4.3.0")
     public ValueBuilder joor(String value) {
         return Builder.joor(value);
     }
 
     /**
      * Returns a JOOR expression value builder
+     *
+     * @deprecated use java instead
      */
+    @Deprecated(since = "4.3.0")
     public ValueBuilder joor(String value, Class<?> resultType) {
         return Builder.joor(value, resultType);
+    }
+
+    /**
+     * Returns a Java expression value builder
+     */
+    public ValueBuilder java(String value) {
+        return Builder.java(value);
+    }
+
+    /**
+     * Returns a Java expression value builder
+     */
+    public ValueBuilder java(String value, Class<?> resultType) {
+        return Builder.java(value, resultType);
     }
 
     /**
@@ -151,6 +173,20 @@ public abstract class BuilderSupport implements CamelContextAware {
      */
     public ValueBuilder jsonpath(String value, Class<?> resultType) {
         return Builder.jsonpath(value, resultType);
+    }
+
+    /**
+     * Returns a JQ expression value builder
+     */
+    public ValueBuilder jq(String value) {
+        return Builder.jq(value);
+    }
+
+    /**
+     * Returns a JQ expression value builder
+     */
+    public ValueBuilder jq(String value, Class<?> resultType) {
+        return Builder.jq(value, resultType);
     }
 
     /**
@@ -203,9 +239,7 @@ public abstract class BuilderSupport implements CamelContextAware {
      * Returns a simple expression value builder
      */
     public ValueBuilder simple(String value, Class<?> resultType) {
-        SimpleExpression exp = new SimpleExpression(value);
-        exp.setResultType(resultType);
-        return new ValueBuilder(exp);
+        return Builder.simple(value, resultType);
     }
 
     /**

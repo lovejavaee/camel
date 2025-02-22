@@ -18,14 +18,13 @@ package org.apache.camel.component.file;
 
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.Consumer;
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Endpoint;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,8 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * Simple unit test to consume a new file
  */
 public class NewFileConsumeTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME = "hello" + UUID.randomUUID() + ".txt";
 
-    private CountDownLatch latch = new CountDownLatch(1);
+    private final CountDownLatch latch = new CountDownLatch(1);
 
     @Override
     public boolean isUseRouteBuilder() {
@@ -50,22 +50,24 @@ public class NewFileConsumeTest extends ContextTestSupport {
 
         // create a file to consume
         Files.createDirectories(testDirectory());
-        Files.write(testFile("hello.txt"), "Hello World".getBytes());
+        Files.write(testFile(TEST_FILE_NAME), "Hello World".getBytes());
 
         Endpoint endpoint = comp.createEndpoint(fileUri(), testDirectory().toString(),
-                new HashMap<String, Object>());
-        Consumer consumer = endpoint.createConsumer(new Processor() {
-            public void process(Exchange exchange) throws Exception {
-                assertNotNull(exchange);
-                String body = exchange.getIn().getBody(String.class);
-                assertEquals("Hello World", body);
-                latch.countDown();
-            }
+                new HashMap<>());
+        Consumer consumer = endpoint.createConsumer(exchange -> {
+            assertNotNull(exchange);
+            String body = exchange.getIn().getBody(String.class);
+            assertEquals("Hello World", body);
+            latch.countDown();
         });
+
+        assertFileExists(testFile(TEST_FILE_NAME));
+
         consumer.start();
         latch.await(5, TimeUnit.SECONDS);
 
         consumer.stop();
+        comp.close();
     }
 
 }

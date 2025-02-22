@@ -18,7 +18,6 @@ package org.apache.camel.impl.cloud;
 
 import java.util.Collections;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.stream.Collectors;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
@@ -33,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class LoadBalancerTest {
 
-    private static StaticServiceDiscovery serviceDiscovery = new StaticServiceDiscovery();
+    private static final StaticServiceDiscovery serviceDiscovery = new StaticServiceDiscovery();
 
     @BeforeAll
     public static void setUp() {
@@ -53,7 +52,7 @@ public class LoadBalancerTest {
         loadBalancer.setServiceDiscovery(serviceDiscovery);
         loadBalancer
                 .setServiceFilter(
-                        (exchange, services) -> services.stream().filter(s -> s.getPort() < 2000).collect(Collectors.toList()));
+                        (exchange, services) -> services.stream().filter(s -> s.getPort() < 2000).toList());
         loadBalancer.setServiceChooser(new RoundRobinServiceChooser());
         Exchange exchange = new DefaultExchange(camelContext);
         loadBalancer.process(exchange, "no-name", service -> {
@@ -77,7 +76,7 @@ public class LoadBalancerTest {
                                 .get("supports"))
                                 .orElse("")
                                 .contains(exchange.getProperty("needs", String.class)))
-                        .collect(Collectors.toList()));
+                        .toList());
         loadBalancer.setServiceChooser(new RoundRobinServiceChooser());
         Exchange exchange = new DefaultExchange(new DefaultCamelContext());
         exchange.setProperty("needs", "foo");
@@ -88,14 +87,14 @@ public class LoadBalancerTest {
     }
 
     @Test
-    public void testNoActiveServices() throws Exception {
+    public void testNoActiveServices() {
         DefaultServiceLoadBalancer loadBalancer = new DefaultServiceLoadBalancer();
         DefaultCamelContext camelContext = new DefaultCamelContext();
         loadBalancer.setCamelContext(camelContext);
         loadBalancer.setServiceDiscovery(serviceDiscovery);
         loadBalancer
                 .setServiceFilter(
-                        (exchange, services) -> services.stream().filter(s -> s.getPort() < 1000).collect(Collectors.toList()));
+                        (exchange, services) -> services.stream().filter(s -> s.getPort() < 1000).toList());
         loadBalancer.setServiceChooser(new RoundRobinServiceChooser());
         assertThrows(RejectedExecutionException.class, () -> {
             loadBalancer.process(new DefaultExchange(camelContext), "no-name", service -> false);

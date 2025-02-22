@@ -23,7 +23,6 @@ import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
 import org.apache.hc.core5.http.io.entity.StringEntity;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,12 +36,10 @@ public class HttpProducerUserAgentTest extends BaseHttpTest {
 
     private String endpointUrl;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        super.setUp();
-
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/agent", (request, response, context) -> {
@@ -54,23 +51,23 @@ public class HttpProducerUserAgentTest extends BaseHttpTest {
         localServer.start();
 
         endpointUrl = "http://localhost:" + localServer.getLocalPort();
+    }
 
+    @BeforeEach
+    void setupUserAgent() {
         HttpComponent http = context.getComponent("http", HttpComponent.class);
         http.setUserAgent("MyAgent");
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void cleanupResources() throws Exception {
         if (localServer != null) {
             localServer.stop();
         }
     }
 
     @Test
-    public void testUserAgent() throws Exception {
+    public void testUserAgent() {
         Exchange out = template.request(endpointUrl + "/agent", exchange -> {
             exchange.getIn().setBody("Hello World");
         });

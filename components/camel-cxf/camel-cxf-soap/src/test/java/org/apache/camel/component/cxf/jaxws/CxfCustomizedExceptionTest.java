@@ -43,16 +43,12 @@ import org.apache.cxf.binding.soap.SoapFault;
 import org.apache.cxf.frontend.ClientFactoryBean;
 import org.apache.cxf.frontend.ClientProxyFactoryBean;
 import org.apache.cxf.interceptor.Fault;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfCustomizedExceptionTest extends CamelTestSupport {
 
     protected static final String SERVICE_CLASS = "serviceClass=org.apache.camel.component.cxf.jaxws.HelloService";
@@ -78,18 +74,13 @@ public class CxfCustomizedExceptionTest extends CamelTestSupport {
     private Bus bus;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void setupResources() {
         bus = BusFactory.getDefaultBus();
-        super.setUp();
-
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
+    public void cleanupResources() {
         //TODO need to shutdown the server
-        super.tearDown();
     }
 
     @Override

@@ -60,11 +60,6 @@ public class StreamProducer extends DefaultAsyncProducer {
     }
 
     @Override
-    protected void doStart() throws Exception {
-        super.doStart();
-    }
-
-    @Override
     protected void doStop() throws Exception {
         super.doStop();
         closeStream(null, true);
@@ -74,15 +69,20 @@ public class StreamProducer extends DefaultAsyncProducer {
     public boolean process(Exchange exchange, AsyncCallback callback) {
         try {
             delay(endpoint.getDelay());
-
-            synchronized (this) {
+            lock.lock();
+            try {
                 try {
                     openStream(exchange);
                     writeToStream(outputStream, exchange);
                 } finally {
                     closeStream(exchange, false);
                 }
+            } finally {
+                lock.unlock();
             }
+        } catch (InterruptedException e) {
+            exchange.setException(e);
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             exchange.setException(e);
         }

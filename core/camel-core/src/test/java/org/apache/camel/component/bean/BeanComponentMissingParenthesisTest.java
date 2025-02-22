@@ -23,13 +23,13 @@ import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BeanComponentMissingParenthesisTest extends ContextTestSupport {
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("myBean", new MyContactBean());
         return jndi;
     }
@@ -43,7 +43,7 @@ public class BeanComponentMissingParenthesisTest extends ContextTestSupport {
     public void testCorrect() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("bean:myBean?method=concat(${body}, ${header.foo})").to("mock:result");
             }
         });
@@ -58,37 +58,35 @@ public class BeanComponentMissingParenthesisTest extends ContextTestSupport {
     public void testMissing() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("bean:myBean?method=concat(${body}, ${header.foo}").to("mock:result");
             }
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Hello", "foo", "Camel");
-            fail("Should throw exception");
-        } catch (CamelExecutionException e) {
-            IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertEquals("Method should end with parenthesis, was concat(${body}, ${header.foo}", iae.getMessage());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Hello", "foo", "Camel"),
+                "Should throw exception");
+
+        IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertEquals("Method should end with parenthesis, was concat(${body}, ${header.foo}", iae.getMessage());
     }
 
     @Test
     public void testInvalidName() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("bean:myBean?method=--concat(${body}, ${header.foo})").to("mock:result");
             }
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Hello", "foo", "Camel");
-            fail("Should throw exception");
-        } catch (CamelExecutionException e) {
-            assertIsInstanceOf(MethodNotFoundException.class, e.getCause());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Hello", "foo", "Camel"),
+                "Should throw exception");
+
+        assertIsInstanceOf(MethodNotFoundException.class, e.getCause());
     }
 
     public String doSomething(String body, String header) {

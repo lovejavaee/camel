@@ -26,6 +26,7 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,13 +35,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /**
  * Wire tap unit test
  */
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class WireTapBeanAsProcessorTest extends ContextTestSupport {
-    private MyBean myBean = new MyBean();
+    private final MyBean myBean = new MyBean();
     private MockEndpoint result;
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("tap", myBean);
         return jndi;
     }
@@ -81,7 +84,7 @@ public class WireTapBeanAsProcessorTest extends ContextTestSupport {
         private String tapped;
 
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             tapped = exchange.getIn().getBody(String.class);
         }
 

@@ -5,6 +5,7 @@
 :description: Have only a single consumer in a cluster consuming from a given endpoint; with automatic failover if the JVM dies.
 :since: 2.19
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only consumer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: zookeeper-master
@@ -14,14 +15,14 @@
 *{component-header}*
 
 The **zookeeper-master:** endpoint provides a way to ensure only a single consumer in a cluster consumes from a given endpoint;
-with automatic failover if that JVM dies.
+with automatic fails over if that JVM dies.
 
-This can be very useful if you need to consume from some legacy back end which either doesn't support concurrent
-consumption or due to commercial or stability reasons you can only have a single connection at any point in time.
+This can be beneficial if you need to consume from some legacy back end that either doesn't support concurrent
+consumption or due to commercial or stability reasons, you can only have a single connection at any point in time.
 
 == Using the master endpoint
 
-Just prefix any camel endpoint with **zookeeper-master:someName:** where _someName_ is a logical name and is
+Prefix any camel endpoint with **zookeeper-master:someName:** where _someName_ is a logical name and is
 used to acquire the master lock. e.g.
 
 [source,java]
@@ -30,7 +31,7 @@ from("zookeeper-master:cheese:jms:foo").to("activemq:wine");
 ----
 
 The above simulates the [Exclusive Consumers](http://activemq.apache.org/exclusive-consumer.html) type feature in
-ActiveMQ; but on any third party JMS provider which maybe doesn't support exclusive consumers.
+ActiveMQ; but on any third party JMS provider that maybe doesn't support exclusive consumers.
 
 
 == URI format
@@ -39,7 +40,7 @@ ActiveMQ; but on any third party JMS provider which maybe doesn't support exclus
 zookeeper-master:name:endpoint[?options]
 ----
 
-Where endpoint is any Camel endpoint you want to run in master/slave mode.
+Where endpoint is any Camel endpoint, you want to run in master/slave mode.
 
 
 
@@ -58,7 +59,7 @@ include::partial$component-endpoint-options.adoc[]
 
 
 
-== Example
+== Examples
 
 You can protect a clustered Camel application to only consume files from one active node.
 
@@ -85,21 +86,21 @@ ZooKeeper will by default connect to `localhost:2181`, but you can configure thi
     master.setZooKeeperUrl("myzookeeper:2181");
 ----
 
-However you can also configure the url of the ZooKeeper ensemble using environment variables.
+However, you can also configure the url of the ZooKeeper ensemble using environment variables.
 
 [source,bash]
 ----
 export ZOOKEEPER_URL = "myzookeeper:2181"
 ----
 
-== Master RoutePolicy
+=== Master RoutePolicy
 
 You can also use a `RoutePolicy` to control routes in master/slave mode.
 
-When doing so you must configure the route policy with
+When doing so, you must configure the route policy with
 
 - url to zookeeper ensemble
-- name of cluster group
+- name of the cluster group
 - *important* and set the route to not auto startup
 
 A little example
@@ -111,7 +112,7 @@ A little example
     master.setGroupName("myGroup");
 
     // its import to set the route to not auto startup
-    // as we let the route policy start/stop the routes when it becomes a master/slave etc
+    // as we let the route policy start/stop the routes when it becomes a master/slave, etc.
     from("file:target/inbox?delete=true").noAutoStartup()
         // use the zookeeper master route policy in the clustered group
         // to run this route in master/slave mode

@@ -31,14 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InOnlyQueueProducerTest extends JmsTestSupport {
 
-    private static final String TEST_DESTINATION_NAME = "sync.queue.producer.test";
+    private static final String TEST_DESTINATION_NAME = "sync.queue.producer.test.InOnlyQueueProducerTest";
 
     public InOnlyQueueProducerTest() {
-    }
-
-    @Override
-    protected boolean useJmx() {
-        return false;
     }
 
     @Test

@@ -5,12 +5,13 @@
 :description: Marshal POJOs to JSON and back using Jackson.
 :since: 2.0
 :supportlevel: Stable
+:tabs-sync-option:
 //Manually maintained attributes
 :camel-spring-boot-name: jackson
 
 *Since Camel {since}*
 
-Jackson is a Data Format which uses the
+Jackson is a Data Format that uses the
 https://github.com/FasterXML/jackson-core[Jackson Library]
 
 [source,java]
@@ -28,23 +29,32 @@ from("activemq:My.Queue").
 include::partial$dataformat-options.adoc[]
 // dataformat options: END
 
-== Using custom ObjectMapper
+== Usage
+
+=== 2 and 4 bytes characters
+
+Jackson by default outputs 4-byte characters (in languages such as Japanese) as surrogate pair, escaped. This is
+compliant with Json specification. This can however frustrate users, because it garbles regular output, such as
+names and texts with Unicode escapes. To avoid this, users commonly use 4-bytes would need to turn on `combineUnicodeSurrogates=true`
+in the Camel dataformat.
+
+=== Using custom ObjectMapper
 
 You can configure `JacksonDataFormat` to use a custom `ObjectMapper` in case you need more control of the mapping configuration.
 
-If you setup a single `ObjectMapper` in the registry, then Camel will automatic lookup and use this `ObjectMapper`.
-For example if you use Spring Boot, then Spring Boot can provide a default `ObjectMapper` for you if you have Spring MVC enabled.
+If you set up a single `ObjectMapper` in the registry, then Camel will automatic lookup and use this `ObjectMapper`.
+For example, if you use Spring Boot, then Spring Boot can provide a default `ObjectMapper` for you if you have Spring MVC enabled.
 And this would allow Camel to detect that there is one bean of `ObjectMapper` class type in the Spring Boot bean registry
 and then use it. When this happens you should set a `INFO` logging from Camel.
 
-== Using Jackson for automatic type conversion
+=== Using Jackson for automatic type conversion
 
 The `camel-jackson` module allows integrating Jackson as a xref:manual::type-converter.adoc[Type Converter].
 
-This gives a set of out of the box converters to/from the Jackson type `JSonNode`, such as converting
-from `JSonNode` to `String` or vice-versa.
+This gives a set of out-of-the-box converters to/from the Jackson type `JSonNode`, such as converting
+from `JSonNode` to `String` or vice versa.
 
-=== Enabling more type converters and support for POJOs
+==== Enabling more type converters and support for POJOs
 
 To enable POJO conversion support for `camel-jackson` then this must be enabled,
 which is done by setting the following options on the `CamelContext` global options, as shown:
@@ -54,22 +64,21 @@ which is done by setting the following options on the `CamelContext` global opti
 // Enable Jackson JSON type converter for more types.
 camelContext.getGlobalOptions().put("CamelJacksonEnableTypeConverter", "true");
 // Allow Jackson JSON to convert to pojo types also
-// (by default Jackson only converts to String and other simple types)
+// (by default, Jackson only converts to String and other simple types)
 getContext().getGlobalOptions().put("CamelJacksonTypeConverterToPojo", "true");
 ----
 
 The `camel-jackson` type converter integrates with xref:dataformats:jaxb-dataformat.adoc[JAXB]
 which means you can annotate POJO class with `JAXB` annotations that Jackson can use.
-You can also use Jacksons own annotations on your POJO classes.
+You can also use Jackson's own annotations in your POJO classes.
 
 == Dependencies
 
-To use Jackson in your camel routes you need to add the dependency
-on *camel-jackson* which implements this data format.
+To use Jackson in your Camel routes, you need to add the dependency
+on *camel-jackson*, which implements this data format.
 
-If you use maven you could just add the following to your pom.xml,
-substituting the version number for the latest & greatest release (see
-the download page for the latest versions).
+If you use Maven, you could add the following to your `pom.xml`,
+substituting the version number for the latest & greatest release:
 
 [source,xml]
 ----------------------------------------------------------

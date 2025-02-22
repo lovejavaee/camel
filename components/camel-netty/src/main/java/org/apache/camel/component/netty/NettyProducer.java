@@ -18,6 +18,8 @@ package org.apache.camel.component.netty;
 
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
@@ -30,13 +32,19 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollDatagramChannel;
+import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.ChannelGroupFuture;
 import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.channel.kqueue.KQueue;
+import io.netty.channel.kqueue.KQueueDomainSocketChannel;
+import io.netty.channel.kqueue.KQueueSocketChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
@@ -366,6 +374,9 @@ public class NettyProducer extends DefaultAsyncProducer {
                         // but we can try to get a result with a 0 timeout, then netty will throw the caused
                         // exception wrapped in an outer exception
                         channelFuture.get(0, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        cause = e.getCause();
                     } catch (Exception e) {
                         cause = e.getCause();
                     }
@@ -449,15 +460,35 @@ public class NettyProducer extends DefaultAsyncProducer {
         if (isTcp()) {
             // its okay to create a new bootstrap for each new channel
             Bootstrap clientBootstrap = new Bootstrap();
-            if (configuration.isNativeTransport()) {
-                clientBootstrap.channel(EpollSocketChannel.class);
+            if (configuration.getUnixDomainSocketPath() != null) {
+                if (KQueue.isAvailable()) {
+                    clientBootstrap.channel(KQueueDomainSocketChannel.class);
+                } else if (Epoll.isAvailable()) {
+                    clientBootstrap.channel(EpollDomainSocketChannel.class);
+                } else {
+                    throw new IllegalStateException(
+                            "Unable to use unix domain sockets - both Epoll and KQueue are not available");
+                }
             } else {
-                clientBootstrap.channel(NioSocketChannel.class);
+                if (configuration.isNativeTransport()) {
+                    if (KQueue.isAvailable()) {
+                        clientBootstrap.channel(KQueueSocketChannel.class);
+                    } else if (Epoll.isAvailable()) {
+                        clientBootstrap.channel(EpollSocketChannel.class);
+                    } else {
+                        throw new IllegalStateException(
+                                "Unable to use native transport - both Epoll and KQueue are not available");
+                    }
+                } else {
+                    clientBootstrap.channel(NioSocketChannel.class);
+                }
             }
             clientBootstrap.group(getWorkerGroup());
-            clientBootstrap.option(ChannelOption.SO_KEEPALIVE, configuration.isKeepAlive());
-            clientBootstrap.option(ChannelOption.TCP_NODELAY, configuration.isTcpNoDelay());
-            clientBootstrap.option(ChannelOption.SO_REUSEADDR, configuration.isReuseAddress());
+            if (configuration.getUnixDomainSocketPath() == null) {
+                clientBootstrap.option(ChannelOption.SO_KEEPALIVE, configuration.isKeepAlive());
+                clientBootstrap.option(ChannelOption.TCP_NODELAY, configuration.isTcpNoDelay());
+                clientBootstrap.option(ChannelOption.SO_REUSEADDR, configuration.isReuseAddress());
+            }
             clientBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, configuration.getConnectTimeout());
 
             //TODO need to check it later;
@@ -471,11 +502,19 @@ public class NettyProducer extends DefaultAsyncProducer {
 
             // set the pipeline factory, which creates the pipeline for each newly created channels
             clientBootstrap.handler(pipelineFactory);
-            answer = clientBootstrap.connect(new InetSocketAddress(configuration.getHost(), configuration.getPort()));
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Created new TCP client bootstrap connecting to {}:{} with options: {}",
+            SocketAddress socketAddress;
+            if (configuration.getUnixDomainSocketPath() != null) {
+                Path udsPath = Path.of(configuration.getUnixDomainSocketPath()).toAbsolutePath();
+                LOG.debug("Creating new TCP client bootstrap connecting to {} with options {}",
+                        udsPath, clientBootstrap);
+                socketAddress = new DomainSocketAddress(udsPath.toFile());
+            } else {
+                LOG.debug("Creating new TCP client bootstrap connecting to {}:{} with options: {}",
                         configuration.getHost(), configuration.getPort(), clientBootstrap);
+                socketAddress = new InetSocketAddress(configuration.getHost(), configuration.getPort());
             }
+            answer = clientBootstrap.connect(socketAddress);
+            LOG.debug("TCP client bootstrap created");
             return answer;
         } else {
             // its okay to create a new bootstrap for each new channel

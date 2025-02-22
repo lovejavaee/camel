@@ -25,13 +25,13 @@ import org.springframework.test.context.support.AbstractTestExecutionListener;
 
 public class CamelSpringBootExecutionListener extends AbstractTestExecutionListener {
 
-    protected static ThreadLocal<ConfigurableApplicationContext> threadApplicationContext = new ThreadLocal<>();
+    protected static final ThreadLocal<ConfigurableApplicationContext> threadApplicationContext = new ThreadLocal<>();
 
     private static final Logger LOG = LoggerFactory.getLogger(CamelSpringBootExecutionListener.class);
     private static final String PROPERTY_SKIP_STARTING_CAMEL_CONTEXT = "skipStartingCamelContext";
 
     /**
-     * Returns the precedence that is used by Spring to choose the appropriate execution order of test listeners.
+     * Returns the precedence used by Spring to choose the appropriate execution order of test listeners.
      *
      * See {@link SpringTestExecutionListenerSorter#getPrecedence(Class)} for more.
      */
@@ -62,12 +62,13 @@ public class CamelSpringBootExecutionListener extends AbstractTestExecutionListe
 
         CamelAnnotationsHandler.handleUseOverridePropertiesWithPropertiesComponent(context, testClass);
 
-        // Post CamelContext(s) instantiation but pre CamelContext(s) start
-        // setup
+        // Post CamelContext(s) instantiation but pre CamelContext(s) start setup
         CamelAnnotationsHandler.handleProvidesBreakpoint(context, testClass);
         CamelAnnotationsHandler.handleShutdownTimeout(context, testClass);
         CamelAnnotationsHandler.handleMockEndpoints(context, testClass);
         CamelAnnotationsHandler.handleMockEndpointsAndSkip(context, testClass);
+        CamelAnnotationsHandler.handleStubEndpoints(context, testClass);
+        CamelAnnotationsHandler.handleAutoStartupExclude(context, testClass);
 
         System.clearProperty(PROPERTY_SKIP_STARTING_CAMEL_CONTEXT);
         SpringCamelContext.setNoStart(false);
@@ -98,8 +99,9 @@ public class CamelSpringBootExecutionListener extends AbstractTestExecutionListe
         // mark Camel to be startable again and start Camel
         System.clearProperty(PROPERTY_SKIP_STARTING_CAMEL_CONTEXT);
 
-        // route coverage need to know the test method
-        CamelAnnotationsHandler.handleRouteCoverage(context, testClass, s -> testName);
+        // route coverage/dump need to know the test method
+        CamelAnnotationsHandler.handleRouteCoverageEnable(context, testClass, s -> testName);
+        CamelAnnotationsHandler.handleRouteDumpEnable(context, testClass, s -> testName);
 
         LOG.info("Initialized CamelSpringBootExecutionListener now ready to start CamelContext");
         CamelAnnotationsHandler.handleCamelContextStartup(context, testClass);
@@ -120,6 +122,8 @@ public class CamelSpringBootExecutionListener extends AbstractTestExecutionListe
             // even if spring application context is running (i.e. its not
             // dirtied per test method)
             CamelAnnotationsHandler.handleRouteCoverageDump(context, testClass, s -> testName);
+            // also dump route as either xml or yaml
+            CamelAnnotationsHandler.handleRouteDump(context, testClass, s -> testName);
         }
     }
 }

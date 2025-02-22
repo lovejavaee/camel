@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-bean-validator</artifactId>
@@ -59,7 +59,7 @@
         <dependency>
             <groupId>jakarta.el</groupId>
             <artifactId>jakarta.el-api</artifactId>
-            <version>${jakarta-el-api-hibernate-validator-version}</version>
+            <version>${jakarta-el-api-version}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.expressly</groupId>

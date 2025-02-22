@@ -54,8 +54,8 @@ public class DefaultProcessorFactory implements ProcessorFactory, BootstrapClose
 
     @Override
     public void close() throws IOException {
-        if (finder instanceof BootstrapCloseable) {
-            ((BootstrapCloseable) finder).close();
+        if (finder instanceof BootstrapCloseable bootstrapCloseable) {
+            bootstrapCloseable.close();
             finder = null;
         }
     }
@@ -69,8 +69,7 @@ public class DefaultProcessorFactory implements ProcessorFactory, BootstrapClose
         }
         try {
             Object object = finder.newInstance(name).orElse(null);
-            if (object instanceof ProcessorFactory) {
-                ProcessorFactory pc = (ProcessorFactory) object;
+            if (object instanceof ProcessorFactory pc) {
                 Processor processor = pc.createChildProcessor(route, definition, mandatory);
                 LineNumberAware.trySetLineNumberAware(processor, definition);
                 return processor;
@@ -118,7 +117,7 @@ public class DefaultProcessorFactory implements ProcessorFactory, BootstrapClose
             boolean shutdownExecutorService = (boolean) args[2];
             return new MulticastProcessor(
                     camelContext, null, processors, null, true, executor, shutdownExecutorService, false, false, 0,
-                    null, false, false);
+                    null, false, false, 0);
         } else if ("Pipeline".equals(definitionName)) {
             List<Processor> processors = (List<Processor>) args[0];
             return Pipeline.newInstance(camelContext, processors);

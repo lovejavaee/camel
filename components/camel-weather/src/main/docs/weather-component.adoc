@@ -5,6 +5,7 @@
 :description: Poll the weather information from Open Weather Map.
 :since: 2.12
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: weather
@@ -60,12 +61,14 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Exchange data format
+== Usage
 
-Camel will deliver the body as a json formatted java.lang.String (see
+=== Exchange data format
+
+Camel will deliver the body as a json formatted `java.lang.String` (see
 the `mode` option above).
 
-== Samples
+== Examples
 
 In this sample we find the 7-day weather forecast for Madrid, Spain:
 
@@ -74,7 +77,7 @@ In this sample we find the 7-day weather forecast for Madrid, Spain:
 from("weather:foo?location=Madrid,Spain&period=7 days&appid=APIKEY&geolocationAccessKey=IPSTACK_ACCESS_KEY&geolocationRequestHostIP=LOCAL_IP").to("jms:queue:weather");
 ---------------------------------------------------------------------------------------------
 
-To just find the current weather for your current location you can use
+To just find the current weather for your current location, you can use
 this:
 
 [source,java]
@@ -82,7 +85,7 @@ this:
 from("weather:foo?appid=APIKEY&geolocationAccessKey=IPSTACK_ACCESS_KEY&geolocationRequestHostIP=LOCAL_IP").to("jms:queue:weather");
 ---------------------------------------------------------
 
-And to find the weather using the producer we do:
+And to find the weather using the producer, we do:
 
 [source,java]
 --------------------------------------------------------

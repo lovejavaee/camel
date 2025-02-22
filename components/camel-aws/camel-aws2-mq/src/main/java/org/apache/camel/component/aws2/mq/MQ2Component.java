@@ -22,13 +22,14 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 /**
  * For working with Amazon MQ SDK v2.
  */
 @Component("aws2-mq")
-public class MQ2Component extends DefaultComponent {
+public class MQ2Component extends HealthCheckComponent {
+
     @Metadata
     private MQ2Configuration configuration = new MQ2Configuration();
 
@@ -45,10 +46,13 @@ public class MQ2Component extends DefaultComponent {
         MQ2Configuration configuration = this.configuration != null ? this.configuration.copy() : new MQ2Configuration();
         MQ2Endpoint endpoint = new MQ2Endpoint(uri, this, configuration);
         setProperties(endpoint, parameters);
-        if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider()) && configuration.getAmazonMqClient() == null
+        if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseProfileCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseSessionCredentials())
+                && configuration.getAmazonMqClient() == null
                 && (configuration.getAccessKey() == null || configuration.getSecretKey() == null)) {
             throw new IllegalArgumentException(
-                    "useDefaultCredentialsProvider is set to false, amazonMQClient or accessKey and secretKey must be specified");
+                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, useSessionCredentials is set to false, amazonMQClient or accessKey and secretKey must be specified");
         }
 
         return endpoint;

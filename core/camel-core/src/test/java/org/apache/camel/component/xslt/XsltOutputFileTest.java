@@ -27,7 +27,7 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  *
@@ -36,8 +36,6 @@ public class XsltOutputFileTest extends ContextTestSupport {
 
     @Test
     public void testXsltOutput() throws Exception {
-        testDirectory(true);
-
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedBodiesReceived("<?xml version=\"1.0\" encoding=\"UTF-8\"?><goodbye>world!</goodbye>");
         mock.expectedFileExists(testFile("xsltme.xml"));
@@ -50,21 +48,20 @@ public class XsltOutputFileTest extends ContextTestSupport {
     }
 
     @Test
-    public void testXsltOutputFileMissingHeader() throws Exception {
-        try {
-            template.sendBody("direct:start", "<hello>world!</hello>");
-            fail("Should thrown exception");
-        } catch (CamelExecutionException e) {
-            NoSuchHeaderException nshe = assertIsInstanceOf(NoSuchHeaderException.class, e.getCause());
-            assertEquals(Exchange.XSLT_FILE_NAME, nshe.getHeaderName());
-        }
+    public void testXsltOutputFileMissingHeader() {
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("direct:start", "<hello>world!</hello>"),
+                "Should thrown exception");
+
+        NoSuchHeaderException nshe = assertIsInstanceOf(NoSuchHeaderException.class, e.getCause());
+        assertEquals(Exchange.XSLT_FILE_NAME, nshe.getHeaderName());
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("xslt:org/apache/camel/component/xslt/example.xsl?output=file").to("mock:result");
             }
         };

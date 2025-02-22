@@ -29,21 +29,22 @@ import org.apache.camel.CamelException;
 import org.apache.camel.component.as2.api.AS2Header;
 import org.apache.camel.component.as2.api.AS2MediaType;
 import org.apache.camel.component.as2.api.entity.ApplicationEDIConsentEntity;
-import org.apache.camel.component.as2.api.entity.ApplicationEDIEntity;
 import org.apache.camel.component.as2.api.entity.ApplicationEDIFACTEntity;
 import org.apache.camel.component.as2.api.entity.ApplicationEDIX12Entity;
+import org.apache.camel.component.as2.api.entity.ApplicationEntity;
+import org.apache.camel.component.as2.api.entity.ApplicationXMLEntity;
 import org.apache.camel.component.as2.api.entity.MimeEntity;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Base64InputStream;
 import org.apache.commons.codec.binary.Base64OutputStream;
 import org.apache.commons.codec.net.QuotedPrintableCodec;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpEntityEnclosingRequest;
-import org.apache.http.HttpMessage;
-import org.apache.http.HttpResponse;
-import org.apache.http.entity.ContentType;
+import org.apache.hc.core5.http.ClassicHttpRequest;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpMessage;
 import org.bouncycastle.util.encoders.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +53,7 @@ public final class EntityUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(EntityUtils.class);
 
-    private static AtomicLong partNumber = new AtomicLong();
+    private static final AtomicLong partNumber = new AtomicLong();
 
     private EntityUtils() {
     }
@@ -181,8 +182,8 @@ public final class EntityUtils {
         }
     }
 
-    public static ApplicationEDIEntity createEDIEntity(
-            String ediMessage, ContentType ediMessageContentType, String contentTransferEncoding, boolean isMainBody,
+    public static ApplicationEntity createEDIEntity(
+            byte[] ediMessage, ContentType ediMessageContentType, String contentTransferEncoding, boolean isMainBody,
             String filename)
             throws CamelException {
         ObjectHelper.notNull(ediMessage, "EDI Message");
@@ -198,6 +199,8 @@ public final class EntityUtils {
                 return new ApplicationEDIX12Entity(ediMessage, charset, contentTransferEncoding, isMainBody, filename);
             case AS2MediaType.APPLICATION_EDI_CONSENT:
                 return new ApplicationEDIConsentEntity(ediMessage, charset, contentTransferEncoding, isMainBody, filename);
+            case AS2MediaType.APPLICATION_XML:
+                return new ApplicationXMLEntity(ediMessage, charset, contentTransferEncoding, isMainBody, filename);
             default:
                 throw new CamelException("Invalid EDI entity mime type: " + ediMessageContentType.getMimeType());
         }
@@ -205,11 +208,10 @@ public final class EntityUtils {
     }
 
     public static byte[] getContent(HttpEntity entity) {
-        try {
-            final ByteArrayOutputStream outstream = new ByteArrayOutputStream();
-            entity.writeTo(outstream);
-            outstream.flush();
-            return outstream.toByteArray();
+        try (final ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            entity.writeTo(os);
+            os.flush();
+            return os.toByteArray();
         } catch (Exception e) {
             LOG.debug("failed to get content", e);
             return null;
@@ -218,35 +220,35 @@ public final class EntityUtils {
 
     public static boolean hasEntity(HttpMessage message) {
         boolean hasEntity = false;
-        if (message instanceof HttpEntityEnclosingRequest) {
-            hasEntity = ((HttpEntityEnclosingRequest) message).getEntity() != null;
-        } else if (message instanceof HttpResponse) {
-            hasEntity = ((HttpResponse) message).getEntity() != null;
+        if (message instanceof ClassicHttpRequest httpEntityEnclosingRequest) {
+            hasEntity = httpEntityEnclosingRequest.getEntity() != null;
+        } else if (message instanceof ClassicHttpResponse httpResponse) {
+            hasEntity = httpResponse.getEntity() != null;
         }
         return hasEntity;
     }
 
     public static HttpEntity getMessageEntity(HttpMessage message) {
-        if (message instanceof HttpEntityEnclosingRequest) {
-            return ((HttpEntityEnclosingRequest) message).getEntity();
-        } else if (message instanceof HttpResponse) {
-            return ((HttpResponse) message).getEntity();
+        if (message instanceof ClassicHttpRequest httpEntityEnclosingRequest) {
+            return httpEntityEnclosingRequest.getEntity();
+        } else if (message instanceof ClassicHttpResponse httpResponse) {
+            return httpResponse.getEntity();
         }
         return null;
     }
 
     public static void setMessageEntity(HttpMessage message, HttpEntity entity) {
-        if (message instanceof HttpEntityEnclosingRequest) {
-            ((HttpEntityEnclosingRequest) message).setEntity(entity);
-        } else if (message instanceof HttpResponse) {
-            ((HttpResponse) message).setEntity(entity);
+        if (message instanceof ClassicHttpRequest httpEntityEnclosingRequest) {
+            httpEntityEnclosingRequest.setEntity(entity);
+        } else if (message instanceof ClassicHttpResponse httpResponse) {
+            httpResponse.setEntity(entity);
         }
-        Header contentTypeHeader = entity.getContentType();
-        if (contentTypeHeader != null) {
-            message.setHeader(contentTypeHeader);
+        String contentType = entity.getContentType();
+        if (contentType != null) {
+            message.setHeader(AS2Header.CONTENT_TYPE, contentType);
         }
-        if (entity instanceof MimeEntity) {
-            Header contentTransferEncodingHeader = ((MimeEntity) entity).getContentTransferEncoding();
+        if (entity instanceof MimeEntity mimeEntity) {
+            Header contentTransferEncodingHeader = mimeEntity.getContentTransferEncoding();
             if (contentTransferEncodingHeader != null) {
                 message.setHeader(contentTransferEncodingHeader);
             }
@@ -275,9 +277,9 @@ public final class EntityUtils {
 
     public static String printEntity(HttpEntity entity) throws IOException {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             PrintStream ps = new PrintStream(baos, true, "utf-8")) {
+             PrintStream ps = new PrintStream(baos, true, StandardCharsets.UTF_8)) {
             printEntity(ps, entity);
-            return baos.toString(StandardCharsets.UTF_8.name());
+            return baos.toString(StandardCharsets.UTF_8);
         }
     }
 

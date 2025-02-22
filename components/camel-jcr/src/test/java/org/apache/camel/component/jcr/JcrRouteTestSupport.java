@@ -27,7 +27,6 @@ import javax.jcr.SimpleCredentials;
 import org.apache.camel.spi.Registry;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.apache.jackrabbit.core.TransientRepository;
-import org.junit.jupiter.api.BeforeEach;
 
 import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
 
@@ -40,13 +39,11 @@ public abstract class JcrRouteTestSupport extends CamelTestSupport {
 
     protected static final String REPO_PATH = "target/repository-simple-security";
 
-    private Repository repository;
+    private static final Repository repository = new TransientRepository(CONFIG_FILE, REPO_PATH);
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         deleteDirectory(REPO_PATH);
-        super.setUp();
     }
 
     protected Repository getRepository() {
@@ -64,7 +61,6 @@ public abstract class JcrRouteTestSupport extends CamelTestSupport {
             throw new FileNotFoundException("Missing config file: " + config.getPath());
         }
 
-        repository = new TransientRepository(CONFIG_FILE, REPO_PATH);
         registry.bind("repository", repository);
     }
 }

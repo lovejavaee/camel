@@ -16,15 +16,20 @@
  */
 package org.apache.camel.component.xmpp.integration;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.logging.LogManager;
+
 import org.apache.camel.component.xmpp.XmppTestUtil;
 import org.apache.camel.spi.Registry;
-import org.apache.camel.support.SimpleRegistry;
 import org.apache.camel.test.infra.xmpp.services.XmppService;
 import org.apache.camel.test.infra.xmpp.services.XmppServiceFactory;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // This was originally disabled on the pom file with the reason given below.
 @DisabledOnOs(value = OS.AIX, disabledReason = "has problem with all the new reconnection stuff and whatnot")
@@ -32,12 +37,21 @@ public class XmppBaseIT extends CamelTestSupport {
     @RegisterExtension
     static XmppService service = XmppServiceFactory.createService();
 
-    @Override
-    protected Registry createCamelRegistry() throws Exception {
-        Registry registry = new SimpleRegistry();
+    static {
+        try (InputStream is = XmppBaseIT.class.getClassLoader().getResourceAsStream("logging.properties")) {
+            LogManager.getLogManager().readConfiguration(is);
+        } catch (IOException e) {
+            Logger logger = LoggerFactory.getLogger(XmppBaseIT.class);
 
+            logger.warn(
+                    "Unable to setup JUL-to-slf4j logging bridge. The test execution should result in a log of bogus output. Error: {}",
+                    e.getMessage(), e);
+        }
+    }
+
+    @Override
+    protected void bindToRegistry(Registry registry) throws Exception {
         XmppTestUtil.bindSSLContextTo(registry, service.host(), service.port());
-        return registry;
     }
 
     protected String getUrl() {

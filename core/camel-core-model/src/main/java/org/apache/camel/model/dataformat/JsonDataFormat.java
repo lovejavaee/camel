@@ -33,6 +33,7 @@ import org.apache.camel.spi.Metadata;
 @XmlRootElement(name = "json")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class JsonDataFormat extends DataFormatDefinition implements ContentTypeHeaderAware {
+
     @XmlAttribute
     private String objectMapper;
     @XmlAttribute
@@ -47,6 +48,11 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
     @XmlAttribute
     @Metadata(defaultValue = "Jackson")
     private JsonLibrary library = JsonLibrary.Jackson;
+    @XmlAttribute
+    @Metadata(javaType = "java.lang.Boolean",
+              description = "Force generator that outputs JSON content to combine surrogate pairs (if any) into 4-byte "
+                            + "characters. This should be preferred when using 4-byte characters such as Japanese.")
+    private String combineUnicodeSurrogates;
     @XmlAttribute(name = "unmarshalType")
     private String unmarshalTypeName;
     @XmlTransient
@@ -89,7 +95,7 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
     @Metadata(label = "advanced")
     private String timezone;
     @XmlAttribute
-    @Metadata(label = "advanced")
+    @Metadata(label = "advanced", javaType = "org.apache.camel.component.jackson.SchemaResolver")
     private String schemaResolver;
     @XmlAttribute
     @Metadata(label = "advanced", javaType = "java.lang.Boolean", defaultValue = "true")
@@ -116,6 +122,36 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
         this.library = library;
     }
 
+    protected JsonDataFormat(JsonDataFormat source) {
+        super(source);
+        this.objectMapper = source.objectMapper;
+        this.useDefaultObjectMapper = source.useDefaultObjectMapper;
+        this.autoDiscoverObjectMapper = source.autoDiscoverObjectMapper;
+        this.prettyPrint = source.prettyPrint;
+        this.library = source.library;
+        this.combineUnicodeSurrogates = source.combineUnicodeSurrogates;
+        this.unmarshalTypeName = source.unmarshalTypeName;
+        this.unmarshalType = source.unmarshalType;
+        this.jsonViewTypeName = source.jsonViewTypeName;
+        this.jsonView = source.jsonView;
+        this.include = source.include;
+        this.allowJmsType = source.allowJmsType;
+        this.collectionTypeName = source.collectionTypeName;
+        this.collectionType = source.collectionType;
+        this.useList = source.useList;
+        this.moduleClassNames = source.moduleClassNames;
+        this.moduleRefs = source.moduleRefs;
+        this.enableFeatures = source.enableFeatures;
+        this.disableFeatures = source.disableFeatures;
+        this.allowUnmarshallType = source.allowUnmarshallType;
+        this.timezone = source.timezone;
+        this.schemaResolver = source.schemaResolver;
+        this.autoDiscoverSchemaResolver = source.autoDiscoverSchemaResolver;
+        this.namingStrategy = source.namingStrategy;
+        this.contentTypeHeader = source.contentTypeHeader;
+        this.dateFormatPattern = source.dateFormatPattern;
+    }
+
     private JsonDataFormat(Builder builder) {
         this();
         this.objectMapper = builder.objectMapper;
@@ -123,6 +159,7 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
         this.autoDiscoverObjectMapper = builder.autoDiscoverObjectMapper;
         this.prettyPrint = builder.prettyPrint;
         this.library = builder.library;
+        this.combineUnicodeSurrogates = builder.combineUnicodeSurrogates;
         this.unmarshalTypeName = builder.unmarshalTypeName;
         this.unmarshalType = builder.unmarshalType;
         this.jsonViewTypeName = builder.jsonViewTypeName;
@@ -143,6 +180,11 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
         this.namingStrategy = builder.namingStrategy;
         this.contentTypeHeader = builder.contentTypeHeader;
         this.dateFormatPattern = builder.dateFormatPattern;
+    }
+
+    @Override
+    public JsonDataFormat copyDefinition() {
+        return new JsonDataFormat(this);
     }
 
     @Override
@@ -200,6 +242,18 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
      */
     public void setPrettyPrint(String prettyPrint) {
         this.prettyPrint = prettyPrint;
+    }
+
+    public String getCombineUnicodeSurrogates() {
+        return combineUnicodeSurrogates;
+    }
+
+    /**
+     * Force generator that outputs JSON content to combine surrogate pairs (if any) into 4-byte characters. This should
+     * be preferred when using 4-byte characters such as Japanese.
+     */
+    public void setCombineUnicodeSurrogates(String combineUnicodeSurrogates) {
+        this.combineUnicodeSurrogates = combineUnicodeSurrogates;
     }
 
     public String getUnmarshalTypeName() {
@@ -583,6 +637,7 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
         private String autoDiscoverObjectMapper;
         private String prettyPrint;
         private JsonLibrary library = JsonLibrary.Jackson;
+        private String combineUnicodeSurrogates;
         private String unmarshalTypeName;
         private Class<?> unmarshalType;
         private String jsonViewTypeName;
@@ -695,6 +750,24 @@ public class JsonDataFormat extends DataFormatDefinition implements ContentTypeH
          */
         public Builder library(JsonLibrary library) {
             this.library = library;
+            return this;
+        }
+
+        /**
+         * Force generator that outputs JSON content to combine surrogate pairs (if any) into 4-byte characters. This
+         * should be preferred when using 4-byte characters such as Japanese.
+         */
+        public Builder combineUnicodeSurrogates(boolean combineUnicodeSurrogates) {
+            this.combineUnicodeSurrogates = Boolean.toString(combineUnicodeSurrogates);
+            return this;
+        }
+
+        /**
+         * Force generator that outputs JSON content to combine surrogate pairs (if any) into 4-byte characters. This
+         * should be preferred when using 4-byte characters such as Japanese.
+         */
+        public Builder combineUnicodeSurrogates(String combineUnicodeSurrogates) {
+            this.combineUnicodeSurrogates = combineUnicodeSurrogates;
             return this;
         }
 

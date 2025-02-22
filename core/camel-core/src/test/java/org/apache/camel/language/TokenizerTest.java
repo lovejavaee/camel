@@ -25,9 +25,7 @@ import org.apache.camel.language.tokenizer.TokenizeLanguage;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TokenizerTest extends ExchangeTestSupport {
 
@@ -37,37 +35,28 @@ public class TokenizerTest extends ExchangeTestSupport {
 
     Expression tokenize(String token, boolean regex) {
         TokenizeLanguage language = new TokenizeLanguage();
-        language.setToken(token);
-        language.setRegex(regex);
-        return language.createExpression(null);
+        language.setCamelContext(context);
+        return language.createExpression(null, new Object[] { null, null, token, null, null, null, regex });
     }
 
     Expression tokenize(String headerName, String token) {
-        return tokenize(headerName, token, false);
-    }
-
-    Expression tokenize(String headerName, String token, boolean regex) {
         TokenizeLanguage language = new TokenizeLanguage();
-        language.setHeaderName(headerName);
-        language.setToken(token);
-        language.setRegex(regex);
-        return language.createExpression(null);
+        language.setCamelContext(context);
+        return language.createExpression(null, new Object[] { null, "header:" + headerName, token });
     }
 
     Expression tokenizePair(String startToken, String endToken, boolean includeTokens) {
         TokenizeLanguage language = new TokenizeLanguage();
-        language.setToken(startToken);
-        language.setEndToken(endToken);
-        language.setIncludeTokens(includeTokens);
-        return language.createExpression(null);
+        language.setCamelContext(context);
+        return language.createExpression(null,
+                new Object[] { null, null, startToken, endToken, null, null, null, null, includeTokens });
     }
 
     Expression tokenizeXML(String tagName, String inheritNamespaceTagName) {
         TokenizeLanguage language = new TokenizeLanguage();
-        language.setToken(tagName);
-        language.setInheritNamespaceTagName(inheritNamespaceTagName);
-        language.setXml(true);
-        return language.createExpression(null);
+        language.setCamelContext(context);
+        return language.createExpression(null,
+                new Object[] { null, null, tagName, null, inheritNamespaceTagName, null, null, true });
     }
 
     @Override
@@ -77,7 +66,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeHeaderWithStringConstructor() throws Exception {
+    public void testTokenizeHeaderWithStringConstructor() {
         List<?> names = tokenize("names", ",").evaluate(exchange, List.class);
         assertEquals(3, names.size());
 
@@ -87,7 +76,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeHeader() throws Exception {
+    public void testTokenizeHeader() {
         Expression exp = tokenize("names", ",");
         exp.init(context);
 
@@ -100,7 +89,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeBody() throws Exception {
+    public void testTokenizeBody() {
         Expression exp = tokenize(",");
         exp.init(context);
 
@@ -114,7 +103,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeBodyRegEx() throws Exception {
+    public void testTokenizeBodyRegEx() {
         Expression exp = tokenize("(\\W+)\\s*", true);
         exp.init(context);
 
@@ -129,8 +118,8 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeHeaderRegEx() throws Exception {
-        Expression exp = tokenize("quote", "(\\W+)\\s*", true);
+    public void testTokenizeHeaderRegEx() {
+        Expression exp = tokenize("quote", "(\\W+)\\s*");
         exp.init(context);
 
         exchange.getIn().setHeader("quote", "Camel rocks");
@@ -143,12 +132,10 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeManualConfiguration() throws Exception {
+    public void testTokenizeManualConfiguration() {
         TokenizeLanguage lan = new TokenizeLanguage();
-        lan.setHeaderName("names");
-        lan.setRegex(false);
-        lan.setToken(",");
-        Expression exp = lan.createExpression();
+        lan.setCamelContext(context);
+        Expression exp = lan.createExpression(null, new Object[] { null, "header:names", "," });
         exp.init(context);
 
         List<?> names = exp.evaluate(exchange, List.class);
@@ -157,15 +144,10 @@ public class TokenizerTest extends ExchangeTestSupport {
         assertEquals("Claus", names.get(0));
         assertEquals("James", names.get(1));
         assertEquals("Willem", names.get(2));
-
-        assertEquals("names", lan.getHeaderName());
-        assertEquals(",", lan.getToken());
-        assertFalse(lan.isRegex());
-        assertTrue(lan.isSingleton());
     }
 
     @Test
-    public void testTokenizePairSpecial() throws Exception {
+    public void testTokenizePairSpecial() {
         Expression exp = tokenizePair("!", "@", false);
         exp.init(context);
 
@@ -179,7 +161,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizePair() throws Exception {
+    public void testTokenizePair() {
         Expression exp = tokenizePair("[START]", "[END]", false);
         exp.init(context);
 
@@ -193,7 +175,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizePairSimple() throws Exception {
+    public void testTokenizePairSimple() {
         Expression exp = tokenizePair("${header.foo}", "${header.bar}", false);
         exp.init(context);
 
@@ -209,7 +191,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizePairIncludeTokens() throws Exception {
+    public void testTokenizePairIncludeTokens() {
         Expression exp = tokenizePair("[START]", "[END]", true);
         exp.init(context);
 
@@ -223,7 +205,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPair() throws Exception {
+    public void testTokenizeXMLPair() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -240,7 +222,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairSimple() throws Exception {
+    public void testTokenizeXMLPairSimple() {
         Expression exp = tokenizeXML("${header.foo}", null);
         exp.init(context);
 
@@ -258,7 +240,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairNoXMLTag() throws Exception {
+    public void testTokenizeXMLPairNoXMLTag() {
         Expression exp = tokenizeXML("person", null);
         exp.init(context);
 
@@ -275,7 +257,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithNoise() throws Exception {
+    public void testTokenizeXMLPairWithNoise() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -293,7 +275,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairEmpty() throws Exception {
+    public void testTokenizeXMLPairEmpty() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -304,7 +286,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairNoData() throws Exception {
+    public void testTokenizeXMLPairNoData() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -315,7 +297,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairNullData() throws Exception {
+    public void testTokenizeXMLPairNullData() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -326,7 +308,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithSimilarChildNames() throws Exception {
+    public void testTokenizeXMLPairWithSimilarChildNames() {
         Expression exp = tokenizeXML("Trip", "Trips");
         exp.init(context);
 
@@ -337,7 +319,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithDefaultNamespace() throws Exception {
+    public void testTokenizeXMLPairWithDefaultNamespace() {
         Expression exp = tokenizeXML("<person>", "<persons>");
         exp.init(context);
 
@@ -355,7 +337,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithDefaultNamespaceNotInherit() throws Exception {
+    public void testTokenizeXMLPairWithDefaultNamespaceNotInherit() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -373,7 +355,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithDefaultAndFooNamespace() throws Exception {
+    public void testTokenizeXMLPairWithDefaultAndFooNamespace() {
         Expression exp = tokenizeXML("<person>", "<persons>");
         exp.init(context);
 
@@ -391,7 +373,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithLocalNamespace() throws Exception {
+    public void testTokenizeXMLPairWithLocalNamespace() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -410,7 +392,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithLocalAndInheritedNamespace() throws Exception {
+    public void testTokenizeXMLPairWithLocalAndInheritedNamespace() {
         Expression exp = tokenizeXML("<person>", "<persons>");
         exp.init(context);
 
@@ -428,7 +410,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithLocalAndNotInheritedNamespace() throws Exception {
+    public void testTokenizeXMLPairWithLocalAndNotInheritedNamespace() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -446,7 +428,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithAttributes() throws Exception {
+    public void testTokenizeXMLPairWithAttributes() {
         Expression exp = tokenizeXML("<person>", null);
         exp.init(context);
 
@@ -465,7 +447,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithAttributesInheritNamespace() throws Exception {
+    public void testTokenizeXMLPairWithAttributesInheritNamespace() {
         Expression exp = tokenizeXML("<person>", "<persons>");
         exp.init(context);
 
@@ -483,7 +465,7 @@ public class TokenizerTest extends ExchangeTestSupport {
     }
 
     @Test
-    public void testTokenizeXMLPairWithAttributes2InheritNamespace() throws Exception {
+    public void testTokenizeXMLPairWithAttributes2InheritNamespace() {
         Expression exp = tokenizeXML("<person>", "<persons>");
         exp.init(context);
 

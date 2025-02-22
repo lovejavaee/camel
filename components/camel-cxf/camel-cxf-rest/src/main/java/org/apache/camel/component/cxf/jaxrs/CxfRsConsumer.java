@@ -39,6 +39,11 @@ public class CxfRsConsumer extends DefaultConsumer implements Suspendable {
         super(endpoint, processor);
     }
 
+    @Override
+    public boolean isHostedService() {
+        return true;
+    }
+
     protected Server createServer() {
         CxfRsEndpoint endpoint = (CxfRsEndpoint) getEndpoint();
         CxfRsInvoker cxfRsInvoker = new CxfRsInvoker(endpoint, this);
@@ -56,6 +61,8 @@ public class CxfRsConsumer extends DefaultConsumer implements Suspendable {
         svrBean.getInInterceptors().add(new UnitOfWorkCloserInterceptor(Phase.POST_INVOKE, true));
         // close the UnitOfWork normally
         svrBean.getOutInterceptors().add(new UnitOfWorkCloserInterceptor());
+        // close the UnitOfWork in case of Fault
+        svrBean.getOutFaultInterceptors().add(new UnitOfWorkCloserInterceptor());
 
         Server server = svrBean.create();
 

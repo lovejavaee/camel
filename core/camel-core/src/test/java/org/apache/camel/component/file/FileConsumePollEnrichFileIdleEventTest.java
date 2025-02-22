@@ -16,10 +16,13 @@
  */
 package org.apache.camel.component.file;
 
+import java.util.concurrent.TimeUnit;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 public class FileConsumePollEnrichFileIdleEventTest extends ContextTestSupport {
@@ -37,38 +40,43 @@ public class FileConsumePollEnrichFileIdleEventTest extends ContextTestSupport {
         template.sendBodyAndHeader(fileUri("enrich"), "Event1", Exchange.FILE_NAME,
                 "Event1.txt");
 
-        log.info("Sleeping for 1 sec before writing enrichdata file");
-        Thread.sleep(1000);
-        template.sendBodyAndHeader(fileUri("enrichdata"), "EnrichData",
-                Exchange.FILE_NAME, "AAA.dat");
-        // Trigger second event which should find the EnrichData file
-        template.sendBodyAndHeader(fileUri("enrich"), "Event2", Exchange.FILE_NAME,
-                "Event2.txt");
-        log.info("... write done");
+        context.getRouteController().startAllRoutes();
 
-        assertMockEndpointsSatisfied();
+        log.info("Sleeping for 1 sec before writing enrichdata file");
+
+        Awaitility.await().pollDelay(1, TimeUnit.SECONDS).untilAsserted(() -> {
+            template.sendBodyAndHeader(fileUri("enrichdata"), "EnrichData",
+                    Exchange.FILE_NAME, "AAA.dat");
+            // Trigger second event which should find the EnrichData file
+            template.sendBodyAndHeader(fileUri("enrich"), "Event2", Exchange.FILE_NAME,
+                    "Event2.txt");
+            log.info("... write done");
+            assertMockEndpointsSatisfied();
+        });
     }
 
     @Test
     public void testPollEmptyEnrich() throws Exception {
-        getMockEndpoint("mock:start").expectedBodiesReceived("Event1");
+        getMockEndpoint("mock:start").expectedBodiesReceived("Event3");
 
         MockEndpoint mock = getMockEndpoint("mock:result");
-        mock.expectedBodiesReceived("Event1");
-        mock.expectedFileExists(testFile("enrich/.done/Event1.txt"));
+        mock.expectedBodiesReceived("Event3");
+        mock.expectedFileExists(testFile("enrich/.done/Event3.txt"));
 
-        template.sendBodyAndHeader(fileUri("enrich"), "Event1", Exchange.FILE_NAME,
-                "Event1.txt");
+        template.sendBodyAndHeader(fileUri("enrich"), "Event3", Exchange.FILE_NAME,
+                "Event3.txt");
+
+        context.getRouteController().startAllRoutes();
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
-                from(fileUri("enrich?initialDelay=0&delay=10&move=.done"))
+            public void configure() {
+                from(fileUri("enrich?initialDelay=0&delay=10&move=.done")).autoStartup(false)
                         .to("mock:start")
                         .pollEnrich(
                                 fileUri("enrichdata?initialDelay=0&delay=10&move=.done&sendEmptyMessageWhenIdle=true"), 1000)

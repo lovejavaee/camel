@@ -53,13 +53,6 @@ import org.apache.camel.util.function.Suppliers;
  * Such requirement was found when trying to configure maven-resolver without using the deprecated service locator
  * helpers (see <a href="https://issues.apache.org/jira/browse/MRESOLVER-157">MRESOLVER-157</a>).
  * </p>
- *
- * <p>
- * While this is quite thin extension of {@link SupplierRegistry} and thin implementation of JSR-330 style of dependency
- * injection and could potentially be used in many places, for now it's used <em>only</em> to configure
- * <em>beans/services</em> required by {@link org.eclipse.aether.RepositorySystem}. If there's a need to use this
- * registry in other places, we can move it from {@code camel-tooling-maven} module.
- * </p>
  */
 public class DIRegistry extends SupplierRegistry {
 
@@ -130,7 +123,7 @@ public class DIRegistry extends SupplierRegistry {
         for (Annotation ann : type.getAnnotations()) {
             if (isNamedAnnotation(ann)) {
                 name = getNamedAnnotationValue(type);
-                if (name == null || name.trim().isEmpty()) {
+                if (name == null || name.isBlank()) {
                     name = key.getName();
                 }
             }
@@ -203,7 +196,6 @@ public class DIRegistry extends SupplierRegistry {
                                 } else if (Map.class == rawType) {
                                     if (typeArguments.length == 2) {
                                         // first type must be String (name - from @Named or FQCN)
-                                        Type kType = typeArguments[0];
                                         Type vType = typeArguments[1];
                                         t = rawType;
                                         param = new LinkedHashMap<>();

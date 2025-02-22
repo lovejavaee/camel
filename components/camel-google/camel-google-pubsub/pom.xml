@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-google-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-google-pubsub</artifactId>
@@ -36,25 +36,15 @@
         <schemeName>google-pubsub</schemeName>
         <componentName>GooglePubSub</componentName>
         <componentPackage>org.apache.camel.component.google.pubsub</componentPackage>
-    </properties>
 
-    <dependencyManagement>
-        <dependencies>
-            <!-- Override the android JDK 7 guava in libraries-bom -->
-            <dependency>
-                <groupId>com.google.guava</groupId>
-                <artifactId>guava</artifactId>
-                <version>${google-cloud-guava-version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.cloud</groupId>
-                <artifactId>libraries-bom</artifactId>
-                <version>${google-cloud-bom-version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
+        <!-- The emulator is only available for x86 -->
+        <skipITs.ppc64le>true</skipITs.ppc64le>
+        <skipTests.ppc64le>true</skipTests.ppc64le>
+        <skipITs.s390x>true</skipITs.s390x>
+        <skipTests.s390x>true</skipTests.s390x>
+        <skipITs.aarch64>true</skipITs.aarch64>
+        <skipTests.aarch64>true</skipTests.aarch64>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -64,6 +54,7 @@
         <dependency>
             <groupId>com.google.cloud</groupId>
             <artifactId>google-cloud-pubsub</artifactId>
+            <version>${google-cloud-pubsub-version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.google.code.findbugs</groupId>
@@ -71,20 +62,27 @@
                 </exclusion>
             </exclusions>
         </dependency>
+
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-junit5</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- test infra -->
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+            <version>${slf4j-version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- test infra -->
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-google-pubsub</artifactId>
             <version>${project.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 </project>

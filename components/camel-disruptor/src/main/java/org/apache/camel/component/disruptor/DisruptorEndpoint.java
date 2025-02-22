@@ -51,7 +51,7 @@ import org.slf4j.LoggerFactory;
  */
 @ManagedResource(description = "Managed Disruptor Endpoint")
 @UriEndpoint(firstVersion = "2.12.0", scheme = "disruptor,disruptor-vm", title = "Disruptor,Disruptor VM",
-             syntax = "disruptor:name", category = { Category.ENDPOINT })
+             remote = false, syntax = "disruptor:name", category = { Category.MESSAGING })
 public class DisruptorEndpoint extends DefaultEndpoint implements AsyncEndpoint, MultipleConsumersSupport {
     public static final String DISRUPTOR_IGNORE_EXCHANGE = "disruptor.ignoreExchange";
     private static final Logger LOGGER = LoggerFactory.getLogger(DisruptorEndpoint.class);
@@ -85,6 +85,11 @@ public class DisruptorEndpoint extends DefaultEndpoint implements AsyncEndpoint,
         super(endpointUri, component);
         this.disruptorReference = disruptorReference;
         this.name = disruptorReference.getName();
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @ManagedAttribute(description = "Queue name")
@@ -153,9 +158,9 @@ public class DisruptorEndpoint extends DefaultEndpoint implements AsyncEndpoint,
 
     /**
      * The maximum capacity of the Disruptors ringbuffer Will be effectively increased to the nearest power of two.
-     * Notice: Mind if you use this option, then its the first endpoint being created with the queue name, that
-     * determines the size. To make sure all endpoints use same size, then configure the size option on all of them, or
-     * the first endpoint being created.
+     * Notice: Mind if you use this option, then it's the first endpoint being created with the queue name that
+     * determines the size. To make sure all endpoints use the same size, then configure the size option on all of them,
+     * or the first endpoint being created.
      */
     public void setSize(int size) {
         this.size = size;
@@ -279,8 +284,9 @@ public class DisruptorEndpoint extends DefaultEndpoint implements AsyncEndpoint,
     }
 
     void onStarted(final DisruptorConsumer consumer) throws Exception {
-        synchronized (this) {
-            // validate multiple consumers has been enabled is necessary
+        lock.lock();
+        try {
+            // validate multiple consumers have been enabled is necessary
             if (!consumers.isEmpty() && !isMultipleConsumersSupported()) {
                 throw new IllegalStateException(
                         "Multiple consumers for the same endpoint is not allowed: " + this);
@@ -292,17 +298,22 @@ public class DisruptorEndpoint extends DefaultEndpoint implements AsyncEndpoint,
                 LOGGER.debug("Tried to start Consumer {} on endpoint {} but it was already started", consumer,
                         getEndpointUri());
             }
+        } finally {
+            lock.unlock();
         }
     }
 
     void onStopped(final DisruptorConsumer consumer) throws Exception {
-        synchronized (this) {
+        lock.lock();
+        try {
             if (consumers.remove(consumer)) {
                 LOGGER.debug("Stopping consumer {} on endpoint {}", consumer, getEndpointUri());
                 getDisruptor().reconfigure();
             } else {
                 LOGGER.debug("Tried to stop Consumer {} on endpoint {} but it was already stopped", consumer, getEndpointUri());
             }
+        } finally {
+            lock.unlock();
         }
     }
 

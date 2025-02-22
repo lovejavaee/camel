@@ -23,14 +23,14 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-aws-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-aws-xray</artifactId>
     <packaging>jar</packaging>
 
     <name>Camel :: AWS :: XRay</name>
-    <description>Distributed tracing using AWS XRay</description>
+    <description>Enable Distributed tracing using AWS XRay</description>
 
     <properties>
         <firstVersion>2.21.0</firstVersion>
@@ -68,6 +68,13 @@
                  AWSXRayServletFilter for instrumenting incoming requests -->
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-xray-recorder-sdk-core</artifactId>
+            <exclusions>
+                <!-- Newer version is brought by aws-xray-recorder-sdk-aws-sdk-->
+                <exclusion>
+                    <artifactId>aws-java-sdk-core</artifactId>
+                    <groupId>com.amazonaws</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <!-- Instruments calls to AWS services made with AWS SDK for Java clients by adding a tracing
@@ -96,15 +103,7 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
-            <version>${commons-lang3-version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
-            <scope>test</scope>
-        </dependency>
-
     </dependencies>
 </project>

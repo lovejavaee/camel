@@ -80,10 +80,11 @@ public class OnExceptionReifier extends ProcessorReifier<OnExceptionDefinition> 
 
         Predicate when = null;
         if (definition.getOnWhen() != null) {
+            definition.getOnWhen().preCreateProcessor();
             when = createPredicate(definition.getOnWhen().getExpression());
         }
 
-        return new CatchProcessor(classes, childProcessor, when);
+        return new CatchProcessor(getCamelContext(), classes, childProcessor, when);
     }
 
     protected List<Class<? extends Throwable>> createExceptionClasses(ClassResolver resolver) throws ClassNotFoundException {

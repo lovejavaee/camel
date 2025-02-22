@@ -26,6 +26,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.PollingConsumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
@@ -51,12 +52,12 @@ import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 import static org.apache.camel.component.springrabbit.SpringRabbitMQConstants.DIRECT_MESSAGE_LISTENER_CONTAINER;
 
 /**
- * Send and receive messages from RabbitMQ using Spring RabbitMQ client.
+ * Send and receive messages from RabbitMQ using the Spring RabbitMQ client.
  */
 @UriEndpoint(firstVersion = "3.8.0", scheme = "spring-rabbitmq", title = "Spring RabbitMQ",
              syntax = "spring-rabbitmq:exchangeName",
              category = { Category.MESSAGING }, headersClass = SpringRabbitMQConstants.class)
-public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndpoint {
+public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndpoint, EndpointServiceLocation {
 
     public static final String ARG_PREFIX = "arg.";
     public static final String CONSUMER_ARG_PREFIX = "consumer.";
@@ -84,9 +85,9 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
     @UriParam(label = "common",
               description = "The connection factory to be use. A connection factory must be configured either on the component or endpoint.")
     private ConnectionFactory connectionFactory;
-    @UriParam(label = "consumer",
-              description = "The queue(s) to use for consuming messages. Multiple queue names can be separated by comma."
-                            + " If none has been configured then Camel will generate an unique id as the queue name for the consumer.")
+    @UriParam(label = "common",
+              description = "The queue(s) to use for consuming or producing messages. Multiple queue names can be separated by comma."
+                            + " If none has been configured then Camel will generate an unique id as the queue name.")
     private String queues;
     @UriParam(label = "consumer", defaultValue = "true",
               description = "Specifies whether the consumer container should auto-startup.")
@@ -130,13 +131,13 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
     private boolean exclusive;
     @UriParam(label = "consumer", description = "Set to true for an no-local consumer")
     private boolean noLocal;
-    @UriParam(label = "consumer", description = "The name of the dead letter exchange")
+    @UriParam(label = "common", description = "The name of the dead letter exchange")
     private String deadLetterExchange;
-    @UriParam(label = "consumer", description = "The name of the dead letter queue")
+    @UriParam(label = "common", description = "The name of the dead letter queue")
     private String deadLetterQueue;
-    @UriParam(label = "consumer", description = "The routing key for the dead letter exchange")
+    @UriParam(label = "common", description = "The routing key for the dead letter exchange")
     private String deadLetterRoutingKey;
-    @UriParam(label = "consumer", defaultValue = "direct", enums = "direct,fanout,headers,topic",
+    @UriParam(label = "common", defaultValue = "direct", enums = "direct,fanout,headers,topic",
               description = "The type of the dead letter exchange")
     private String deadLetterExchangeType = "direct";
     @UriParam(label = "common",
@@ -146,10 +147,22 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
                             + " handles the reply message. You can also use this option if you want to use Camel as a proxy between different"
                             + " message brokers and you want to route message from one system to another.")
     private boolean disableReplyTo;
-    @UriParam(label = "producer", javaType = "java.time.Duration", defaultValue = "5000",
+    @UriParam(label = "producer",
+              description = "Specifies whether the producer should auto declare binding between exchange, queue and routing key when starting.")
+    private boolean autoDeclareProducer;
+    @UriParam(label = "producer",
+              description = "This can be used if we need to declare the queue but not the exchange.")
+    private boolean skipDeclareExchange;
+    @UriParam(label = "producer",
+              description = "If true the producer will not declare and bind a queue. This can be used for directing messages via an existing routing key.")
+    private boolean skipDeclareQueue;
+    @UriParam(label = "producer",
+              description = "If true the queue will not be bound to the exchange after declaring it.")
+    private boolean skipBindQueue;
+    @UriParam(label = "producer", javaType = "java.time.Duration", defaultValue = "30000",
               description = "Specify the timeout in milliseconds to be used when waiting for a reply message when doing request/reply (InOut) messaging."
-                            + " The default value is 5 seconds. A negative value indicates an indefinite timeout.")
-    private long replyTimeout = 5000;
+                            + " The default value is 30 seconds. A negative value indicates an indefinite timeout (Beware that this will cause a memory leak if a reply is not received).")
+    private long replyTimeout = 30000;
     @UriParam(label = "producer", javaType = "java.time.Duration", defaultValue = "5000",
               description = "Specify the timeout in milliseconds to be used when waiting for a message sent to be confirmed by RabbitMQ when doing send only messaging (InOnly)."
                             + " The default value is 5 seconds. A negative value indicates an indefinite timeout.")
@@ -161,6 +174,9 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
     @UriParam(label = "producer", defaultValue = "false",
               description = "Use a separate connection for publishers and consumers")
     private boolean usePublisherConnection;
+    @UriParam(label = "producer", defaultValue = "false",
+              description = "Whether to allow sending messages with no body. If this option is false and the message body is null, then an MessageConversionException is thrown.")
+    private boolean allowNullBody;
     @UriParam(defaultValue = "false", label = "advanced",
               description = "Sets whether synchronous processing should be strictly used")
     private boolean synchronous;
@@ -178,7 +194,7 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
                                                          + "If this is configured then the other settings such as maximumRetryAttempts for retry are not in use.")
     private RetryOperationsInterceptor retry;
     @UriParam(label = "consumer", defaultValue = "5",
-              description = "How many times a Rabbitmq consumer will retry the same message if Camel failed to process the message")
+              description = "How many times a Rabbitmq consumer will try the same message if Camel failed to process the message (The number of attempts includes the initial try)")
     private int maximumRetryAttempts = 5;
     @UriParam(label = "consumer", defaultValue = "1000",
               description = "Delay in millis a Rabbitmq consumer will wait before redelivering a message that Camel failed to process")
@@ -195,6 +211,45 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
     @Override
     public SpringRabbitMQComponent getComponent() {
         return (SpringRabbitMQComponent) super.getComponent();
+    }
+
+    @Override
+    protected void doInit() throws Exception {
+        if (allowNullBody) {
+            // need to wrap message converter in allow null
+            messageConverter = new AllowNullBodyMessageConverter(messageConverter);
+        }
+    }
+
+    @Override
+    public String getServiceUrl() {
+        int port = 0;
+        String host = null;
+        if (getConnectionFactory() != null) {
+            host = getConnectionFactory().getHost();
+            port = getConnectionFactory().getPort();
+        }
+        if (host != null) {
+            return host + ":" + port;
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "amqp";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        String un = null;
+        if (getConnectionFactory() != null) {
+            un = getConnectionFactory().getUsername();
+        }
+        if (un != null) {
+            return Map.of("username", un);
+        }
+        return null;
     }
 
     public String getExchangeName() {
@@ -231,6 +286,38 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
 
     public void setAutoDeclare(boolean autoDeclare) {
         this.autoDeclare = autoDeclare;
+    }
+
+    public boolean isAutoDeclareProducer() {
+        return autoDeclareProducer;
+    }
+
+    public void setAutoDeclareProducer(boolean autoDeclareProducer) {
+        this.autoDeclareProducer = autoDeclareProducer;
+    }
+
+    public boolean isSkipDeclareExchange() {
+        return skipDeclareExchange;
+    }
+
+    public void setSkipDeclareExchange(boolean skipDeclareExchange) {
+        this.skipDeclareExchange = skipDeclareExchange;
+    }
+
+    public boolean isSkipDeclareQueue() {
+        return skipDeclareQueue;
+    }
+
+    public void setSkipDeclareQueue(boolean skipDeclareQueue) {
+        this.skipDeclareQueue = skipDeclareQueue;
+    }
+
+    public boolean isSkipBindQueue() {
+        return skipBindQueue;
+    }
+
+    public void setSkipBindQueue(boolean skipBindQueue) {
+        this.skipBindQueue = skipBindQueue;
     }
 
     public boolean isAsyncConsumer() {
@@ -383,6 +470,14 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
 
     public void setUsePublisherConnection(boolean usePublisherConnection) {
         this.usePublisherConnection = usePublisherConnection;
+    }
+
+    public boolean isAllowNullBody() {
+        return allowNullBody;
+    }
+
+    public void setAllowNullBody(boolean allowNullBody) {
+        this.allowNullBody = allowNullBody;
     }
 
     public boolean isSynchronous() {
@@ -550,9 +645,11 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
     public AsyncRabbitTemplate createInOutTemplate() {
         RabbitTemplate template = new RabbitTemplate(getConnectionFactory());
         template.setRoutingKey(routingKey);
-        template.setReplyTimeout(replyTimeout);
         template.setUsePublisherConnection(usePublisherConnection);
-        return new AsyncRabbitTemplate(template);
+        AsyncRabbitTemplate asyncTemplate = new AsyncRabbitTemplate(template);
+        // use receive timeout (for reply timeout) on the async template
+        asyncTemplate.setReceiveTimeout(replyTimeout);
+        return asyncTemplate;
     }
 
     public AbstractMessageListenerContainer createMessageListenerContainer() {
@@ -589,10 +686,13 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
     }
 
     public void declareElements(AbstractMessageListenerContainer container) {
-        AmqpAdmin admin = null;
         if (container instanceof MessageListenerContainer) {
-            admin = ((MessageListenerContainer) container).getAmqpAdmin();
+            AmqpAdmin admin = ((MessageListenerContainer) container).getAmqpAdmin();
+            declareElements(container, admin);
         }
+    }
+
+    public void declareElements(AbstractMessageListenerContainer container, AmqpAdmin admin) {
         if (admin != null && autoDeclare) {
             // bind dead letter exchange
             if (deadLetterExchange != null) {
@@ -618,25 +718,27 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
                 }
             }
 
-            Map<String, Object> map = getExchangeArgs();
-            boolean durable = parseArgsBoolean(map, "durable", "true");
-            boolean autoDelete = parseArgsBoolean(map, "autoDelete", "false");
-            if (!durable || autoDelete) {
-                LOG.info("Auto-declaring a non-durable or auto-delete Exchange ({}) durable:{}, auto-delete:{}. "
-                         + "It will be deleted by the broker if it shuts down, and can be redeclared by closing and "
-                         + "reopening the connection.",
-                        exchangeName, durable, autoDelete);
-            }
+            String exchangeName = SpringRabbitMQHelper.isDefaultExchange(getExchangeName()) ? "" : getExchangeName();
+            if (!skipDeclareExchange) {
+                Map<String, Object> map = getExchangeArgs();
+                boolean durable = parseArgsBoolean(map, "durable", "true");
+                boolean autoDelete = parseArgsBoolean(map, "autoDelete", "false");
+                if (!durable || autoDelete) {
+                    LOG.info("Auto-declaring a non-durable or auto-delete Exchange ({}) durable:{}, auto-delete:{}. "
+                             + "It will be deleted by the broker if it shuts down, and can be redeclared by closing and "
+                             + "reopening the connection.",
+                            exchangeName, durable, autoDelete);
+                }
 
-            String en = SpringRabbitMQHelper.isDefaultExchange(getExchangeName()) ? "" : getExchangeName();
-            ExchangeBuilder eb = new ExchangeBuilder(en, getExchangeType());
-            eb.durable(durable);
-            if (autoDelete) {
-                eb.autoDelete();
+                ExchangeBuilder eb = new ExchangeBuilder(exchangeName, getExchangeType());
+                eb.durable(durable);
+                if (autoDelete) {
+                    eb.autoDelete();
+                }
+                eb.withArguments(map);
+                final org.springframework.amqp.core.Exchange rabbitExchange = eb.build();
+                admin.declareExchange(rabbitExchange);
             }
-            eb.withArguments(map);
-            final org.springframework.amqp.core.Exchange rabbitExchange = eb.build();
-            admin.declareExchange(rabbitExchange);
 
             // if the consumer has no specific queue names then auto-create an unique queue (auto deleted)
             String queuesToDeclare = queues;
@@ -650,10 +752,10 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
 
             for (String queue : queuesToDeclare.split(",")) {
                 queue = queue.trim();
-                map = getQueueArgs();
+                Map<String, Object> map = getQueueArgs();
                 prepareDeadLetterQueueArgs(map);
-                durable = parseArgsBoolean(map, "durable", "false");
-                autoDelete = parseArgsBoolean(map, "autoDelete", autoDeleteDefault);
+                boolean durable = parseArgsBoolean(map, "durable", "false");
+                boolean autoDelete = parseArgsBoolean(map, "autoDelete", autoDeleteDefault);
                 boolean exclusive = parseArgsBoolean(map, "exclusive", "false");
 
                 QueueBuilder qb;
@@ -680,25 +782,27 @@ public class SpringRabbitMQEndpoint extends DefaultEndpoint implements AsyncEndp
                 qb.withArguments(map);
                 final Queue rabbitQueue = qb.build();
 
-                if (!durable || autoDelete || exclusive) {
-                    LOG.info("Auto-declaring a non-durable, auto-delete, or exclusive Queue ({})"
-                             + "durable:{}, auto-delete:{}, exclusive:{}. It will be redeclared if the broker stops and "
-                             + "is restarted while the connection factory is alive, but all messages will be lost.",
-                            rabbitQueue.getName(), durable, autoDelete, exclusive);
+                String qn = queue;
+                if (!skipDeclareQueue) {
+                    if (!durable || autoDelete || exclusive) {
+                        LOG.info("Auto-declaring a non-durable, auto-delete, or exclusive Queue ({})"
+                                 + "durable:{}, auto-delete:{}, exclusive:{}. It will be redeclared if the broker stops and "
+                                 + "is restarted while the connection factory is alive, but all messages will be lost.",
+                                rabbitQueue.getName(), durable, autoDelete, exclusive);
+                    }
+                    qn = admin.declareQueue(rabbitQueue);
+                    // if we auto created a new unique queue then the container needs to know the queue name
+                    if (generateUniqueQueue && container != null) {
+                        container.setQueueNames(qn);
+                    }
                 }
-
-                String qn = admin.declareQueue(rabbitQueue);
-
-                // if we auto created a new unique queue then the container needs to know the queue name
-                if (generateUniqueQueue) {
-                    container.setQueueNames(qn);
+                if (!skipBindQueue) {
+                    // bind queue to exchange
+                    Binding binding = new Binding(
+                            qn, Binding.DestinationType.QUEUE, exchangeName, routingKey,
+                            getBindingArgs());
+                    admin.declareBinding(binding);
                 }
-
-                // bind queue to exchange
-                Binding binding = new Binding(
-                        qn, Binding.DestinationType.QUEUE, rabbitExchange.getName(), routingKey,
-                        getBindingArgs());
-                admin.declareBinding(binding);
             }
         }
     }

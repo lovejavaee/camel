@@ -22,81 +22,62 @@ on:
     branches:
       - main
     paths-ignore:
+      - .github/**
       - README.md
       - SECURITY.md
       - Jenkinsfile
       - Jenkinsfile.*
       - NOTICE.txt
 
+permissions: 
+  contents: read
+
 jobs:
-  checkstyle:
-    if: github.repository == 'apache/camel'
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        persist-credentials: false
-    - id: install-mvnd
-      uses: ./.github/actions/install-mvnd
-    - name: Set up JDK
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'
-        java-version: 17
-        cache: 'maven'
-    - name: mvn checkstyle
-      run: ${{ steps.install-mvnd.outputs.mvnd-dir }}/mvnd -l checkstyle.log -Dmvnd.threads=2 -V -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 --no-transfer-progress  -Dcheckstyle.failOnViolation=true -e checkstyle:checkstyle
-    - name: archive logs
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: checkstyle.log
-        path: checkstyle.log
-    - name: Generate failure checkstyle summary
-      if: failure()
-      run: |
-        echo ":x: Checkstyle failed" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-    - name: Generate successful checkstyle summary
-      if: success()
-      run: |
-        echo ":white_check_mark: Checkstyle passed" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
   build:
     if: github.repository == 'apache/camel'
     permissions:
       issues: write
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-        java: [ '17' ]
+        java: ['17']
+        experimental: [ false ]
+        include:
+          - java: '21'
+            experimental: true
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-          fetch-depth: 0
       - id: install-packages
         uses: ./.github/actions/install-packages
       - id: install-mvnd
         uses: ./.github/actions/install-mvnd
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
           cache: 'maven'
       - name: maven build
-        run: ${{ steps.install-mvnd.outputs.mvnd-dir }}/mvnd -l build.log -Dmvnd.threads=2 -V -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 --no-transfer-progress -e -Pfastinstall -DskipTests install
+        run: ./etc/scripts/regen.sh
       - name: archive logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         if: always()
         with:
-          name: build.log
+          name: build-${{ matrix.java }}.log
           path: build.log
-      - id: test
-        name: Quick test execution for affected components
-        uses: ./.github/actions/quick-test
+      - name: Fail if there are uncommitted changes
+        shell: bash
+        run: |
+          [[ -z $(git status --porcelain) ]] || { echo 'There are uncommitted changes'; git status; echo; echo; git diff; exit 1; }
+      - name: mvn test
+        uses: ./.github/actions/incremental-build
         with:
+          mode: test
+          pr-id: ${{ github.event.number }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          start-commit: ${{ github.event.pull_request.base.sha }}
-          end-commit: ${{ github.event.after }}
+          skip-mvnd-install: 'true'
+          artifact-upload-suffix: java-${{ matrix.java }}

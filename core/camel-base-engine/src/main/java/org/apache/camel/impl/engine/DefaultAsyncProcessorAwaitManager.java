@@ -35,6 +35,7 @@ import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.MessageHelper;
 import org.apache.camel.support.processor.DefaultExchangeFormatter;
 import org.apache.camel.support.service.ServiceSupport;
+import org.apache.camel.util.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,6 +110,8 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
             }
 
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Interrupted while waiting for callback, will continue routing exchangeId: {} -> {}",
                         exchange.getExchangeId(), exchange);
@@ -175,7 +178,7 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
         AwaitThreadEntry entry = (AwaitThreadEntry) inflight.get(exchange);
         if (entry != null) {
             try {
-                StringBuilder sb = new StringBuilder();
+                StringBuilder sb = new StringBuilder(512);
                 sb.append(
                         "Interrupted while waiting for asynchronous callback, will release the following blocked thread which was waiting for exchange to finish processing with exchangeId: ");
                 sb.append(exchange.getExchangeId());
@@ -185,9 +188,7 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
 
                 // dump a route stack trace of the exchange
                 String routeStackTrace = MessageHelper.dumpMessageHistoryStacktrace(exchange, exchangeFormatter, false);
-                if (routeStackTrace != null) {
-                    sb.append(routeStackTrace);
-                }
+                sb.append(routeStackTrace);
                 LOG.warn(sb.toString());
 
             } catch (Exception e) {
@@ -226,7 +227,7 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
         if (count > 0) {
             LOG.warn("Shutting down while there are still {} inflight threads currently blocked.", count);
 
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder(1024);
             for (AwaitThread entry : threads) {
                 sb.append(dumpBlockedThread(entry));
             }
@@ -236,9 +237,9 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
                 for (AwaitThread entry : threads) {
                     try {
                         interrupt(entry.getExchange());
-                    } catch (Throwable e) {
-                        LOG.warn("Error while interrupting thread: " + entry.getBlockedThread().getName()
-                                 + ". This exception is ignored.",
+                    } catch (Exception e) {
+                        LOG.warn("Error while interrupting thread: {}. This exception is ignored.",
+                                entry.getBlockedThread().getName(),
                                 e);
                     }
                 }
@@ -253,7 +254,7 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
     }
 
     private static String dumpBlockedThread(AwaitThread entry) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(512);
         sb.append("\n");
         sb.append("Blocked Thread\n");
         sb.append(
@@ -279,13 +280,12 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
         private final Thread thread;
         private final Exchange exchange;
         private final CountDownLatch latch;
-        private final long start;
+        private final StopWatch watch = new StopWatch();
 
         private AwaitThreadEntry(Thread thread, Exchange exchange, CountDownLatch latch) {
             this.thread = thread;
             this.exchange = exchange;
             this.latch = latch;
-            this.start = System.currentTimeMillis();
         }
 
         @Override
@@ -300,7 +300,7 @@ public class DefaultAsyncProcessorAwaitManager extends ServiceSupport implements
 
         @Override
         public long getWaitDuration() {
-            return System.currentTimeMillis() - start;
+            return watch.taken();
         }
 
         @Override

@@ -26,6 +26,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.aws2.s3.AWS2S3Constants;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.infra.aws2.clients.AWSSDKClientUtils;
+import org.apache.camel.util.IOHelper;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -59,8 +60,8 @@ public class S3MultipartUploadOperationIT extends Aws2S3Base {
     }
 
     @Test
-    public void sendInWithContentType() {
-        result.expectedMessageCount(1);
+    public void sendInWithContentType() throws Exception {
+        result.expectedMessageCount(2);
 
         template.send("direct:putObject", new Processor() {
 
@@ -74,8 +75,29 @@ public class S3MultipartUploadOperationIT extends Aws2S3Base {
 
         S3Client s = AWSSDKClientUtils.newS3Client();
         ResponseInputStream<GetObjectResponse> response
-                = s.getObject(GetObjectRequest.builder().bucket("mycamel").key("camel-content-type.txt").build());
+                = s.getObject(GetObjectRequest.builder().bucket(name.get()).key("camel-content-type.txt").build());
         assertEquals("application/text", response.response().contentType());
+
+        MockEndpoint.assertIsSatisfied(context);
+    }
+
+    @Test
+    public void sendZeroLength() throws Exception {
+        result.expectedMessageCount(3);
+
+        File zero = new File("target/zero.txt");
+        IOHelper.writeText("", zero);
+
+        template.send("direct:putObject", new Processor() {
+
+            @Override
+            public void process(Exchange exchange) {
+                exchange.getIn().setHeader(AWS2S3Constants.KEY, "zero.txt");
+                exchange.getIn().setBody(zero);
+            }
+        });
+
+        MockEndpoint.assertIsSatisfied(context);
     }
 
     @Override
@@ -83,7 +105,7 @@ public class S3MultipartUploadOperationIT extends Aws2S3Base {
         return new RouteBuilder() {
             @Override
             public void configure() {
-                String awsEndpoint = "aws2-s3://mycamel?multiPartUpload=true&autoCreateBucket=true";
+                String awsEndpoint = "aws2-s3://" + name.get() + "?multiPartUpload=true&autoCreateBucket=true";
 
                 from("direct:putObject").to(awsEndpoint).to("mock:result");
 

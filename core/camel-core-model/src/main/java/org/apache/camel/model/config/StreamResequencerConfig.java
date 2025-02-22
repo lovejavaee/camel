@@ -29,7 +29,7 @@ import org.apache.camel.spi.Metadata;
  * Configures stream-processing resequence eip.
  */
 @Metadata(label = "configuration,eip")
-@XmlRootElement(name = "stream-config")
+@XmlRootElement(name = "streamConfig")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class StreamResequencerConfig extends ResequencerConfig {
 
@@ -113,6 +113,21 @@ public class StreamResequencerConfig extends ResequencerConfig {
         this.timeout = Long.toString(timeout);
         this.rejectOld = rejectOld != null ? Boolean.toString(rejectOld) : null;
         this.comparatorBean = comparator;
+    }
+
+    protected StreamResequencerConfig(StreamResequencerConfig source) {
+        this.comparatorBean = source.comparatorBean;
+        this.capacity = source.capacity;
+        this.timeout = source.timeout;
+        this.deliveryAttemptInterval = source.deliveryAttemptInterval;
+        this.ignoreInvalidExchanges = source.ignoreInvalidExchanges;
+        this.rejectOld = source.rejectOld;
+        this.comparator = source.comparator;
+    }
+
+    @Override
+    public StreamResequencerConfig copyDefinition() {
+        return new StreamResequencerConfig(this);
     }
 
     /**

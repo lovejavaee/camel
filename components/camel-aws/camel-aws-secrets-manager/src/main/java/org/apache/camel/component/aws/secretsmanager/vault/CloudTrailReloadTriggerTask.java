@@ -16,6 +16,7 @@
  */
 package org.apache.camel.component.aws.secretsmanager.vault;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
@@ -24,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.camel.CamelContext;
 import org.apache.camel.CamelContextAware;
 import org.apache.camel.RuntimeCamelException;
@@ -50,6 +54,13 @@ import software.amazon.awssdk.services.cloudtrail.model.LookupAttributeKey;
 import software.amazon.awssdk.services.cloudtrail.model.LookupEventsRequest;
 import software.amazon.awssdk.services.cloudtrail.model.LookupEventsResponse;
 import software.amazon.awssdk.services.cloudtrail.model.Resource;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.SqsClientBuilder;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 /**
  * Period task which checks if AWS secrets has been updated and can trigger Camel to be reloaded.
@@ -69,20 +80,36 @@ public class CloudTrailReloadTriggerTask extends ServiceSupport implements Camel
     private static final String CAMEL_AWS_VAULT_PROFILE_NAME_ENV
             = "CAMEL_AWS_VAULT_PROFILE_NAME";
 
+    private static final String CAMEL_AWS_VAULT_SQS_QUEUE_URL_ENV
+            = "CAMEL_AWS_VAULT_SQS_QUEUE_URL";
+
+    private static final String CAMEL_AWS_VAULT_USE_SQS_NOTIFICATION_ENV
+            = "CAMEL_AWS_VAULT_USE_SQS_NOTIFICATION";
+
+    private static final String CAMEL_AWS_VAULT_IS_OVERRIDE_ENDPOINT
+            = "CAMEL_AWS_VAULT_IS_OVERRIDE_ENDPOINT";
+
+    private static final String CAMEL_AWS_VAULT_URI_ENDPOINT_OVERRIDE = "CAMEL_AWS_VAULT_URI_ENDPOINT_OVERRIDE";
+
     private static final Logger LOG = LoggerFactory.getLogger(CloudTrailReloadTriggerTask.class);
     private static final String SECRETSMANAGER_AMAZONAWS_COM = "secretsmanager.amazonaws.com";
 
     private static final String SECRETSMANAGER_UPDATE_EVENT = "PutSecretValue";
 
+    private static final String SECRETSMANAGER_UPDATE_SECRET_EVENT = "UpdateSecret";
+
     private CamelContext camelContext;
     private boolean reloadEnabled = true;
     private String secrets;
     private CloudTrailClient cloudTrailClient;
+    private SqsClient sqsClient;
     private SecretsManagerPropertiesFunction propertiesFunction;
     private volatile Instant lastTime;
     private volatile Instant lastCheckTime;
     private volatile Instant lastReloadTime;
     private final Map<String, Instant> updates = new HashMap<>();
+    private boolean useSqsNotification;
+    private String queueUrl;
 
     public CloudTrailReloadTriggerTask() {
     }
@@ -149,40 +176,66 @@ public class CloudTrailReloadTriggerTask extends ServiceSupport implements Camel
         String accessKey = System.getenv(CAMEL_AWS_VAULT_ACCESS_KEY_ENV);
         String secretKey = System.getenv(CAMEL_AWS_VAULT_SECRET_KEY_ENV);
         String region = System.getenv(CAMEL_AWS_VAULT_REGION_ENV);
+        boolean isOverrideEndpoint = Boolean.parseBoolean(System.getenv(CAMEL_AWS_VAULT_IS_OVERRIDE_ENDPOINT));
+        String uriEndpointOverride = System.getenv(CAMEL_AWS_VAULT_URI_ENDPOINT_OVERRIDE);
         boolean useDefaultCredentialsProvider
                 = Boolean.parseBoolean(System.getenv(CAMEL_AWS_VAULT_USE_DEFAULT_CREDENTIALS_PROVIDER_ENV));
         boolean useProfileCredentialsProvider
                 = Boolean.parseBoolean(System.getenv(CAMEL_AWS_VAULT_USE_PROFILE_CREDENTIALS_PROVIDER_ENV));
+        useSqsNotification
+                = Boolean.parseBoolean(System.getenv(CAMEL_AWS_VAULT_USE_SQS_NOTIFICATION_ENV));
         String profileName = System.getenv(CAMEL_AWS_VAULT_PROFILE_NAME_ENV);
+        queueUrl = System.getenv(CAMEL_AWS_VAULT_SQS_QUEUE_URL_ENV);
         if (ObjectHelper.isEmpty(accessKey) && ObjectHelper.isEmpty(secretKey) && ObjectHelper.isEmpty(region)) {
             AwsVaultConfiguration awsVaultConfiguration = getCamelContext().getVaultConfiguration().aws();
             if (ObjectHelper.isNotEmpty(awsVaultConfiguration)) {
                 accessKey = awsVaultConfiguration.getAccessKey();
                 secretKey = awsVaultConfiguration.getSecretKey();
                 region = awsVaultConfiguration.getRegion();
+                isOverrideEndpoint = awsVaultConfiguration.isOverrideEndpoint();
+                uriEndpointOverride = awsVaultConfiguration.getUriEndpointOverride();
                 useDefaultCredentialsProvider = awsVaultConfiguration.isDefaultCredentialsProvider();
                 useProfileCredentialsProvider = awsVaultConfiguration.isProfileCredentialsProvider();
                 profileName = awsVaultConfiguration.getProfileName();
+                useSqsNotification = awsVaultConfiguration.isUseSqsNotification();
+                queueUrl = awsVaultConfiguration.getSqsQueueUrl();
             }
         }
-        if (ObjectHelper.isNotEmpty(accessKey) && ObjectHelper.isNotEmpty(secretKey) && ObjectHelper.isNotEmpty(region)) {
+        if (!useSqsNotification) {
             CloudTrailClientBuilder clientBuilder = CloudTrailClient.builder();
-            AwsBasicCredentials cred = AwsBasicCredentials.create(accessKey, secretKey);
-            clientBuilder = clientBuilder.credentialsProvider(StaticCredentialsProvider.create(cred));
-            clientBuilder.region(Region.of(region));
-            cloudTrailClient = clientBuilder.build();
-        } else if (useDefaultCredentialsProvider && ObjectHelper.isNotEmpty(region)) {
-            CloudTrailClientBuilder clientBuilder = CloudTrailClient.builder();
-            clientBuilder.region(Region.of(region));
-            cloudTrailClient = clientBuilder.build();
-        } else if (useProfileCredentialsProvider && ObjectHelper.isNotEmpty(profileName)) {
-            CloudTrailClientBuilder clientBuilder = CloudTrailClient.builder();
-            clientBuilder.credentialsProvider(ProfileCredentialsProvider.create(profileName));
-            clientBuilder.region(Region.of(region));
-            cloudTrailClient = clientBuilder.build();
+            if (ObjectHelper.isNotEmpty(accessKey) && ObjectHelper.isNotEmpty(secretKey) && ObjectHelper.isNotEmpty(region)) {
+
+                AwsBasicCredentials cred = AwsBasicCredentials.create(accessKey, secretKey);
+                clientBuilder = clientBuilder.credentialsProvider(StaticCredentialsProvider.create(cred));
+                clientBuilder.region(Region.of(region));
+            } else if (useDefaultCredentialsProvider && ObjectHelper.isNotEmpty(region)) {
+                clientBuilder.region(Region.of(region));
+            } else if (useProfileCredentialsProvider && ObjectHelper.isNotEmpty(profileName)) {
+                clientBuilder.credentialsProvider(ProfileCredentialsProvider.create(profileName));
+                clientBuilder.region(Region.of(region));
+            } else {
+                throw new RuntimeCamelException(
+                        "Using the AWS Secrets Refresh Task requires setting AWS credentials as application properties or environment variables");
+            }
+            cloudTrailClient = isOverrideEndpoint
+                    ? clientBuilder.endpointOverride(URI.create(uriEndpointOverride)).build() : clientBuilder.build();
         } else {
-            throw new RuntimeCamelException(
-                    "Using the AWS Secrets Refresh Task requires setting AWS credentials as application properties or environment variables");
+            SqsClientBuilder clientBuilder = SqsClient.builder();
+            if (ObjectHelper.isNotEmpty(accessKey) && ObjectHelper.isNotEmpty(secretKey) && ObjectHelper.isNotEmpty(region)) {
+                AwsBasicCredentials cred = AwsBasicCredentials.create(accessKey, secretKey);
+                clientBuilder = clientBuilder.credentialsProvider(StaticCredentialsProvider.create(cred));
+                clientBuilder.region(Region.of(region));
+            } else if (useDefaultCredentialsProvider && ObjectHelper.isNotEmpty(region)) {
+                clientBuilder.region(Region.of(region));
+            } else if (useProfileCredentialsProvider && ObjectHelper.isNotEmpty(profileName)) {
+                clientBuilder.credentialsProvider(ProfileCredentialsProvider.create(profileName));
+                clientBuilder.region(Region.of(region));
+            } else {
+                throw new RuntimeCamelException(
+                        "Using the AWS Secrets Refresh Task requires setting AWS credentials as application properties or environment variables");
+            }
+            sqsClient = isOverrideEndpoint
+                    ? clientBuilder.endpointOverride(URI.create(uriEndpointOverride)).build() : clientBuilder.build();
         }
     }
 
@@ -199,6 +252,15 @@ public class CloudTrailReloadTriggerTask extends ServiceSupport implements Camel
             cloudTrailClient = null;
         }
 
+        if (sqsClient != null) {
+            try {
+                sqsClient.close();
+            } catch (Exception e) {
+                // ignore
+            }
+            sqsClient = null;
+        }
+
         updates.clear();
     }
 
@@ -207,47 +269,106 @@ public class CloudTrailReloadTriggerTask extends ServiceSupport implements Camel
         lastCheckTime = Instant.now();
         boolean triggerReloading = false;
 
-        try {
-            LookupEventsRequest.Builder eventsRequestBuilder = LookupEventsRequest.builder()
-                    .maxResults(100).lookupAttributes(LookupAttribute.builder().attributeKey(LookupAttributeKey.EVENT_SOURCE)
-                            .attributeValue(SECRETSMANAGER_AMAZONAWS_COM).build());
+        if (!useSqsNotification) {
 
-            if (lastTime != null) {
-                eventsRequestBuilder.startTime(lastTime.plusMillis(1000));
-            }
+            try {
+                LookupEventsRequest.Builder eventsRequestBuilder = LookupEventsRequest.builder()
+                        .maxResults(100)
+                        .lookupAttributes(LookupAttribute.builder().attributeKey(LookupAttributeKey.EVENT_SOURCE)
+                                .attributeValue(SECRETSMANAGER_AMAZONAWS_COM).build());
 
-            LookupEventsRequest lookupEventsRequest = eventsRequestBuilder.build();
+                if (lastTime != null) {
+                    eventsRequestBuilder.startTime(lastTime.plusMillis(1000));
+                }
 
-            LookupEventsResponse response = cloudTrailClient.lookupEvents(lookupEventsRequest);
-            List<Event> events = response.events();
+                LookupEventsRequest lookupEventsRequest = eventsRequestBuilder.build();
 
-            if (!events.isEmpty()) {
-                lastTime = events.get(0).eventTime();
-            }
+                LookupEventsResponse response = cloudTrailClient.lookupEvents(lookupEventsRequest);
+                List<Event> events = response.events();
 
-            LOG.debug("Found {} events", events.size());
-            for (Event event : events) {
-                if (event.eventSource().equalsIgnoreCase(SECRETSMANAGER_AMAZONAWS_COM)) {
-                    if (event.eventName().equalsIgnoreCase(SECRETSMANAGER_UPDATE_EVENT)) {
-                        List<Resource> a = event.resources();
-                        for (Resource res : a) {
-                            String name = res.resourceName();
-                            if (matchSecret(name)) {
-                                updates.put(name, event.eventTime());
-                                if (isReloadEnabled()) {
-                                    LOG.info("Update for AWS secret: {} detected, triggering CamelContext reload", name);
-                                    triggerReloading = true;
+                if (!events.isEmpty()) {
+                    lastTime = events.get(0).eventTime();
+                }
+
+                LOG.debug("Found {} events", events.size());
+                for (Event event : events) {
+                    if (event.eventSource().equalsIgnoreCase(SECRETSMANAGER_AMAZONAWS_COM)) {
+                        if (event.eventName().equalsIgnoreCase(SECRETSMANAGER_UPDATE_EVENT)
+                                || event.eventName().equalsIgnoreCase(SECRETSMANAGER_UPDATE_SECRET_EVENT)) {
+                            List<Resource> a = event.resources();
+                            for (Resource res : a) {
+                                String name = res.resourceName();
+                                if (matchSecret(name)) {
+                                    updates.put(name, event.eventTime());
+                                    if (isReloadEnabled()) {
+                                        LOG.info("Update for AWS secret: {} detected, triggering CamelContext reload", name);
+                                        triggerReloading = true;
+                                    }
+                                    break;
                                 }
-                                break;
                             }
                         }
                     }
                 }
+            } catch (Exception e) {
+                LOG.warn(
+                        "Error during AWS Secrets Refresh Task due to {}. This exception is ignored. Will try again on next run.",
+                        e.getMessage(), e);
             }
-        } catch (Exception e) {
-            LOG.warn("Error during AWS Secrets Refresh Task due to " + e.getMessage()
-                     + ". This exception is ignored. Will try again on next run.",
-                    e);
+        } else {
+            try {
+                ReceiveMessageRequest.Builder request = ReceiveMessageRequest.builder().queueUrl(queueUrl);
+
+                LOG.trace("Receiving messages with request [{}]...", request);
+
+                ReceiveMessageResponse messageResult = null;
+                ReceiveMessageRequest requestBuild = request.build();
+                try {
+                    messageResult = sqsClient.receiveMessage(requestBuild);
+                } catch (QueueDoesNotExistException e) {
+                    LOG.info("Queue does not exist.");
+                }
+
+                for (Message message : messageResult.messages()) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode event = null;
+                    try {
+                        event = mapper.readTree(message.body());
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                    if (ObjectHelper.isNotEmpty(event.get("detail"))) {
+                        JsonNode innerDetail = event.get("detail");
+                        if (innerDetail.get("eventSource").asText().equalsIgnoreCase(SECRETSMANAGER_AMAZONAWS_COM)) {
+                            if (innerDetail.get("eventName").asText().equalsIgnoreCase(SECRETSMANAGER_UPDATE_EVENT)
+                                    || innerDetail.get("eventName").asText()
+                                            .equalsIgnoreCase(SECRETSMANAGER_UPDATE_SECRET_EVENT)) {
+                                String name = innerDetail.get("requestParameters").get("secretId").asText();
+                                if (matchSecret(name)) {
+                                    updates.put(name, Instant.parse(innerDetail.get("eventTime").asText()));
+                                    if (isReloadEnabled()) {
+                                        LOG.info("Update for AWS secret: {} detected, triggering CamelContext reload", name);
+                                        triggerReloading = true;
+                                        message.receiptHandle();
+                                        DeleteMessageRequest.Builder deleteRequest
+                                                = DeleteMessageRequest.builder().queueUrl(queueUrl)
+                                                        .receiptHandle(message.receiptHandle());
+
+                                        LOG.trace("Deleting message with receipt handle {}...", message.receiptHandle());
+
+                                        sqsClient.deleteMessage(deleteRequest.build());
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn(
+                        "Error during AWS Secrets Refresh Task due to {}. This exception is ignored. Will try again on next run.",
+                        e.getMessage(), e);
+            }
         }
 
         if (triggerReloading) {

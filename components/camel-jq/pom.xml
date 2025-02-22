@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-jq</artifactId>
@@ -50,14 +50,13 @@
             <artifactId>jackson-jq</artifactId>
             <version>${jackson-jq-version}</version>
         </dependency>
+        <dependency>
+            <groupId>net.thisptr</groupId>
+            <artifactId>jackson-jq-extra</artifactId>
+            <version>${jackson-jq-version}</version>
+        </dependency>
 
         <!-- test dependencies -->
-        <dependency>
-            <groupId>net.javacrumbs.json-unit</groupId>
-            <artifactId>json-unit</artifactId>
-            <version>${json-unit-version}</version>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>net.javacrumbs.json-unit</groupId>
             <artifactId>json-unit-assertj</artifactId>
@@ -67,7 +66,6 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj-version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -79,12 +77,6 @@
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-core</artifactId>
             <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest</artifactId>
-            <version>${hamcrest-version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

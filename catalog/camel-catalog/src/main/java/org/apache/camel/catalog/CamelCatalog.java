@@ -24,13 +24,18 @@ import java.util.Set;
 
 import org.apache.camel.tooling.model.ArtifactModel;
 import org.apache.camel.tooling.model.BaseModel;
+import org.apache.camel.tooling.model.BaseOptionModel;
 import org.apache.camel.tooling.model.ComponentModel;
 import org.apache.camel.tooling.model.DataFormatModel;
+import org.apache.camel.tooling.model.DevConsoleModel;
 import org.apache.camel.tooling.model.EipModel;
+import org.apache.camel.tooling.model.Kind;
 import org.apache.camel.tooling.model.LanguageModel;
 import org.apache.camel.tooling.model.MainModel;
 import org.apache.camel.tooling.model.OtherModel;
+import org.apache.camel.tooling.model.PojoBeanModel;
 import org.apache.camel.tooling.model.ReleaseModel;
+import org.apache.camel.tooling.model.TransformerModel;
 
 /**
  * Catalog of components, data formats, models (EIPs), languages, and more from this Apache Camel release.
@@ -193,6 +198,16 @@ public interface CamelCatalog {
     List<String> findLanguageNames();
 
     /**
+     * Find all the transformer names from the Camel catalog
+     */
+    List<String> findTransformerNames();
+
+    /**
+     * Find all the dev-console names from the Camel catalog
+     */
+    List<String> findDevConsoleNames();
+
+    /**
      * Find all the model names from the Camel catalog
      */
     List<String> findModelNames();
@@ -203,24 +218,25 @@ public interface CamelCatalog {
     List<String> findOtherNames();
 
     /**
+     * Find all the pojo beans names from the Camel catalog
+     */
+    List<String> findBeansNames();
+
+    /**
      * @param  kind the kind to look for
      * @return      the list of part names of the given {@link Kind} available in this {@link CamelCatalog}
      */
     default List<String> findNames(Kind kind) {
-        switch (kind) {
-            case component:
-                return findComponentNames();
-            case dataformat:
-                return findDataFormatNames();
-            case language:
-                return findLanguageNames();
-            case other:
-                return findOtherNames();
-            case eip:
-                return findModelNames();
-            default:
-                throw new IllegalArgumentException("Unexpected kind " + kind);
-        }
+        return switch (kind) {
+            case component -> findComponentNames();
+            case dataformat -> findDataFormatNames();
+            case language -> findLanguageNames();
+            case transformer -> findTransformerNames();
+            case console -> findDevConsoleNames();
+            case other -> findOtherNames();
+            case eip, model -> findModelNames();
+            case bean -> findBeansNames();
+        };
     }
 
     /**
@@ -271,6 +287,14 @@ public interface CamelCatalog {
      * @return      language details in JSon
      */
     String languageJSonSchema(String name);
+
+    /**
+     * Returns the transformer information as JSON format.
+     *
+     * @param  name the transformer name
+     * @return      transformer details in JSon
+     */
+    String transformerJSonSchema(String name);
 
     /**
      * Returns the other (miscellaneous) information as JSON format.
@@ -405,6 +429,9 @@ public interface CamelCatalog {
     /**
      * Parses and validates the language as a predicate
      * <p/>
+     * It is possible to specify language options as query parameters in the language parameter, such as
+     * jsonpath?unpackArray=true&allowEasyPredicate=false
+     *
      * <b>Important:</b> This requires having <tt>camel-core</tt> and the language dependencies on the classpath
      *
      * @param  classLoader a custom classloader to use for loading the language from the classpath, or <tt>null</tt> for
@@ -418,6 +445,9 @@ public interface CamelCatalog {
     /**
      * Parses and validates the language as an expression
      * <p/>
+     * It is possible to specify language options as query parameters in the language parameter, such as
+     * jsonpath?unpackArray=true&allowEasyPredicate=false
+     *
      * <b>Important:</b> This requires having <tt>camel-core</tt> and the language dependencies on the classpath
      *
      * @param  classLoader a custom classloader to use for loading the language from the classpath, or <tt>null</tt> for
@@ -482,6 +512,16 @@ public interface CamelCatalog {
     String listLanguagesAsJson();
 
     /**
+     * Lists all the transformers summary details in JSon
+     */
+    String listTransformersAsJson();
+
+    /**
+     * Lists all the dev-consoles summary details in JSon
+     */
+    String listDevConsolesAsJson();
+
+    /**
      * Lists all the models (EIPs) summary details in JSon
      */
     String listModelsAsJson();
@@ -515,6 +555,18 @@ public interface CamelCatalog {
     LanguageModel languageModel(String name);
 
     /**
+     * @param  name the transformer name to look up
+     * @return      the requested transformer or {@code null} in case it is not available in this {@link CamelCatalog}
+     */
+    TransformerModel transformerModel(String name);
+
+    /**
+     * @param  name the dev-console name to look up
+     * @return      the requested dev-console or {@code null} in case it is not available in this {@link CamelCatalog}
+     */
+    DevConsoleModel devConsoleModel(String name);
+
+    /**
      * @param  name the other name to look up
      * @return      the requested other or {@code null} in case it is not available in this {@link CamelCatalog}
      */
@@ -525,6 +577,12 @@ public interface CamelCatalog {
      * @return      the requested EIP model or {@code null} in case it is not available in this {@link CamelCatalog}
      */
     EipModel eipModel(String name);
+
+    /**
+     * @param  name the FQN class name to look up
+     * @return      the requested Bean model or {@code null} in case it is not available in this {@link CamelCatalog}
+     */
+    PojoBeanModel pojoBeanModel(String name);
 
     /**
      * @return the requested main model or {@code null} in case it is not available in this {@link CamelCatalog}
@@ -538,21 +596,17 @@ public interface CamelCatalog {
      * @param  name the name to look up
      * @return      the requested model or {@code null} in case it is not available in this {@link CamelCatalog}
      */
-    default BaseModel<?> model(Kind kind, String name) {
-        switch (kind) {
-            case component:
-                return componentModel(name);
-            case dataformat:
-                return dataFormatModel(name);
-            case language:
-                return languageModel(name);
-            case other:
-                return otherModel(name);
-            case eip:
-                return eipModel(name);
-            default:
-                throw new IllegalArgumentException("Unexpected kind " + kind);
-        }
+    default BaseModel<? extends BaseOptionModel> model(Kind kind, String name) {
+        return switch (kind) {
+            case component -> componentModel(name);
+            case dataformat -> dataFormatModel(name);
+            case language -> languageModel(name);
+            case transformer -> transformerModel(name);
+            case console -> devConsoleModel(name);
+            case other -> otherModel(name);
+            case eip, model -> eipModel(name);
+            case bean -> pojoBeanModel(name);
+        };
     }
 
     /**

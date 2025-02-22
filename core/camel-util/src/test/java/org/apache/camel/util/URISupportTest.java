@@ -30,8 +30,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -252,15 +254,15 @@ public class URISupportTest {
     }
 
     @Test
-    public void testSanitizeAccessToken() throws Exception {
+    public void testSanitizeAccessToken() {
         String out1 = URISupport
                 .sanitizeUri("google-sheets-stream://spreadsheets?accessToken=MY_TOKEN&clientId=foo&clientSecret=MY_SECRET");
         assertEquals("google-sheets-stream://spreadsheets?accessToken=xxxxxx&clientId=xxxxxx&clientSecret=xxxxxx", out1);
     }
 
     @Test
-    public void testSanitizeAuthorizationToken() throws Exception {
-        String out1 = URISupport.sanitizeUri("telegram:bots?authorizationToken=1234567890:AABBCOhEaqprrk6qqQtsSPFYS3Njgv2ljW2");
+    public void testSanitizeAuthorizationToken() {
+        String out1 = URISupport.sanitizeUri("telegram:bots?authorizationToken=1234567890:XXAuthTokenHereXX");
         assertEquals("telegram:bots?authorizationToken=xxxxxx", out1);
     }
 
@@ -329,7 +331,7 @@ public class URISupportTest {
     }
 
     @Test
-    public void testSanitizeSaslJaasConfig() throws Exception {
+    public void testSanitizeSaslJaasConfig() {
         String out1 = URISupport.sanitizeUri(
                 "kafka://MY-TOPIC-NAME?saslJaasConfig=org.apache.kafka.common.security.plain.PlainLoginModule required username=scott password=tiger");
         assertEquals("kafka://MY-TOPIC-NAME?saslJaasConfig=xxxxxx", out1);
@@ -579,16 +581,16 @@ public class URISupportTest {
     }
 
     @Test
-    public void testExtractQuery() throws Exception {
-        assertEquals(null, URISupport.extractQuery(null));
-        assertEquals(null, URISupport.extractQuery(""));
-        assertEquals(null, URISupport.extractQuery("file:foo"));
+    public void testExtractQuery() {
+        assertNull(URISupport.extractQuery(null));
+        assertNull(URISupport.extractQuery(""));
+        assertNull(URISupport.extractQuery("file:foo"));
         assertEquals("recursive=true", URISupport.extractQuery("file:foo?recursive=true"));
         assertEquals("recursive=true&delete=true", URISupport.extractQuery("file:foo?recursive=true&delete=true"));
     }
 
     @Test
-    public void testPlusInQuery() throws Exception {
+    public void testPlusInQuery() {
         Map<String, Object> map = new HashMap<>();
         map.put("param1", "+447777111222");
         String q = URISupport.createQueryString(map);
@@ -601,7 +603,7 @@ public class URISupportTest {
     }
 
     @Test
-    public void testBuildMultiValueQuery() throws Exception {
+    public void testBuildMultiValueQuery() {
         List<Object> list = new ArrayList<>();
         assertEquals("", URISupport.buildMultiValueQuery("id", list));
         list = List.of("hello");
@@ -612,4 +614,29 @@ public class URISupportTest {
         assertEquals("hey=foo&hey=bar&hey=3&hey=true&hey=baz", URISupport.buildMultiValueQuery("hey", list));
     }
 
+    @Test
+    public void testGetDecodeQuery() throws Exception {
+        String out = URISupport.normalizeUri("smtp://localhost?username=davsclaus&password=secret");
+        String enc = UnsafeUriCharactersEncoder.encode(out);
+        String dec = URISupport.getDecodeQuery(enc);
+        assertEquals(out, dec);
+
+        out = URISupport.normalizeUri("smtp://localhost?password=secret&username=davsclaus");
+        assertEquals(out, dec);
+
+        out = URISupport.normalizeUri("http://localhost?username=davsclaus&password=RAW(#@a)");
+        enc = UnsafeUriCharactersEncoder.encode(out);
+        assertNotEquals(out, enc);
+
+        dec = URISupport.getDecodeQuery(enc);
+        assertEquals(out, dec);
+
+        out = URISupport.normalizeUri("bean://MyBean?method=RAW(addString(%22#@a%23, test))");
+        enc = UnsafeUriCharactersEncoder.encode(out);
+        assertNotEquals(out, enc);
+
+        dec = URISupport.getDecodeQuery(enc);
+        assertEquals(out, dec);
+
+    }
 }

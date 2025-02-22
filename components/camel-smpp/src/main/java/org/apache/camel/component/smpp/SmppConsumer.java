@@ -75,11 +75,12 @@ public class SmppConsumer extends DefaultConsumer {
                 configuration.getSessionStateListener().onStateChange(newState, oldState, source);
             }
 
-            if (newState.equals(SessionState.CLOSED)) {
-                LOG.warn("Lost connection to: {} - trying to reconnect...", getEndpoint().getConnectionString());
+            if (newState.equals(SessionState.UNBOUND) || newState.equals(SessionState.CLOSED)) {
+                LOG.warn(newState.equals(SessionState.UNBOUND)
+                        ? "Session to {} was unbound - trying to reconnect" : "Lost connection to: {} - trying to reconnect...",
+                        getEndpoint().getConnectionString());
                 closeSession();
-
-                reconnect(configuration.getInitialReconnectDelay());
+                reconnect();
             }
         };
         this.messageReceiverListener
@@ -109,7 +110,8 @@ public class SmppConsumer extends DefaultConsumer {
                         BindType.BIND_RX, this.configuration.getSystemId(),
                         this.configuration.getPassword(), this.configuration.getSystemType(),
                         TypeOfNumber.UNKNOWN, NumberingPlanIndicator.UNKNOWN,
-                        configuration.getAddressRange()));
+                        configuration.getAddressRange(),
+                        configuration.getInterfaceVersionByte()));
 
         return newSession;
     }
@@ -183,9 +185,10 @@ public class SmppConsumer extends DefaultConsumer {
         }
     }
 
-    private void reconnect(final long initialReconnectDelay) {
+    private void reconnect() {
         if (reconnectLock.tryLock()) {
-            BlockingTask task = newReconnectTask(reconnectService, RECONNECT_TASK_NAME, initialReconnectDelay,
+            BlockingTask task = newReconnectTask(reconnectService, RECONNECT_TASK_NAME,
+                    configuration.getInitialReconnectDelay(),
                     configuration.getReconnectDelay(),
                     configuration.getMaxReconnect());
 

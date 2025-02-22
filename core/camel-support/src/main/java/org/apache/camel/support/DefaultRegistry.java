@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Stack;
 import java.util.function.Supplier;
 
 import org.apache.camel.CamelContext;
@@ -37,7 +38,13 @@ import org.apache.camel.spi.Registry;
 import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.support.service.ServiceSupport;
 import org.apache.camel.util.IOHelper;
+import org.apache.camel.util.KeyValueHolder;
 import org.apache.camel.util.function.Suppliers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.camel.util.ObjectHelper.isEmpty;
+import static org.apache.camel.util.ObjectHelper.isNotEmpty;
 
 /**
  * The default {@link Registry} which supports using a given first-choice repository to lookup the beans, such as
@@ -49,12 +56,13 @@ import org.apache.camel.util.function.Suppliers;
  */
 public class DefaultRegistry extends ServiceSupport implements Registry, LocalBeanRepositoryAware, CamelContextAware {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultRegistry.class);
     protected CamelContext camelContext;
-    protected final ThreadLocal<BeanRepository> localRepository = new ThreadLocal<>();
-    protected volatile boolean localRepositoryEnabled; // flag to keep track if local is in use or not
+    protected final Stack<BeanRepository> localRepository = new Stack<>();;
     protected List<BeanRepository> repositories;
     protected Registry fallbackRegistry = new SimpleRegistry();
     protected Registry supplierRegistry = new SupplierRegistry();
+    protected final Map<String, KeyValueHolder<Object, String>> beansToDestroy = new LinkedHashMap<>();
 
     /**
      * Creates a default registry that uses {@link SimpleRegistry} as the fallback registry. The fallback registry can
@@ -95,21 +103,21 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
      */
     public void setLocalBeanRepository(BeanRepository repository) {
         if (repository != null) {
-            this.localRepository.set(repository);
-            this.localRepositoryEnabled = true;
-        } else {
-            BeanRepository old = this.localRepository.get();
+            this.localRepository.push(repository);
+        } else if (!this.localRepository.isEmpty()) {
+            BeanRepository old = this.localRepository.pop();
             if (old != null) {
                 ServiceHelper.stopService(old);
             }
-            this.localRepository.remove();
-            this.localRepositoryEnabled = false;
         }
     }
 
     @Override
     public BeanRepository getLocalBeanRepository() {
-        return localRepositoryEnabled ? localRepository.get() : null;
+        if (localRepository.isEmpty()) {
+            return null;
+        }
+        return localRepository.peek();
     }
 
     /**
@@ -163,12 +171,38 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
         }
     }
 
+    /**
+     * Adds a custom {@link BeanRepository}.
+     */
+    public void addBeanRepository(BeanRepository repository) {
+        if (repository == null) {
+            repositories = new ArrayList<>();
+        }
+        repositories.add(repository);
+    }
+
     @Override
     public void bind(String id, Class<?> type, Object bean) throws RuntimeCamelException {
+        bind(id, type, bean, null, null);
+    }
+
+    @Override
+    public void bind(String id, Class<?> type, Object bean, String initMethod, String destroyMethod)
+            throws RuntimeCamelException {
         if (bean != null) {
             // automatic inject camel context in bean if its aware
             CamelContextAware.trySetCamelContext(bean, camelContext);
+            if (isNotEmpty(initMethod)) {
+                try {
+                    org.apache.camel.support.ObjectHelper.invokeMethodSafe(initMethod, bean);
+                } catch (Exception e) {
+                    throw RuntimeCamelException.wrapRuntimeCamelException(e);
+                }
+            }
             fallbackRegistry.bind(id, type, bean);
+            if (isNotEmpty(destroyMethod)) {
+                beansToDestroy.put(id, new KeyValueHolder<>(bean, destroyMethod));
+            }
         }
     }
 
@@ -191,6 +225,22 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
     public void unbind(String id) {
         supplierRegistry.unbind(id);
         fallbackRegistry.unbind(id);
+        // destroy on unbind
+        destroyBean(id, true);
+    }
+
+    protected void destroyBean(String name, boolean remove) {
+        var holder = remove ? beansToDestroy.remove(name) : beansToDestroy.get(name);
+        if (holder != null) {
+            String destroyMethod = holder.getValue();
+            Object target = holder.getKey();
+            try {
+                org.apache.camel.support.ObjectHelper.invokeMethodSafe(destroyMethod, target);
+            } catch (Exception e) {
+                LOG.warn("Error invoking destroy method: {} on bean: {} due to: {}. This exception is ignored.",
+                        destroyMethod, target, e.getMessage(), e);
+            }
+        }
     }
 
     @Override
@@ -207,7 +257,7 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
         }
 
         // local repository takes precedence
-        BeanRepository local = localRepositoryEnabled ? localRepository.get() : null;
+        BeanRepository local = getLocalBeanRepository();
         if (local != null) {
             answer = local.lookupByName(name);
             if (answer != null) {
@@ -248,7 +298,7 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
         }
 
         // local repository takes precedence
-        BeanRepository local = localRepositoryEnabled ? localRepository.get() : null;
+        BeanRepository local = getLocalBeanRepository();
         if (local != null) {
             answer = local.lookupByNameAndType(name, type);
             if (answer != null) {
@@ -279,7 +329,7 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
         Map<String, T> answer = new LinkedHashMap<>();
 
         // local repository takes precedence
-        BeanRepository local = localRepositoryEnabled ? localRepository.get() : null;
+        BeanRepository local = getLocalBeanRepository();
         if (local != null) {
             Map<String, T> found = local.findByTypeWithName(type);
             if (found != null && !found.isEmpty()) {
@@ -313,7 +363,7 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
         Set<T> answer = new LinkedHashSet<>();
 
         // local repository takes precedence
-        BeanRepository local = localRepositoryEnabled ? localRepository.get() : null;
+        BeanRepository local = getLocalBeanRepository();
         if (local != null) {
             Set<T> found = local.findByType(type);
             if (found != null && !found.isEmpty()) {
@@ -343,14 +393,48 @@ public class DefaultRegistry extends ServiceSupport implements Registry, LocalBe
     }
 
     @Override
+    public <T> T findSingleByType(Class<T> type) {
+        T found = null;
+
+        // local repository takes precedence
+        BeanRepository local = getLocalBeanRepository();
+        if (local != null) {
+            found = local.findSingleByType(type);
+        }
+
+        if (found == null && repositories != null) {
+            for (BeanRepository r : repositories) {
+                found = r.findSingleByType(type);
+                if (found != null) {
+                    break;
+                }
+            }
+        }
+
+        if (found == null) {
+            found = supplierRegistry.findSingleByType(type);
+        }
+        if (found == null) {
+            found = fallbackRegistry.findSingleByType(type);
+        }
+
+        return found;
+    }
+
+    @Override
     protected void doStop() throws Exception {
         super.doStop();
-        if (supplierRegistry instanceof Closeable) {
-            IOHelper.close((Closeable) supplierRegistry);
+        if (supplierRegistry instanceof Closeable closeable) {
+            IOHelper.close(closeable);
         }
-        if (fallbackRegistry instanceof Closeable) {
-            IOHelper.close((Closeable) fallbackRegistry);
+        if (fallbackRegistry instanceof Closeable closeable) {
+            IOHelper.close(closeable);
         }
         ServiceHelper.stopAndShutdownServices(supplierRegistry, fallbackRegistry);
+        // destroy beans on shutdown
+        for (String name : beansToDestroy.keySet()) {
+            destroyBean(name, false);
+        }
+        beansToDestroy.clear();
     }
 }

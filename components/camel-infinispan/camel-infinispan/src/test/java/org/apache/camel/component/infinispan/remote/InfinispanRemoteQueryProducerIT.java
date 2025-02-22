@@ -31,9 +31,9 @@ import org.infinispan.commons.marshall.ProtoStreamMarshaller;
 import org.infinispan.commons.util.Util;
 import org.infinispan.protostream.FileDescriptorSource;
 import org.infinispan.protostream.SerializationContext;
-import org.infinispan.protostream.sampledomain.User;
-import org.infinispan.protostream.sampledomain.marshallers.GenderMarshaller;
-import org.infinispan.protostream.sampledomain.marshallers.UserMarshaller;
+import org.infinispan.protostream.domain.User;
+import org.infinispan.protostream.domain.marshallers.GenderMarshaller;
+import org.infinispan.protostream.domain.marshallers.UserMarshaller;
 import org.infinispan.query.remote.client.ProtobufMetadataManagerConstants;
 import org.infinispan.query.remote.client.impl.MarshallerRegistration;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,11 +49,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class InfinispanRemoteQueryProducerIT extends InfinispanRemoteQueryTestSupport {
 
     @BindToRegistry("noResultQueryBuilder")
-    public static final InfinispanQueryBuilder NO_RESULT_QUERY_BUILDER
+    private InfinispanQueryBuilder noResultQueryBuilder
             = qf -> qf.from(User.class).having("name").like("%abc%").build();
 
     @BindToRegistry("withResultQueryBuilder")
-    public static final InfinispanQueryBuilder WITH_RESULT_QUERY_BUILDER
+    private InfinispanQueryBuilder withResultQueryBuilder
             = qf -> qf.from(User.class).having("name").like("%A").build();
 
     // *****************************
@@ -72,7 +72,7 @@ public class InfinispanRemoteQueryProducerIT extends InfinispanRemoteQueryTestSu
 
     @Test
     public void producerQueryWithoutResult() {
-        producerQueryWithoutResult("direct:start", NO_RESULT_QUERY_BUILDER);
+        producerQueryWithoutResult("direct:start", noResultQueryBuilder);
     }
 
     @Test
@@ -92,7 +92,7 @@ public class InfinispanRemoteQueryProducerIT extends InfinispanRemoteQueryTestSu
 
     @Test
     public void producerQueryWithResult() {
-        producerQueryWithResult("direct:start", WITH_RESULT_QUERY_BUILDER);
+        producerQueryWithResult("direct:start", withResultQueryBuilder);
     }
 
     @Test

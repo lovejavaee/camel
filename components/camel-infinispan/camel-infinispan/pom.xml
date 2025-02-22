@@ -24,13 +24,19 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-infinispan-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-infinispan</artifactId>
     <packaging>jar</packaging>
     <name>Camel :: Infinispan :: Remote</name>
     <description>Camel Infinispan Remote support</description>
+
+    <properties>
+        <!-- Infinispan container is not available on these platforms -->
+        <skipITs.ppc64le>true</skipITs.ppc64le>
+        <skipITs.s390x>true</skipITs.s390x>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -44,7 +50,7 @@
         </dependency>
         <dependency>
             <groupId>org.infinispan</groupId>
-            <artifactId>infinispan-client-hotrod-jakarta</artifactId>
+            <artifactId>infinispan-client-hotrod</artifactId>
             <version>${infinispan-version}</version>
             <exclusions>
                 <exclusion>
@@ -84,7 +90,7 @@
             <scope>test</scope>
         </dependency>
 
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-infinispan</artifactId>
             <version>${project.version}</version>
@@ -95,7 +101,7 @@
         <!-- testing - infinispan -->
         <dependency>
             <groupId>org.infinispan</groupId>
-            <artifactId>infinispan-core-jakarta</artifactId>
+            <artifactId>infinispan-core</artifactId>
             <version>${infinispan-version}</version>
             <scope>test</scope>
         </dependency>
@@ -115,20 +121,15 @@
         </dependency>
         <dependency>
             <groupId>org.infinispan</groupId>
-            <artifactId>infinispan-spring5-remote</artifactId>
+            <artifactId>infinispan-spring6-remote</artifactId>
             <version>${infinispan-version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.infinispan.protostream</groupId>
-            <artifactId>sample-domain-definition</artifactId>
+            <artifactId>protostream</artifactId>
             <version>${protostream-version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.infinispan.protostream</groupId>
-            <artifactId>sample-domain-implementation</artifactId>
-            <version>${protostream-version}</version>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
@@ -144,42 +145,39 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj-version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <configuration>
-                    <systemPropertyVariables>
-                        <infinispan.test.jgroups.protocol>tcp</infinispan.test.jgroups.protocol>
-                    </systemPropertyVariables>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.infinispan.protostream</groupId>
+                <artifactId>protostream</artifactId>
+                <version>${protostream-version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.infinispan.protostream</groupId>
+                <artifactId>protostream-types</artifactId>
+                <version>${protostream-version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <profiles>
         <profile>
-            <id>jdk17-build</id>
+            <id>full</id>
             <activation>
-                <jdk>[17,)</jdk>
+                <property>
+                    <name>!quickly</name>
+                </property>
             </activation>
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <systemPropertyVariables>
@@ -192,4 +190,5 @@
             </build>
         </profile>
     </profiles>
+
 </project>

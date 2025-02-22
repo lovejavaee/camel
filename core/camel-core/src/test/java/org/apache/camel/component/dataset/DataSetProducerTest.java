@@ -16,18 +16,21 @@
  */
 package org.apache.camel.component.dataset;
 
+import java.util.List;
+
 import org.apache.camel.ContextTestSupport;
+import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class DataSetProducerTest extends ContextTestSupport {
 
-    protected SimpleDataSet dataSet = new SimpleDataSet(20);
+    protected final SimpleDataSet dataSet = new SimpleDataSet(20);
 
     final String dataSetName = "foo";
     final String dataSetUri = "dataset://" + dataSetName;
@@ -38,8 +41,8 @@ public class DataSetProducerTest extends ContextTestSupport {
     final String resultUri = "mock://result";
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry answer = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry answer = super.createCamelRegistry();
         answer.bind("foo", dataSet);
         return answer;
     }
@@ -171,31 +174,25 @@ public class DataSetProducerTest extends ContextTestSupport {
             template.sendBody(dataSetUriWithDataSetIndexSetToStrict, dataSet.getDefaultBody());
         }
 
-        try {
-            assertMockEndpointsSatisfied();
-        } catch (AssertionError assertionError) {
-            // Check as much of the string as possible - but the ExchangeID at
-            // the end will be unique
-            String expectedErrorString = "Caught exception on " + dataSetUriWithDataSetIndexSetToStrict + " due to:" + " No '"
-                                         + Exchange.DATASET_INDEX
-                                         + "' header available of type: java.lang.Long";
-            String actualErrorString = assertionError.getMessage();
-            if (actualErrorString.startsWith(expectedErrorString)) {
-                // This is what we expect
-                return;
-            } else {
-                throw assertionError;
-            }
+        // Check as much of the string as possible - but the ExchangeID at
+        // the end will be unique
+        String expectedErrorString = "Caught exception on " + dataSetUriWithDataSetIndexSetToStrict + " due to:" + " No '"
+                                     + Exchange.DATASET_INDEX
+                                     + "' header available of type: java.lang.Long";
+        List<Endpoint> endpoints = context.getEndpoints().stream()
+                .filter(e -> e.getEndpointUri().startsWith(dataSetUriWithDataSetIndexSetToStrict))
+                .toList();
+        for (Endpoint endpoint : endpoints) {
+            assertThat(endpoint).isInstanceOf(MockEndpoint.class);
+            ((MockEndpoint) endpoint).assertIsNotSatisfied(expectedErrorString);
         }
-
-        fail("AssertionError should have been generated");
     }
 
     @Test
     public void testDataSetIndexUriParameterUnset() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUri).to(resultUri);
             }
         });
@@ -221,7 +218,7 @@ public class DataSetProducerTest extends ContextTestSupport {
     public void testDataSetIndexUriParameterSetToOff() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUriWithDataSetIndexSetToOff).to(resultUri);
             }
         });
@@ -245,7 +242,7 @@ public class DataSetProducerTest extends ContextTestSupport {
     public void testDataSetIndexUriParameterSetToLenient() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUriWithDataSetIndexSetToLenient).to(resultUri);
             }
         });
@@ -269,7 +266,7 @@ public class DataSetProducerTest extends ContextTestSupport {
     public void testDataSetIndexUriParameterSetToStrict() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUriWithDataSetIndexSetToStrict).to(resultUri);
             }
         });
@@ -293,7 +290,7 @@ public class DataSetProducerTest extends ContextTestSupport {
     public void testInvalidDataSetIndexValueWithDataSetIndexUriParameterUnset() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUri).to(resultUri);
             }
         });
@@ -313,31 +310,25 @@ public class DataSetProducerTest extends ContextTestSupport {
             }
         }
 
-        try {
-            assertMockEndpointsSatisfied();
-        } catch (AssertionError assertionError) {
-            // Check as much of the string as possible - but the ExchangeID at
-            // the end will be unique
-            String expectedErrorString = "Caught exception on " + dataSetUri + " due to: " + "Header: " + Exchange.DATASET_INDEX
-                                         + " does not match. Expected: " + size / 2
-                                         + " but was: " + (size / 2 + 10);
-            String actualErrorString = assertionError.getMessage();
-            if (actualErrorString.startsWith(expectedErrorString)) {
-                // This is what we expect
-                return;
-            } else {
-                throw assertionError;
-            }
+        // Check as much of the string as possible - but the ExchangeID at
+        // the end will be unique
+        String expectedErrorString = "Caught exception on " + dataSetUri + " due to: " + "Header: " + Exchange.DATASET_INDEX
+                                     + " does not match. Expected: " + size / 2
+                                     + " but was: " + (size / 2 + 10);
+        List<Endpoint> endpoints = context.getEndpoints().stream()
+                .filter(e -> e.getEndpointUri().startsWith(dataSetUri))
+                .toList();
+        for (Endpoint endpoint : endpoints) {
+            assertThat(endpoint).isInstanceOf(MockEndpoint.class);
+            ((MockEndpoint) endpoint).assertIsNotSatisfied(expectedErrorString);
         }
-
-        fail("AssertionError should have been generated");
     }
 
     @Test
     public void testInvalidDataSetIndexValueWithDataSetIndexUriParameterSetToOff() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUriWithDataSetIndexSetToOff).to(resultUri);
             }
         });
@@ -363,7 +354,7 @@ public class DataSetProducerTest extends ContextTestSupport {
     public void testInvalidDataSetIndexValueWithDataSetIndexUriParameterSetToLenient() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUriWithDataSetIndexSetToLenient).to(resultUri);
             }
         });
@@ -383,31 +374,25 @@ public class DataSetProducerTest extends ContextTestSupport {
             }
         }
 
-        try {
-            assertMockEndpointsSatisfied();
-        } catch (AssertionError assertionError) {
-            // Check as much of the string as possible - but the ExchangeID at
-            // the end will be unique
-            String expectedErrorString = "Caught exception on " + dataSetUriWithDataSetIndexSetToLenient + " due to: "
-                                         + "Header: " + Exchange.DATASET_INDEX
-                                         + " does not match. Expected: " + size / 2 + " but was: " + (size / 2 + 10);
-            String actualErrorString = assertionError.getMessage();
-            if (actualErrorString.startsWith(expectedErrorString)) {
-                // This is what we expect
-                return;
-            } else {
-                throw assertionError;
-            }
+        // Check as much of the string as possible - but the ExchangeID at
+        // the end will be unique
+        String expectedErrorString = "Caught exception on " + dataSetUriWithDataSetIndexSetToLenient + " due to: "
+                                     + "Header: " + Exchange.DATASET_INDEX
+                                     + " does not match. Expected: " + size / 2 + " but was: " + (size / 2 + 10);
+        List<Endpoint> endpoints = context.getEndpoints().stream()
+                .filter(e -> e.getEndpointUri().startsWith(dataSetUriWithDataSetIndexSetToLenient))
+                .toList();
+        for (Endpoint endpoint : endpoints) {
+            assertThat(endpoint).isInstanceOf(MockEndpoint.class);
+            ((MockEndpoint) endpoint).assertIsNotSatisfied(expectedErrorString);
         }
-
-        fail("AssertionError should have been generated");
     }
 
     @Test
     public void testInvalidDataSetIndexValueWithDataSetIndexUriParameterSetToStrict() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(sourceUri).to(dataSetUriWithDataSetIndexSetToStrict).to(resultUri);
             }
         });
@@ -427,23 +412,17 @@ public class DataSetProducerTest extends ContextTestSupport {
             }
         }
 
-        try {
-            assertMockEndpointsSatisfied();
-        } catch (AssertionError assertionError) {
-            // Check as much of the string as possible - but the ExchangeID at
-            // the end will be unique
-            String expectedErrorString = "Caught exception on " + dataSetUriWithDataSetIndexSetToStrict + " due to: "
-                                         + "Header: " + Exchange.DATASET_INDEX
-                                         + " does not match. Expected: " + size / 2 + " but was: " + (size / 2 + 10);
-            String actualErrorString = assertionError.getMessage();
-            if (actualErrorString.startsWith(expectedErrorString)) {
-                // This is what we expect
-                return;
-            } else {
-                throw assertionError;
-            }
+        // Check as much of the string as possible - but the ExchangeID at
+        // the end will be unique
+        String expectedErrorString = "Caught exception on " + dataSetUriWithDataSetIndexSetToStrict + " due to: "
+                                     + "Header: " + Exchange.DATASET_INDEX
+                                     + " does not match. Expected: " + size / 2 + " but was: " + (size / 2 + 10);
+        List<Endpoint> endpoints = context.getEndpoints().stream()
+                .filter(e -> e.getEndpointUri().startsWith(dataSetUriWithDataSetIndexSetToStrict))
+                .toList();
+        for (Endpoint endpoint : endpoints) {
+            assertThat(endpoint).isInstanceOf(MockEndpoint.class);
+            ((MockEndpoint) endpoint).assertIsNotSatisfied(expectedErrorString);
         }
-
-        fail("AssertionError should have been generated");
     }
 }

@@ -63,12 +63,7 @@ public class FileChangedExclusiveReadLockStrategy extends MarkerFileExclusiveRea
         while (!exclusive) {
             // timeout check
             if (timeout > 0) {
-                long delta = watch.taken();
-                if (delta > timeout) {
-                    CamelLogger.log(LOG, readLockLoggingLevel,
-                            "Cannot acquire read lock within " + timeout + " millis. Will skip the file: " + file);
-                    // we could not get the lock within the timeout period, so
-                    // return false
+                if (isTimedOut(watch, target, timeout, readLockLoggingLevel)) {
                     return false;
                 }
             }
@@ -116,6 +111,7 @@ public class FileChangedExclusiveReadLockStrategy extends MarkerFileExclusiveRea
             Thread.sleep(checkInterval);
             return false;
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.debug("Sleep interrupted while waiting for exclusive read lock, so breaking out");
             return true;
         }

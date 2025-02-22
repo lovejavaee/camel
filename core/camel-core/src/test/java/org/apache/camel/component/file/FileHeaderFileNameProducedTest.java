@@ -16,6 +16,8 @@
  */
 package org.apache.camel.component.file;
 
+import java.nio.file.Path;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -41,10 +43,10 @@ public class FileHeaderFileNameProducedTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
-                from("direct:in").to(fileUri("?fileExist=Override")).to("mock:result");
+            public void configure() {
+                from("direct:in").to(fileUri(Path.of("target"), "?fileExist=Override")).to("mock:result");
             }
         };
     }

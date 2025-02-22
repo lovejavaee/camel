@@ -21,7 +21,7 @@ import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test that placeholder DSL is working as expected.
@@ -33,21 +33,18 @@ public class OptionalPropertiesDslTest extends ContextTestSupport {
         getMockEndpoint("mock:a").expectedMessageCount(1);
         getMockEndpoint("mock:b").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:start", "Hello World");
-            fail("Should have thrown an exception");
-        } catch (Exception e) {
-            // expected
-        }
+        assertThrows(Exception.class,
+                () -> template.sendBody("direct:start", "Hello World"),
+                "Should have thrown an exception");
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 // START SNIPPET: e1
                 from("direct:start")
                         // use a property placeholder for the option stopOnException

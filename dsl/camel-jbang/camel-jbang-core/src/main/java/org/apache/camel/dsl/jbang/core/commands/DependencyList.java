@@ -28,6 +28,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import org.apache.camel.dsl.jbang.core.common.CommandLineHelper;
+import org.apache.camel.dsl.jbang.core.common.RuntimeType;
 import org.apache.camel.dsl.jbang.core.common.RuntimeUtil;
 import org.apache.camel.dsl.jbang.core.common.XmlHelper;
 import org.apache.camel.tooling.maven.MavenGav;
@@ -36,12 +38,13 @@ import org.apache.camel.util.FileUtil;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "list",
-                     description = "Displays all Camel dependencies required to run")
+                     description = "Displays all Camel dependencies required to run", sortOptions = false,
+                     showDefaultValues = true)
 public class DependencyList extends Export {
 
-    protected static final String EXPORT_DIR = ".camel-jbang/export";
+    protected static final String EXPORT_DIR = CommandLineHelper.CAMEL_JBANG_WORK_DIR + "/export";
 
-    @CommandLine.Option(names = { "--output" }, description = "Output format (gav or maven)", defaultValue = "gav")
+    @CommandLine.Option(names = { "--output" }, description = "Output format (gav, maven, jbang)", defaultValue = "gav")
     protected String output;
 
     public DependencyList(CamelJBangMain main) {
@@ -56,9 +59,18 @@ public class DependencyList extends Export {
 
     @Override
     protected Integer export() throws Exception {
-        if (!"gav".equals(output) && !"maven".equals(output)) {
-            System.err.println("--output must be either gav or maven, was: " + output);
+        if (!"gav".equals(output) && !"maven".equals(output) && !"jbang".equals(output)) {
+            printer().printErr("--output must be either gav or maven, was: " + output);
             return 1;
+        }
+
+        // automatic detect maven/gradle based projects and use that
+        if (files.isEmpty()) {
+            if (new File("pom.xml").exists()) {
+                files.add("pom.xml");
+            } else if (new File("build.gradle").exists()) {
+                files.add("build.gradle");
+            }
         }
 
         Integer answer = doExport();
@@ -76,6 +88,15 @@ public class DependencyList extends Export {
                 String quarkusVersion = null;
                 for (int i = 0; i < nl.getLength(); i++) {
                     Element node = (Element) nl.item(i);
+
+                    // must be child at <project/dependencyManagement> or <project/dependencies>
+                    String p = node.getParentNode().getNodeName();
+                    String p2 = node.getParentNode().getParentNode().getNodeName();
+                    boolean accept = "project".equals(p2) && (p.equals("dependencyManagement") || p.equals("dependencies"));
+                    if (!accept) {
+                        continue;
+                    }
+
                     String g = node.getElementsByTagName("groupId").item(0).getTextContent();
                     String a = node.getElementsByTagName("artifactId").item(0).getTextContent();
                     String v = null;
@@ -143,8 +164,11 @@ public class DependencyList extends Export {
                 }
                 // sort GAVs
                 gavs.sort(mavenGavComparator());
+                int i = 0;
+                int total = gavs.size();
                 for (MavenGav gav : gavs) {
-                    outputGav(gav);
+                    outputGav(gav, i, total);
+                    i++;
                 }
             }
             // cleanup dir after complete
@@ -154,26 +178,35 @@ public class DependencyList extends Export {
         return answer;
     }
 
-    protected void outputGav(MavenGav gav) {
+    protected void outputGav(MavenGav gav, int index, int total) {
         if ("gav".equals(output)) {
-            System.out.println(gav.toString());
+            outPrinter().println(String.valueOf(gav));
         } else if ("maven".equals(output)) {
-            System.out.println("<dependency>");
-            System.out.printf("    <groupId>%s</groupId>%n", gav.getGroupId());
-            System.out.printf("    <artifactId>%s</artifactId>%n", gav.getArtifactId());
-            System.out.printf("    <version>%s</version>%n", gav.getVersion());
-            System.out.println("</dependency>");
+            outPrinter().println("<dependency>");
+            outPrinter().printf("    <groupId>%s</groupId>%n", gav.getGroupId());
+            outPrinter().printf("    <artifactId>%s</artifactId>%n", gav.getArtifactId());
+            outPrinter().printf("    <version>%s</version>%n", gav.getVersion());
+            outPrinter().println("</dependency>");
+        } else if ("jbang".equals(output)) {
+            if (index == 0) {
+                outPrinter().println("//DEPS org.apache.camel:camel-bom:" + gav.getVersion() + "@pom");
+            }
+            if (gav.getGroupId().equals("org.apache.camel")) {
+                // jbang has version in @pom so we should remove this
+                gav.setVersion(null);
+            }
+            outPrinter().println("//DEPS " + gav);
         }
     }
 
     protected Integer doExport() throws Exception {
-        // read runtime and gav from profile if not configured
-        File profile = new File(getProfile() + ".properties");
+        // read runtime and gav from properties if not configured
+        File profile = new File("application.properties");
         if (profile.exists()) {
             Properties prop = new CamelCaseOrderedProperties();
             RuntimeUtil.loadProperties(prop, profile);
-            if (this.runtime == null) {
-                this.runtime = prop.getProperty("camel.jbang.runtime");
+            if (this.runtime == null && prop.containsKey("camel.jbang.runtime")) {
+                this.runtime = RuntimeType.fromValue(prop.getProperty("camel.jbang.runtime"));
             }
             if (this.gav == null) {
                 this.gav = prop.getProperty("camel.jbang.gav");
@@ -192,22 +225,27 @@ public class DependencyList extends Export {
         // use temporary export dir
         exportDir = EXPORT_DIR;
         if (gav == null) {
-            gav = "org.apache.camel:camel-jbang-dummy:1.0";
+            gav = "org.example.project:camel-jbang-dummy:1.0";
         }
         if (runtime == null) {
-            runtime = "camel-main";
+            runtime = RuntimeType.main;
         }
 
         // turn off noise
-        if ("spring-boot".equals(runtime) || "camel-spring-boot".equals(runtime)) {
-            return export(new ExportSpringBoot(getMain()));
-        } else if ("quarkus".equals(runtime) || "camel-quarkus".equals(runtime)) {
-            return export(new ExportQuarkus(getMain()));
-        } else if ("main".equals(runtime) || "camel-main".equals(runtime)) {
-            return export(new ExportCamelMain(getMain()));
-        } else {
-            System.err.println("Unknown runtime: " + runtime);
-            return 1;
+        switch (runtime) {
+            case springBoot -> {
+                return export(new ExportSpringBoot(getMain()));
+            }
+            case quarkus -> {
+                return export(new ExportQuarkus(getMain()));
+            }
+            case main -> {
+                return export(new ExportCamelMain(getMain()));
+            }
+            default -> {
+                printer().printErr("Unknown runtime: " + runtime);
+                return 1;
+            }
         }
     }
 

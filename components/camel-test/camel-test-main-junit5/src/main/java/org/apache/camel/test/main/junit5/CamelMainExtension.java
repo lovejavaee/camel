@@ -20,7 +20,9 @@ import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.api.management.ManagedCamelContext;
 import org.apache.camel.api.management.mbean.ManagedCamelContextMBean;
 import org.apache.camel.model.ModelCamelContext;
-import org.apache.camel.test.CamelRouteCoverageDumper;
+import org.apache.camel.spi.DumpRoutesStrategy;
+import org.apache.camel.test.junit5.util.CamelContextTestHelper;
+import org.apache.camel.test.junit5.util.CamelRouteCoverageDumper;
 import org.apache.camel.util.StopWatch;
 import org.apache.camel.util.StringHelper;
 import org.apache.camel.util.TimeUtils;
@@ -33,7 +35,6 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.camel.test.junit5.CamelTestSupport.ROUTE_COVERAGE_ENABLED;
 import static org.apache.camel.test.junit5.TestSupport.isCamelDebugPresent;
 import static org.junit.jupiter.api.extension.ExtensionContext.Namespace.create;
 
@@ -67,6 +68,7 @@ final class CamelMainExtension
      * The name of the key used to store the watch instance.
      */
     private static final String WATCH = "watch";
+    public static final String SEPARATOR = "********************************************************************************";
     /**
      * The utility class allowing to dump the route coverage of a given test.
      */
@@ -83,9 +85,9 @@ final class CamelMainExtension
         if (LOG.isInfoEnabled()) {
             final Class<?> requiredTestClass = context.getRequiredTestClass();
             final String currentTestName = context.getDisplayName();
-            LOG.info("********************************************************************************");
+            LOG.info(SEPARATOR);
             LOG.info("Testing: {} ({})", currentTestName, requiredTestClass.getName());
-            LOG.info("********************************************************************************");
+            LOG.info(SEPARATOR);
         }
     }
 
@@ -95,12 +97,13 @@ final class CamelMainExtension
         final String currentTestName = context.getDisplayName();
         if (LOG.isInfoEnabled()) {
             final Class<?> requiredTestClass = context.getRequiredTestClass();
-            LOG.info("********************************************************************************");
+            LOG.info(SEPARATOR);
             LOG.info("Testing done: {} ({})", currentTestName, requiredTestClass.getName());
             LOG.info("Took: {} ({} millis)", TimeUtils.printDuration(time, true), time);
-            LOG.info("********************************************************************************");
+            LOG.info(SEPARATOR);
         }
         dumpRouteCoverageIfNeeded(context, time, currentTestName);
+        dumpRouteIfNeeded(context, currentTestName);
     }
 
     /**
@@ -160,17 +163,58 @@ final class CamelMainExtension
     }
 
     /**
+     * Dump the route for the given test if it is enabled.
+     */
+    private void dumpRouteIfNeeded(ExtensionContext context, String currentTestName) throws Exception {
+        String dump = getRouteDump(context);
+        if (dump != null && !dump.isBlank()) {
+            final Class<?> requiredTestClass = context.getRequiredTestClass();
+            // In case of a {@code @Nested} test class, its name will be prefixed by the name of its outer classes
+            String className = requiredTestClass.getName().substring(requiredTestClass.getPackageName().length() + 1);
+            String dir = "target/camel-route-dump";
+            String ext = dump.toLowerCase();
+            String name = String.format("%s-%s.%s", className, StringHelper.before(currentTestName, "("), ext);
+
+            final ModelCamelContext camelContext = getContextStore(context).get(CONTEXT, CamelMainContext.class).context();
+            DumpRoutesStrategy drs = camelContext.getCamelContextExtension().getContextPlugin(DumpRoutesStrategy.class);
+
+            drs.setOutput(dir + "/" + name);
+            drs.setInclude("*");
+            drs.setLog(false);
+            drs.setUriAsParameters(true);
+            drs.dumpRoutes(dump);
+        }
+    }
+
+    /**
      * Indicates whether the route coverage is enabled according to the given extension context and the value of the
-     * system property {@link org.apache.camel.test.junit5.CamelTestSupport#ROUTE_COVERAGE_ENABLED}.
+     * system property {@link org.apache.camel.test.junit5.util.CamelContextTestHelper#ROUTE_COVERAGE_ENABLED}.
      * <p/>
      * In case of {@code @Nested} test classes, the value is always extracted from the annotation of the outer class.
      *
      * @return {@code true} if the route coverage is enabled, {@code false} otherwise.
      */
     private boolean isRouteCoverageEnabled(ExtensionContext context) {
-        return "true".equalsIgnoreCase(System.getProperty(ROUTE_COVERAGE_ENABLED, "false"))
+        return CamelContextTestHelper.isRouteCoverageEnabled(false)
                 || context.getRequiredTestInstances().getAllInstances().get(0).getClass()
                         .getAnnotation(CamelMainTest.class).dumpRouteCoverage();
+    }
+
+    /**
+     * Indicates whether the route dump is enabled according to the given extension context and the value of the system
+     * property {@link org.apache.camel.test.junit5.util.CamelContextTestHelper#ROUTE_DUMP_ENABLED}.
+     * <p/>
+     * In case of {@code @Nested} test classes, the value is always extracted from the annotation of the outer class.
+     *
+     * @return xml or yaml if the route dump is enabled, {@code null} otherwise.
+     */
+    private String getRouteDump(ExtensionContext context) {
+        String dump = CamelContextTestHelper.getRouteDump(null);
+        if (dump == null) {
+            dump = context.getRequiredTestInstances().getAllInstances().get(0).getClass()
+                    .getAnnotation(CamelMainTest.class).dumpRoute();
+        }
+        return dump;
     }
 
     /**

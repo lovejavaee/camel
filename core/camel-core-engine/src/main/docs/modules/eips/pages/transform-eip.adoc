@@ -4,6 +4,7 @@
 :description: Transforms the message body based on an expression
 :since: 
 :supportlevel: Stable
+:tabs-sync-option:
 
 Camel supports the
 http://www.enterpriseintegrationpatterns.com/MessageTranslator.html[Message
@@ -33,23 +34,33 @@ This page is documenting the first approach by using Transform EIP.
 include::partial$eip-options.adoc[]
 // eip options: END
 
-=== Using Transform EIP
+== Exchange properties
+
+// eip exchangeProperties: START
+include::partial$eip-exchangeProperties.adoc[]
+// eip exchangeProperties: END
+
+== Using Transform EIP
 
 You can use a xref:transform-eip.adoc[Transform] which uses an
 xref:manual::expression.adoc[Expression] to do the transformation:
 
-In the example below we prepend Hello to the message body using the
+In the example below, we prepend Hello to the message body using the
 xref:components:languages:simple-language.adoc[Simple] language:
 
+[tabs]
+====
+Java::
++
 [source,java]
 ----
 from("direct:cheese")
-    .setBody(simple("Hello ${body}"))
+    .transform(simple("Hello ${body}"))
     .to("log:hello");
 ----
 
-And in XML DSL:
-
+XML::
++
 [source,xml]
 ----
 <route>
@@ -61,7 +72,65 @@ And in XML DSL:
 </route>
 ----
 
-=== What is the difference between Transform and Set Body
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: direct:cheese
+    steps:
+      - transform:
+          expression:
+            simple: Hello ${body}
+      - to:
+          uri: log:hello
+----
+====
+
+The xref:transform-eip.adoc[Transform] may also reference a given from/to data type (`org.apache.camel.spi.DataType`).
+
+[tabs]
+====
+Java::
++
+[source,java]
+----
+from("direct:cheese")
+    .transform(new DataType("myDataType"))
+    .to("log:hello");
+----
+
+XML::
++
+[source,xml]
+----
+<route>
+    <from uri="direct:cheese"/>
+    <transform toType="myDataType"/>
+    <to uri="log:hello"/>
+</route>
+----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: direct:cheese
+    steps:
+      - transform:
+          to-type: myDataType
+      - to:
+          uri: log:hello
+----
+====
+
+The example above defines the xref:transform-eip.adoc[Transform] EIP that uses a target data type `myDataType`.
+The given data type may reference a xref:manual::transformer.adoc[Transformer] that is able to handle the data type transformation.
+
+Users may also specify `fromType` in order to reference a very specific transformation from a given data type to a given data type.
+
+== What is the difference between Transform and Set Body?
 
 The Transform EIP always sets the result on the OUT message body.
 

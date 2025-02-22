@@ -16,7 +16,14 @@
  */
 package org.apache.camel.impl;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -38,11 +45,14 @@ import org.apache.camel.support.cache.ProducerServicePool;
 import org.apache.camel.util.function.ThrowingFunction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class DefaultProducerCacheTest extends ContextTestSupport {
 
     private final AtomicInteger producerCounter = new AtomicInteger();
@@ -52,7 +62,7 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
     private MyComponent component;
 
     @Test
-    public void testCacheProducerAcquireAndRelease() throws Exception {
+    public void testCacheProducerAcquireAndRelease() {
         DefaultProducerCache cache = new DefaultProducerCache(this, context, 0);
         cache.start();
 
@@ -78,7 +88,7 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
     }
 
     @Test
-    public void testCacheStopExpired() throws Exception {
+    public void testCacheStopExpired() {
         DefaultProducerCache cache = new DefaultProducerCache(this, context, 5);
         cache.start();
 
@@ -106,7 +116,7 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
     }
 
     @Test
-    public void testExtendedStatistics() throws Exception {
+    public void testExtendedStatistics() {
         DefaultProducerCache cache = new DefaultProducerCache(this, context, 5);
         cache.setExtendedStatistics(true);
         cache.start();
@@ -155,7 +165,7 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
     }
 
     @Test
-    public void testCacheEvictWhileInUse() throws Exception {
+    public void testCacheEvictWhileInUse() {
         producerCounter.set(0);
 
         MyProducerCache cache = new MyProducerCache(this, context, 2);
@@ -189,8 +199,8 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
         // nothing has stopped yet even we have 3 producers and a cache limit of 2
         assertEquals(0, stopCounter.get());
 
-        // force evict p1 while its in use (eg simulate someone else grabbing it while evicting race condition)
-        cache.forceEvict(p1);
+        // force evict p2 while its in use (eg simulate someone else grabbing it while evicting race condition)
+        cache.forceEvict(p2);
 
         // and should still not be stopped
         assertEquals(0, stopCounter.get());
@@ -206,6 +216,50 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
 
         // should have stopped all 3 when the cache is stopped
         await().atMost(3, TimeUnit.SECONDS).untilAsserted(() -> assertEquals(3, stopCounter.get()));
+    }
+
+    @Test
+    public void testAcquireProducerConcurrency() throws InterruptedException, ExecutionException {
+        DefaultProducerCache cache = new DefaultProducerCache(this, context, 0);
+        cache.start();
+        List<Endpoint> endpoints = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Endpoint e = context.getEndpoint("direct:queue:" + i);
+            AsyncProducer p = cache.acquireProducer(e);
+            endpoints.add(e);
+        }
+
+        assertEquals(3, cache.size());
+
+        ExecutorService ex = Executors.newFixedThreadPool(16);
+
+        List<Callable<Boolean>> callables = new ArrayList<>();
+
+        for (int i = 0; i < 500; i++) {
+            int index = i % 3;
+            callables.add(() -> isEqualTask(cache, endpoints, index));
+        }
+
+        for (int i = 1; i <= 100; i++) {
+            log.info("Iteration: {}", i);
+            List<Future<Boolean>> results = ex.invokeAll(callables);
+            for (Future<Boolean> future : results) {
+                assertEquals(true, future.get());
+            }
+        }
+    }
+
+    private boolean isEqualTask(DefaultProducerCache cache, List<Endpoint> endpoints, int index) {
+        Producer producer = cache.acquireProducer(endpoints.get(index));
+        boolean isEqual
+                = producer.getEndpoint().getEndpointUri().equalsIgnoreCase(endpoints.get(index).getEndpointUri());
+
+        if (!isEqual) {
+            log.info("Endpoint uri to acquire: {}, returned producer (uri): {}", endpoints.get(index).getEndpointUri(),
+                    producer.getEndpoint().getEndpointUri());
+        }
+
+        return isEqual;
     }
 
     private static class MyProducerCache extends DefaultProducerCache {
@@ -259,7 +313,7 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
         }
 
         @Override
-        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
             throw new UnsupportedOperationException();
         }
     }
@@ -267,21 +321,19 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
     private final class MyEndpoint extends DefaultEndpoint {
 
         private final boolean isSingleton;
-        private final int number;
 
         private MyEndpoint(MyComponent component, boolean isSingleton, int number) {
             super("my://" + number, component);
             this.isSingleton = isSingleton;
-            this.number = number;
         }
 
         @Override
-        public Producer createProducer() throws Exception {
+        public Producer createProducer() {
             return new MyProducer(this);
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return null;
         }
 
@@ -293,7 +345,7 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
 
     private final class MyProducer extends DefaultProducer {
 
-        private int id;
+        private final int id;
 
         MyProducer(Endpoint endpoint) {
             super(endpoint);
@@ -301,17 +353,17 @@ public class DefaultProducerCacheTest extends ContextTestSupport {
         }
 
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             // noop
         }
 
         @Override
-        protected void doStop() throws Exception {
+        protected void doStop() {
             stopCounter.incrementAndGet();
         }
 
         @Override
-        protected void doShutdown() throws Exception {
+        protected void doShutdown() {
             shutdownCounter.incrementAndGet();
         }
 

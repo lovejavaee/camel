@@ -21,8 +21,6 @@ import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,10 +33,10 @@ public class HttpNoCamelHeaderTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/hello", (request, response, context) -> {
@@ -57,14 +55,10 @@ public class HttpNoCamelHeaderTest extends BaseHttpTest {
                     response.setHeader(Exchange.TO_ENDPOINT, "foo");
                 }).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() throws Exception {
 
         if (localServer != null) {
             localServer.stop();
@@ -72,7 +66,7 @@ public class HttpNoCamelHeaderTest extends BaseHttpTest {
     }
 
     @Test
-    public void testNoCamelHeader() throws Exception {
+    public void testNoCamelHeader() {
         Exchange out = template.request(
                 "http://localhost:" + localServer.getLocalPort() + "/hello",
                 exchange -> {

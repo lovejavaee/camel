@@ -24,7 +24,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.camel.builder.RouteBuilder;
@@ -52,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class AbstractInfinispanRemoteClusteredIT {
     @RegisterExtension
-    public static InfinispanService service = InfinispanServiceFactory.createService();
+    public static InfinispanService service = InfinispanServiceFactory.createSingletonInfinispanService();
 
     private RemoteCacheManager cacheContainer;
 
@@ -72,7 +71,7 @@ public class AbstractInfinispanRemoteClusteredIT {
     }
 
     public void runTest(Function<RunnerEnv, RouteBuilder> routeBuilderFunction) throws Exception {
-        final List<String> clients = IntStream.range(0, 3).mapToObj(Integer::toString).collect(Collectors.toList());
+        final List<String> clients = IntStream.range(0, 3).mapToObj(Integer::toString).toList();
         final List<String> results = new ArrayList<>();
 
         final CountDownLatch latch = new CountDownLatch(clients.size());
@@ -121,7 +120,7 @@ public class AbstractInfinispanRemoteClusteredIT {
 
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             context.disableJMX();
-            context.setName("context-" + id);
+            context.getCamelContextExtension().setName("context-" + id);
             context.addService(clusterService);
 
             RunnerEnv contextEnv = new RunnerEnv();

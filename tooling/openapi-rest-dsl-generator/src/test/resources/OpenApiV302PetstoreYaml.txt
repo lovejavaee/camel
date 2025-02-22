@@ -9,7 +9,6 @@
       param:
       - description: "Update an existent pet in the store"
         name: "body"
-        required: true
         type: "body"
       to: "direct:updatePet"
     - id: "updateUser"
@@ -17,14 +16,10 @@
       description: "This can only be done by the logged in user."
       consumes: "application/json,application/xml,application/x-www-form-urlencoded"
       param:
-      - dataType: "string"
-        description: "name that need to be deleted"
+      - description: "name that need to be deleted"
         name: "username"
-        required: true
-        type: "path"
       - description: "Update an existent user in the store"
         name: "body"
-        required: true
         type: "body"
       to: "direct:updateUser"
     post:
@@ -36,7 +31,6 @@
       param:
       - description: "Create a new pet in the store"
         name: "body"
-        required: true
         type: "body"
       to: "direct:addPet"
     - id: "updatePetWithForm"
@@ -45,14 +39,12 @@
       - dataType: "integer"
         description: "ID of pet that needs to be updated"
         name: "petId"
-        required: true
-        type: "path"
-      - dataType: "string"
+      - collectionFormat: "multi"
         description: "Name of pet that needs to be updated"
         name: "name"
         required: false
         type: "query"
-      - dataType: "string"
+      - collectionFormat: "multi"
         description: "Status of pet that needs to be updated"
         name: "status"
         required: false
@@ -66,15 +58,12 @@
       - dataType: "integer"
         description: "ID of pet to update"
         name: "petId"
-        required: true
-        type: "path"
-      - dataType: "string"
+      - collectionFormat: "multi"
         description: "Additional Metadata"
         name: "additionalMetadata"
         required: false
         type: "query"
       - name: "body"
-        required: true
         type: "body"
       to: "direct:uploadFile"
     - id: "placeOrder"
@@ -84,7 +73,6 @@
       produces: "application/json"
       param:
       - name: "body"
-        required: true
         type: "body"
       to: "direct:placeOrder"
     - id: "createUser"
@@ -95,7 +83,6 @@
       param:
       - description: "Created user object"
         name: "body"
-        required: true
         type: "body"
       to: "direct:createUser"
     - id: "createUsersWithListInput"
@@ -105,7 +92,6 @@
       produces: "application/xml,application/json"
       param:
       - name: "body"
-        required: true
         type: "body"
       to: "direct:createUsersWithListInput"
     get:
@@ -114,7 +100,7 @@
       description: "Multiple status values can be provided with comma separated strings"
       produces: "application/xml,application/json"
       param:
-      - dataType: "string"
+      - collectionFormat: "multi"
         defaultValue: "available"
         description: "Status values that need to be considered for filter"
         name: "status"
@@ -131,7 +117,7 @@
         \ tag1, tag2, tag3 for testing."
       produces: "application/xml,application/json"
       param:
-      - arrayType: "string"
+      - collectionFormat: "multi"
         dataType: "array"
         description: "Tags to filter by"
         name: "tags"
@@ -146,8 +132,6 @@
       - dataType: "integer"
         description: "ID of pet to return"
         name: "petId"
-        required: true
-        type: "path"
       to: "direct:getPetById"
     - id: "getInventory"
       path: "/store/inventory"
@@ -163,19 +147,17 @@
       - dataType: "integer"
         description: "ID of order that needs to be fetched"
         name: "orderId"
-        required: true
-        type: "path"
       to: "direct:getOrderById"
     - id: "loginUser"
       path: "/user/login"
       produces: "application/xml,application/json"
       param:
-      - dataType: "string"
+      - collectionFormat: "multi"
         description: "The user name for login"
         name: "username"
         required: false
         type: "query"
-      - dataType: "string"
+      - collectionFormat: "multi"
         description: "The password for login in clear text"
         name: "password"
         required: false
@@ -188,25 +170,19 @@
       path: "/user/{username}"
       produces: "application/xml,application/json"
       param:
-      - dataType: "string"
-        description: "The name that needs to be fetched. Use user1 for testing. "
+      - description: "The name that needs to be fetched. Use user1 for testing. "
         name: "username"
-        required: true
-        type: "path"
       to: "direct:getUserByName"
     delete:
     - id: "deletePet"
       path: "/pet/{petId}"
       param:
-      - dataType: "string"
-        name: "api_key"
+      - name: "api_key"
         required: false
         type: "header"
       - dataType: "integer"
         description: "Pet id to delete"
         name: "petId"
-        required: true
-        type: "path"
       to: "direct:deletePet"
     - id: "deleteOrder"
       path: "/store/order/{orderId}"
@@ -216,16 +192,11 @@
       - dataType: "integer"
         description: "ID of the order that needs to be deleted"
         name: "orderId"
-        required: true
-        type: "path"
       to: "direct:deleteOrder"
     - id: "deleteUser"
       path: "/user/{username}"
       description: "This can only be done by the logged in user."
       param:
-      - dataType: "string"
-        description: "The name that needs to be deleted"
+      - description: "The name that needs to be deleted"
         name: "username"
-        required: true
-        type: "path"
       to: "direct:deleteUser"

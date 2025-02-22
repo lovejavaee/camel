@@ -53,8 +53,7 @@ public final class ErrorHandlerHelper {
             // see if there has been configured a error handler builder on the route
             source = route.getErrorHandlerFactory();
             // check if its also a ref with no error handler configuration like me
-            if (source instanceof RefErrorHandlerDefinition) {
-                RefErrorHandlerDefinition other = (RefErrorHandlerDefinition) source;
+            if (source instanceof RefErrorHandlerDefinition other) {
                 String otherRef = other.getRef();
                 if (!isErrorHandlerFactoryConfigured(otherRef)) {
                     // the other has also no explicit error handler configured
@@ -87,10 +86,9 @@ public final class ErrorHandlerHelper {
         return answer;
     }
 
-    protected static ErrorHandlerFactory lookupErrorHandlerFactory(CamelContext camelContext) {
+    private static ErrorHandlerFactory lookupErrorHandlerFactory(CamelContext camelContext) {
         ErrorHandlerFactory answer = camelContext.getCamelContextExtension().getErrorHandlerFactory();
-        if (answer instanceof RefErrorHandlerDefinition) {
-            RefErrorHandlerDefinition other = (RefErrorHandlerDefinition) answer;
+        if (answer instanceof RefErrorHandlerDefinition other) {
             String otherRef = other.getRef();
             if (isErrorHandlerFactoryConfigured(otherRef)) {
                 answer = CamelContextHelper.lookup(camelContext, otherRef, ErrorHandlerFactory.class);

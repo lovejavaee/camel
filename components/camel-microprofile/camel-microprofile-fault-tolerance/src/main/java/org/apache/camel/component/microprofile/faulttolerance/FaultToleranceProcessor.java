@@ -21,17 +21,17 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Supplier;
 
+import io.smallrye.faulttolerance.core.FaultToleranceContext;
 import io.smallrye.faulttolerance.core.FaultToleranceStrategy;
-import io.smallrye.faulttolerance.core.InvocationContext;
-import io.smallrye.faulttolerance.core.bulkhead.FutureThreadPoolBulkhead;
+import io.smallrye.faulttolerance.core.Future;
+import io.smallrye.faulttolerance.core.bulkhead.Bulkhead;
 import io.smallrye.faulttolerance.core.circuit.breaker.CircuitBreaker;
 import io.smallrye.faulttolerance.core.fallback.Fallback;
 import io.smallrye.faulttolerance.core.stopwatch.SystemStopwatch;
-import io.smallrye.faulttolerance.core.timeout.ScheduledExecutorTimeoutWatcher;
 import io.smallrye.faulttolerance.core.timeout.Timeout;
-import io.smallrye.faulttolerance.core.timeout.TimeoutWatcher;
-import io.smallrye.faulttolerance.core.timer.ThreadTimer;
+import io.smallrye.faulttolerance.core.timer.Timer;
 import io.smallrye.faulttolerance.core.util.ExceptionDecision;
 import org.apache.camel.AsyncCallback;
 import org.apache.camel.CamelContext;
@@ -74,7 +74,7 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
 
     private static final Logger LOG = LoggerFactory.getLogger(FaultToleranceProcessor.class);
 
-    private volatile CircuitBreaker circuitBreaker;
+    private volatile CircuitBreaker<Exchange> circuitBreaker;
     private CamelContext camelContext;
     private String id;
     private String routeId;
@@ -85,11 +85,10 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
     private boolean shutdownScheduledExecutorService;
     private ExecutorService executorService;
     private boolean shutdownExecutorService;
-    private ExecutorService threadTimerExecutorService;
-    private boolean shutdownThreadTimerExecutorService;
     private ProcessorExchangeFactory processorExchangeFactory;
     private PooledExchangeTaskFactory taskFactory;
     private PooledExchangeTaskFactory fallbackTaskFactory;
+    private Timer timer;
 
     public FaultToleranceProcessor(FaultToleranceConfiguration config, Processor processor,
                                    Processor fallbackProcessor) {
@@ -128,11 +127,11 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
         this.routeId = routeId;
     }
 
-    public CircuitBreaker getCircuitBreaker() {
+    public CircuitBreaker<?> getCircuitBreaker() {
         return circuitBreaker;
     }
 
-    public void setCircuitBreaker(CircuitBreaker circuitBreaker) {
+    public void setCircuitBreaker(CircuitBreaker<Exchange> circuitBreaker) {
         this.circuitBreaker = circuitBreaker;
     }
 
@@ -150,6 +149,14 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
 
     public void setExecutorService(ExecutorService executorService) {
         this.executorService = executorService;
+    }
+
+    public Timer getTimer() {
+        return timer;
+    }
+
+    public void setTimer(Timer timer) {
+        this.timer = timer;
     }
 
     @Override
@@ -253,31 +260,42 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
             task = (CircuitBreakerTask) taskFactory.acquire(exchange, callback);
 
             // circuit breaker
-            FaultToleranceStrategy target = circuitBreaker;
+            FaultToleranceStrategy<Exchange> target = circuitBreaker;
 
             // 1. bulkhead
             if (config.isBulkheadEnabled()) {
-                target = new FutureThreadPoolBulkhead(
+                target = new Bulkhead<>(
                         target, "bulkhead", config.getBulkheadMaxConcurrentCalls(),
-                        config.getBulkheadWaitingTaskQueue());
+                        config.getBulkheadWaitingTaskQueue(), true);
             }
             // 2. timeout
             if (config.isTimeoutEnabled()) {
-                TimeoutWatcher watcher = new ScheduledExecutorTimeoutWatcher(scheduledExecutorService);
-                target = new Timeout(target, "timeout", config.getTimeoutDuration(), watcher);
+                target = new Timeout<>(target, "timeout", config.getTimeoutDuration(), getTimer());
             }
             // 3. fallback
             if (fallbackProcessor != null) {
                 fallbackTask = (CircuitBreakerFallbackTask) fallbackTaskFactory.acquire(exchange, callback);
                 final CircuitBreakerFallbackTask fFallbackTask = fallbackTask;
-                target = new Fallback(target, "fallback", fallbackContext -> {
+                target = new Fallback<>(target, "fallback", fallbackContext -> {
                     exchange.setException(fallbackContext.failure);
-                    return fFallbackTask.call();
+                    try {
+                        return Future.from(fFallbackTask);
+                    } catch (Exception e) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Error occurred processing fallback task", e);
+                        }
+                    }
+                    return null;
                 }, ExceptionDecision.ALWAYS_FAILURE);
             }
 
-            target.apply(new InvocationContext(task));
-
+            target.apply(new FaultToleranceContext<>(task, true))
+                    .then((ex, exception) -> {
+                        if (exception instanceof CircuitBreakerOpenException) {
+                            throw (CircuitBreakerOpenException) exception;
+                        }
+                        exchange.setException(exception);
+                    });
         } catch (CircuitBreakerOpenException e) {
             // the circuit breaker triggered a call rejected
             exchange.setProperty(ExchangePropertyKey.CIRCUIT_BREAKER_RESPONSE_SUCCESSFUL_EXECUTION, false);
@@ -351,14 +369,10 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
     protected void doInit() throws Exception {
         ObjectHelper.notNull(camelContext, "CamelContext", this);
         if (circuitBreaker == null) {
-            threadTimerExecutorService
-                    = getCamelContext().getExecutorServiceManager().newCachedThreadPool(this, "CircuitBreakerThreadTimer");
-            shutdownThreadTimerExecutorService = true;
-
             circuitBreaker = new CircuitBreaker<>(
                     invocation(), id, ExceptionDecision.ALWAYS_FAILURE, config.getDelay(), config.getRequestVolumeThreshold(),
                     config.getFailureRatio(),
-                    config.getSuccessThreshold(), SystemStopwatch.INSTANCE, new ThreadTimer(threadTimerExecutorService));
+                    config.getSuccessThreshold(), SystemStopwatch.INSTANCE, getTimer());
         }
 
         ServiceHelper.initService(processorExchangeFactory, taskFactory, fallbackTaskFactory, processor);
@@ -390,10 +404,6 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
             getCamelContext().getExecutorServiceManager().shutdownNow(executorService);
             executorService = null;
         }
-        if (shutdownThreadTimerExecutorService && threadTimerExecutorService != null) {
-            getCamelContext().getExecutorServiceManager().shutdownNow(threadTimerExecutorService);
-            threadTimerExecutorService = null;
-        }
 
         ServiceHelper.stopService(processorExchangeFactory, taskFactory, fallbackTaskFactory, processor);
     }
@@ -403,7 +413,7 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
         ServiceHelper.stopAndShutdownServices(processorExchangeFactory, taskFactory, fallbackTaskFactory, processor);
     }
 
-    private final class CircuitBreakerTask implements PooledExchangeTask, Callable<Exchange> {
+    private final class CircuitBreakerTask implements PooledExchangeTask, Callable<Exchange>, Supplier<Future<Exchange>> {
 
         private Exchange exchange;
 
@@ -481,6 +491,11 @@ public class FaultToleranceProcessor extends AsyncProcessorSupport
                 throw RuntimeExchangeException.wrapRuntimeException(cause);
             }
             return exchange;
+        }
+
+        @Override
+        public Future<Exchange> get() {
+            return Future.from(this);
         }
     }
 

@@ -63,7 +63,7 @@ public class XPathFunctionTest extends ContextTestSupport {
     @Test
     public void testSetXpathProperty() throws Exception {
         String body
-                = "<soapenv:Body xmlns:ns=\"http://myNamesapce\" xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">"
+                = "<soapenv:Body xmlns:ns=\"http://myNamespace\" xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">"
                   + "<ns:Addresses> <Address>address1</Address>"
                   + " <Address>address2</Address> <Address>address3</Address>"
                   + " <Address>address4</Address> </ns:Addresses> </soapenv:Body>";
@@ -77,7 +77,7 @@ public class XPathFunctionTest extends ContextTestSupport {
 
     }
 
-    protected void sendMessage(final Object headerValue, final Object body) throws Exception {
+    protected void sendMessage(final Object headerValue, final Object body) {
         template.sendBodyAndHeader("direct:start", body, "foo", headerValue);
     }
 

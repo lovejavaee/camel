@@ -34,7 +34,7 @@ public abstract class DefaultConfigurationProperties<T> {
 
     private String name;
     private String description;
-    @Metadata(defaultValue = "Default")
+    @Metadata(defaultValue = "Default", enums = "Verbose,Default,Brief,Oneline,Off")
     private StartupSummaryLevel startupSummaryLevel;
     private int durationMaxSeconds;
     private int durationMaxIdleSeconds;
@@ -56,9 +56,12 @@ public abstract class DefaultConfigurationProperties<T> {
     private boolean loadTypeConverters;
     private boolean loadHealthChecks;
     private boolean devConsoleEnabled;
+    @Deprecated(since = "4.10")
     private boolean modeline;
     private int logDebugMaxChars;
     private boolean streamCachingEnabled = true;
+    private String streamCachingAllowClasses;
+    private String streamCachingDenyClasses;
     private boolean streamCachingSpoolEnabled;
     private String streamCachingSpoolDirectory;
     private String streamCachingSpoolCipher;
@@ -69,12 +72,10 @@ public abstract class DefaultConfigurationProperties<T> {
     private int streamCachingBufferSize;
     private boolean streamCachingRemoveSpoolDirectoryWhenStopping = true;
     private boolean streamCachingStatisticsEnabled;
-    private boolean debugging;
-    private boolean backlogTracing;
-    private boolean backlogTracingStandby;
     private boolean typeConverterStatisticsEnabled;
     private boolean tracing;
     private boolean tracingStandby;
+    private boolean tracingTemplates;
     private String tracingPattern;
     @Metadata(defaultValue = "%-4.4s [%-12.12s] [%-33.33s]")
     private String tracingLoggingFormat;
@@ -82,7 +83,10 @@ public abstract class DefaultConfigurationProperties<T> {
     private boolean messageHistory;
     private boolean logMask;
     private boolean logExhaustedMessageBody;
+    private String logName;
+    private String logLanguage;
     private boolean autoStartup = true;
+    private String autoStartupExcludePattern;
     private boolean allowUseOriginalMessage;
     private boolean caseInsensitiveHeaders = true;
     private boolean autowiredEnabled = true;
@@ -93,11 +97,14 @@ public abstract class DefaultConfigurationProperties<T> {
     private boolean useDataType;
     private boolean useBreadcrumb;
     private boolean beanPostProcessorEnabled = true;
-    @Metadata(defaultValue = "Default")
+    @Metadata(defaultValue = "Default", enums = "ContextOnly,RoutesOnly,Default")
     private ManagementMBeansLevel jmxManagementMBeansLevel = ManagementMBeansLevel.Default;
-    @Metadata(defaultValue = "Default")
+    @Metadata(defaultValue = "Default", enums = "Extended,Default,RoutesOnly,Off")
     private ManagementStatisticsLevel jmxManagementStatisticsLevel = ManagementStatisticsLevel.Default;
     private String jmxManagementNamePattern = "#name#";
+    private boolean jmxUpdateRouteEnabled;
+    private boolean jmxManagementRegisterRoutesCreateByKamelet;
+    private boolean jmxManagementRegisterRoutesCreateByTemplate = true;
     private boolean camelEventsTimestampEnabled;
     private boolean useMdcLogging;
     private String mdcLoggingKeysPattern;
@@ -108,6 +115,9 @@ public abstract class DefaultConfigurationProperties<T> {
     private LoggingLevel beanIntrospectionLoggingLevel;
     private boolean contextReloadEnabled;
     private boolean routesCollectorEnabled = true;
+    private boolean routesCollectorIgnoreLoadingError;
+    @Metadata(label = "advanced")
+    private String compileWorkDir;
     private String javaRoutesIncludePattern;
     private String javaRoutesExcludePattern;
     private String routesIncludePattern = "classpath:camel/*,classpath:camel-template/*,classpath:camel-rest/*";
@@ -120,33 +130,28 @@ public abstract class DefaultConfigurationProperties<T> {
     @Metadata(defaultValue = "true")
     private boolean routesReloadRemoveAllRoutes = true;
     private boolean routesReloadRestartDuration;
-    private boolean lightweight;
     @Metadata(defaultValue = "default", enums = "default,prototype,pooled")
     private String exchangeFactory = "default";
     private int exchangeFactoryCapacity = 100;
     private boolean exchangeFactoryStatisticsEnabled;
-    private boolean dumpRoutes;
+    @Metadata(enums = "xml,yaml")
+    private String dumpRoutes;
+    private String dumpRoutesInclude = "routes";
+    private boolean dumpRoutesLog = true;
+    private boolean dumpRoutesResolvePlaceholders = true;
+    private boolean dumpRoutesUriAsParameters;
+    private boolean dumpRoutesGeneratedIds;
+    private String dumpRoutesOutput;
     private Map<String, String> globalOptions;
-    // route controller
-    private boolean routeControllerSuperviseEnabled;
-    private String routeControllerIncludeRoutes;
-    private String routeControllerExcludeRoutes;
-    private int routeControllerThreadPoolSize;
-    private long routeControllerInitialDelay;
-    private long routeControllerBackOffDelay;
-    private long routeControllerBackOffMaxDelay;
-    private long routeControllerBackOffMaxElapsedTime;
-    private long routeControllerBackOffMaxAttempts;
-    private double routeControllerBackOffMultiplier;
-    private boolean routeControllerUnhealthyOnExhausted;
     // startup recorder
-    @Metadata(enums = "false,off,java-flight-recorder,jfr,logging")
+    @Metadata(enums = "false,off,java-flight-recorder,jfr,logging,backlog")
     private String startupRecorder;
     private int startupRecorderMaxDepth = -1;
     private boolean startupRecorderRecording;
     private String startupRecorderProfile = "default";
     private long startupRecorderDuration;
     private String startupRecorderDir;
+    private String cloudPropertiesLocation;
 
     // getter and setters
     // --------------------------------------------------------------
@@ -410,6 +415,7 @@ public abstract class DefaultConfigurationProperties<T> {
         this.devConsoleEnabled = devConsoleEnabled;
     }
 
+    @Deprecated(since = "4.10")
     public boolean isModeline() {
         return modeline;
     }
@@ -418,6 +424,7 @@ public abstract class DefaultConfigurationProperties<T> {
      * Whether camel-k style modeline is also enabled when not using camel-k. Enabling this allows to use a camel-k like
      * experience by being able to configure various settings using modeline directly in your route source code.
      */
+    @Deprecated(since = "4.10")
     public void setModeline(boolean modeline) {
         this.modeline = modeline;
     }
@@ -456,6 +463,30 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public void setStreamCachingEnabled(boolean streamCachingEnabled) {
         this.streamCachingEnabled = streamCachingEnabled;
+    }
+
+    public String getStreamCachingAllowClasses() {
+        return streamCachingAllowClasses;
+    }
+
+    /**
+     * To filter stream caching of a given set of allowed/denied classes. By default, all classes that are
+     * {@link java.io.InputStream} is allowed. Multiple class names can be separated by comma.
+     */
+    public void setStreamCachingAllowClasses(String streamCachingAllowClasses) {
+        this.streamCachingAllowClasses = streamCachingAllowClasses;
+    }
+
+    public String getStreamCachingDenyClasses() {
+        return streamCachingDenyClasses;
+    }
+
+    /**
+     * To filter stream caching of a given set of allowed/denied classes. By default, all classes that are
+     * {@link java.io.InputStream} is allowed. Multiple class names can be separated by comma.
+     */
+    public void setStreamCachingDenyClasses(String streamCachingDenyClasses) {
+        this.streamCachingDenyClasses = streamCachingDenyClasses;
     }
 
     public boolean isStreamCachingSpoolEnabled() {
@@ -622,6 +653,20 @@ public abstract class DefaultConfigurationProperties<T> {
         this.tracingStandby = tracingStandby;
     }
 
+    public boolean isTracingTemplates() {
+        return tracingTemplates;
+    }
+
+    /**
+     * Whether tracing should trace inner details from route templates (or kamelets). Turning this on increases the
+     * verbosity of tracing by including events from internal routes in the templates or kamelets.
+     *
+     * Default is false.
+     */
+    public void setTracingTemplates(boolean tracingTemplates) {
+        this.tracingTemplates = tracingTemplates;
+    }
+
     public String getTracingPattern() {
         return tracingPattern;
     }
@@ -647,46 +692,6 @@ public abstract class DefaultConfigurationProperties<T> {
         tracingLoggingFormat = format;
     }
 
-    public boolean isDebugging() {
-        return debugging;
-    }
-
-    /**
-     * Sets whether debugging is enabled or not.
-     *
-     * Default is false.
-     */
-    public void setDebugging(boolean debugging) {
-        this.debugging = debugging;
-    }
-
-    public boolean isBacklogTracing() {
-        return backlogTracing;
-    }
-
-    /**
-     * Sets whether backlog tracing is enabled or not.
-     *
-     * Default is false.
-     */
-    public void setBacklogTracing(boolean backlogTracing) {
-        this.backlogTracing = backlogTracing;
-    }
-
-    public boolean isBacklogTracingStandby() {
-        return backlogTracingStandby;
-    }
-
-    /**
-     * Whether to set backlog tracing on standby. If on standby then the backlog tracer is installed and made available.
-     * Then the backlog tracer can be enabled later at runtime via JMX or via Java API.
-     *
-     * Default is false.
-     */
-    public void setBacklogTracingStandby(boolean backlogTracingStandby) {
-        this.backlogTracingStandby = backlogTracingStandby;
-    }
-
     public boolean isMessageHistory() {
         return messageHistory;
     }
@@ -707,7 +712,7 @@ public abstract class DefaultConfigurationProperties<T> {
     /**
      * Whether to capture precise source location:line-number for all EIPs in Camel routes.
      *
-     * Enabling this will impact parsing Java based routes (also Groovy, Kotlin, etc.) on startup as this uses JDK
+     * Enabling this will impact parsing Java based routes (also Groovy etc.) on startup as this uses JDK
      * StackTraceElement to calculate the location from the Camel route, which comes with a performance cost. This only
      * impact startup, not the performance of the routes at runtime.
      */
@@ -741,6 +746,45 @@ public abstract class DefaultConfigurationProperties<T> {
         this.logExhaustedMessageBody = logExhaustedMessageBody;
     }
 
+    public String getLogName() {
+        return logName;
+    }
+
+    /**
+     * The global name to use for Log EIP
+     *
+     * The name is default the routeId or the source:line if source location is enabled. You can also specify the name
+     * using tokens:
+     *
+     * <br/>
+     * ${class} - the logger class name (org.apache.camel.processor.LogProcessor) <br/>
+     * ${contextId} - the camel context id <br/>
+     * ${routeId} - the route id <br/>
+     * ${groupId} - the route group id <br/>
+     * ${nodeId} - the node id <br/>
+     * ${nodePrefixId} - the node prefix id <br/>
+     * ${source} - the source:line (source location must be enabled) <br/>
+     * ${source.name} - the source filename (source location must be enabled) <br/>
+     * ${source.line} - the source line number (source location must be enabled)
+     *
+     * For example to use the route and node id you can specify the name as: ${routeId}/${nodeId}
+     */
+    public void setLogName(String logName) {
+        this.logName = logName;
+    }
+
+    public String getLogLanguage() {
+        return logLanguage;
+    }
+
+    /**
+     * To configure the language to use for Log EIP. By default, the simple language is used. However, Camel also
+     * supports other languages such as groovy.
+     */
+    public void setLogLanguage(String logLanguage) {
+        this.logLanguage = logLanguage;
+    }
+
     public boolean isAutoStartup() {
         return autoStartup;
     }
@@ -756,6 +800,22 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public void setAutoStartup(boolean autoStartup) {
         this.autoStartup = autoStartup;
+    }
+
+    public String getAutoStartupExcludePattern() {
+        return autoStartupExcludePattern;
+    }
+
+    /**
+     * Used for exclusive filtering of routes to not automatically start with Camel starts.
+     *
+     * The pattern support matching by route id or endpoint urls.
+     *
+     * Multiple patterns can be specified separated by comma, as example, to exclude all the routes starting from kafka
+     * or jms use: kafka,jms.
+     */
+    public void setAutoStartupExcludePattern(String autoStartupExcludePattern) {
+        this.autoStartupExcludePattern = autoStartupExcludePattern;
     }
 
     public boolean isAllowUseOriginalMessage() {
@@ -826,8 +886,8 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
-     * Sets whether context load statistics is enabled (something like the unix load average). The statistics requires
-     * to have camel-management on the classpath as JMX is required.
+     * Sets whether Camel load (inflight messages, not cpu) statistics is enabled (something like the unix load
+     * average). The statistics requires to have camel-management on the classpath as JMX is required.
      *
      * The default value is false.
      */
@@ -909,7 +969,7 @@ public abstract class DefaultConfigurationProperties<T> {
      *
      * Turning this off should only be done if you are sure you do not use any of these Camel features.
      *
-     * Not all runtimes allow turning this off (such as camel-blueprint or camel-cdi with XML).
+     * Not all runtimes allow turning this off.
      *
      * The default value is true (enabled).
      */
@@ -954,6 +1014,41 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public void setJmxManagementNamePattern(String jmxManagementNamePattern) {
         this.jmxManagementNamePattern = jmxManagementNamePattern;
+    }
+
+    public boolean isJmxManagementRegisterRoutesCreateByKamelet() {
+        return jmxManagementRegisterRoutesCreateByKamelet;
+    }
+
+    /**
+     * Whether routes created by Kamelets should be registered for JMX management. Enabling this allows to have
+     * fine-grained monitoring and management of every route created via Kamelets.
+     *
+     * This is default disabled as a Kamelet is intended as a component (black-box) and its implementation details as
+     * Camel route makes the overall management and monitoring of Camel applications more verbose.
+     *
+     * During development of Kamelets then enabling this will make it possible for developers to do fine-grained
+     * performance inspection and identify potential bottlenecks in the Kamelet routes.
+     *
+     * However, for production usage then keeping this disabled is recommended.
+     */
+    public void setJmxManagementRegisterRoutesCreateByKamelet(boolean jmxManagementRegisterRoutesCreateByKamelet) {
+        this.jmxManagementRegisterRoutesCreateByKamelet = jmxManagementRegisterRoutesCreateByKamelet;
+    }
+
+    public boolean isJmxManagementRegisterRoutesCreateByTemplate() {
+        return jmxManagementRegisterRoutesCreateByTemplate;
+    }
+
+    /**
+     * Whether routes created by route templates (not Kamelets) should be registered for JMX management. Enabling this
+     * allows to have fine-grained monitoring and management of every route created via route templates.
+     *
+     * This is default enabled (unlike Kamelets) as routes created via templates is regarded as standard routes, and
+     * should be available for management and monitoring.
+     */
+    public void setJmxManagementRegisterRoutesCreateByTemplate(boolean jmxManagementRegisterRoutesCreateByTemplate) {
+        this.jmxManagementRegisterRoutesCreateByTemplate = jmxManagementRegisterRoutesCreateByTemplate;
     }
 
     public boolean isCamelEventsTimestampEnabled() {
@@ -1101,6 +1196,30 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public void setRoutesCollectorEnabled(boolean routesCollectorEnabled) {
         this.routesCollectorEnabled = routesCollectorEnabled;
+    }
+
+    public boolean isRoutesCollectorIgnoreLoadingError() {
+        return routesCollectorIgnoreLoadingError;
+    }
+
+    /**
+     * Whether the routes collector should ignore any errors during loading and compiling routes.
+     *
+     * This is only intended for development or tooling.
+     */
+    public void setRoutesCollectorIgnoreLoadingError(boolean routesCollectorIgnoreLoadingError) {
+        this.routesCollectorIgnoreLoadingError = routesCollectorIgnoreLoadingError;
+    }
+
+    public String getCompileWorkDir() {
+        return compileWorkDir;
+    }
+
+    /**
+     * Work directory for compiler. Can be used to write compiled classes or other resources.
+     */
+    public void setCompileWorkDir(String compileWorkDir) {
+        this.compileWorkDir = compileWorkDir;
     }
 
     public String getJavaRoutesIncludePattern() {
@@ -1262,16 +1381,18 @@ public abstract class DefaultConfigurationProperties<T> {
         this.routesReloadRestartDuration = routesReloadRestartDuration;
     }
 
-    public boolean isLightweight() {
-        return lightweight;
+    public boolean isJmxUpdateRouteEnabled() {
+        return jmxUpdateRouteEnabled;
     }
 
     /**
-     * Configure the context to be lightweight. This will trigger some optimizations and memory reduction options.
-     * Lightweight context have some limitations. At this moment, dynamic endpoint destinations are not supported.
+     * Whether to allow updating routes at runtime via JMX using the ManagedRouteMBean.
+     *
+     * This is disabled by default, but can be enabled for development and troubleshooting purposes, such as updating
+     * routes in an existing running Camel via JMX and other tools.
      */
-    public void setLightweight(boolean lightweight) {
-        this.lightweight = lightweight;
+    public void setJmxUpdateRouteEnabled(boolean jmxUpdateRouteEnabled) {
+        this.jmxUpdateRouteEnabled = jmxUpdateRouteEnabled;
     }
 
     public String getExchangeFactory() {
@@ -1312,21 +1433,95 @@ public abstract class DefaultConfigurationProperties<T> {
         this.exchangeFactoryStatisticsEnabled = exchangeFactoryStatisticsEnabled;
     }
 
-    public boolean isDumpRoutes() {
+    public String getDumpRoutes() {
         return dumpRoutes;
     }
 
     /**
      * If dumping is enabled then Camel will during startup dump all loaded routes (incl rests and route templates)
-     * represented as XML DSL into the log. This is intended for trouble shooting or to assist during development.
+     * represented as XML/YAML DSL into the log. This is intended for trouble shooting or to assist during development.
      *
      * Sensitive information that may be configured in the route endpoints could potentially be included in the dump
      * output and is therefore not recommended being used for production usage.
      *
-     * This requires to have camel-xml-jaxb on the classpath to be able to dump the routes as XML.
+     * This requires to have camel-xml-io/camel-yaml-io on the classpath to be able to dump the routes as XML/YAML.
      */
-    public void setDumpRoutes(boolean dumpRoutes) {
+    public void setDumpRoutes(String dumpRoutes) {
         this.dumpRoutes = dumpRoutes;
+    }
+
+    public String getDumpRoutesInclude() {
+        return dumpRoutesInclude;
+    }
+
+    /**
+     * Controls what to include in output for route dumping.
+     *
+     * Possible values: all, routes, rests, routeConfigurations, routeTemplates, beans, dataFormats. Multiple values can
+     * be separated by comma. Default is routes.
+     */
+    public void setDumpRoutesInclude(String dumpRoutesInclude) {
+        this.dumpRoutesInclude = dumpRoutesInclude;
+    }
+
+    public boolean isDumpRoutesLog() {
+        return dumpRoutesLog;
+    }
+
+    /**
+     * Whether to log route dumps to Logger
+     */
+    public void setDumpRoutesLog(boolean dumpRoutesLog) {
+        this.dumpRoutesLog = dumpRoutesLog;
+    }
+
+    public boolean isDumpRoutesResolvePlaceholders() {
+        return dumpRoutesResolvePlaceholders;
+    }
+
+    /**
+     * Whether to resolve property placeholders in the dumped output. Default is true.
+     */
+    public void setDumpRoutesResolvePlaceholders(boolean dumpRoutesResolvePlaceholders) {
+        this.dumpRoutesResolvePlaceholders = dumpRoutesResolvePlaceholders;
+    }
+
+    public boolean isDumpRoutesUriAsParameters() {
+        return dumpRoutesUriAsParameters;
+    }
+
+    /**
+     * When dumping routes to YAML format, then this option controls whether endpoint URIs should be expanded into a
+     * key/value parameters.
+     */
+    public void setDumpRoutesUriAsParameters(boolean dumpRoutesUriAsParameters) {
+        this.dumpRoutesUriAsParameters = dumpRoutesUriAsParameters;
+    }
+
+    public boolean isDumpRoutesGeneratedIds() {
+        return dumpRoutesGeneratedIds;
+    }
+
+    /**
+     * Whether to include auto generated IDs in the dumped output. Default is false.
+     */
+    public void setDumpRoutesGeneratedIds(boolean dumpRoutesGeneratedIds) {
+        this.dumpRoutesGeneratedIds = dumpRoutesGeneratedIds;
+    }
+
+    public String getDumpRoutesOutput() {
+        return dumpRoutesOutput;
+    }
+
+    /**
+     * Whether to save route dumps to an output file.
+     *
+     * If the output is a filename, then all content is saved to this file. If the output is a directory name, then one
+     * or more files are saved to the directory, where the names are based on the original source file names, or auto
+     * generated names.
+     */
+    public void setDumpRoutesOutput(String dumpRoutesOutput) {
+        this.dumpRoutesOutput = dumpRoutesOutput;
     }
 
     public Map<String, String> getGlobalOptions() {
@@ -1356,161 +1551,13 @@ public abstract class DefaultConfigurationProperties<T> {
         this.globalOptions.put(key, value.toString());
     }
 
-    public boolean isRouteControllerSuperviseEnabled() {
-        return routeControllerSuperviseEnabled;
-    }
-
-    /**
-     * To enable using supervising route controller which allows Camel to startup and then the controller takes care of
-     * starting the routes in a safe manner.
-     *
-     * This can be used when you want to startup Camel despite a route may otherwise fail fast during startup and cause
-     * Camel to fail to startup as well. By delegating the route startup to the supervising route controller then its
-     * manages the startup using a background thread. The controller allows to be configured with various settings to
-     * attempt to restart failing routes.
-     */
-    public void setRouteControllerSuperviseEnabled(boolean routeControllerSuperviseEnabled) {
-        this.routeControllerSuperviseEnabled = routeControllerSuperviseEnabled;
-    }
-
-    public String getRouteControllerIncludeRoutes() {
-        return routeControllerIncludeRoutes;
-    }
-
-    /**
-     * Pattern for filtering routes to be included as supervised.
-     *
-     * The pattern is matching on route id, and endpoint uri for the route. Multiple patterns can be separated by comma.
-     *
-     * For example to include all kafka routes, you can say <tt>kafka:*</tt>. And to include routes with specific route
-     * ids <tt>myRoute,myOtherRoute</tt>. The pattern supports wildcards and uses the matcher from
-     * org.apache.camel.support.PatternHelper#matchPattern.
-     */
-    public void setRouteControllerIncludeRoutes(String routeControllerIncludeRoutes) {
-        this.routeControllerIncludeRoutes = routeControllerIncludeRoutes;
-    }
-
-    public String getRouteControllerExcludeRoutes() {
-        return routeControllerExcludeRoutes;
-    }
-
-    /**
-     * Pattern for filtering routes to be excluded as supervised.
-     *
-     * The pattern is matching on route id, and endpoint uri for the route. Multiple patterns can be separated by comma.
-     *
-     * For example to exclude all JMS routes, you can say <tt>jms:*</tt>. And to exclude routes with specific route ids
-     * <tt>mySpecialRoute,myOtherSpecialRoute</tt>. The pattern supports wildcards and uses the matcher from
-     * org.apache.camel.support.PatternHelper#matchPattern.
-     */
-    public void setRouteControllerExcludeRoutes(String routeControllerExcludeRoutes) {
-        this.routeControllerExcludeRoutes = routeControllerExcludeRoutes;
-    }
-
-    public int getRouteControllerThreadPoolSize() {
-        return routeControllerThreadPoolSize;
-    }
-
-    /**
-     * The number of threads used by the route controller scheduled thread pool that are used for restarting routes. The
-     * pool uses 1 thread by default, but you can increase this to allow the controller to concurrently attempt to
-     * restart multiple routes in case more than one route has problems starting.
-     */
-    public void setRouteControllerThreadPoolSize(int routeControllerThreadPoolSize) {
-        this.routeControllerThreadPoolSize = routeControllerThreadPoolSize;
-    }
-
-    public long getRouteControllerInitialDelay() {
-        return routeControllerInitialDelay;
-    }
-
-    /**
-     * Initial delay in milli seconds before the route controller starts, after CamelContext has been started.
-     */
-    public void setRouteControllerInitialDelay(long routeControllerInitialDelay) {
-        this.routeControllerInitialDelay = routeControllerInitialDelay;
-    }
-
-    public long getRouteControllerBackOffDelay() {
-        return routeControllerBackOffDelay;
-    }
-
-    /**
-     * Backoff delay in millis when restarting a route that failed to startup.
-     */
-    public void setRouteControllerBackOffDelay(long routeControllerBackOffDelay) {
-        this.routeControllerBackOffDelay = routeControllerBackOffDelay;
-    }
-
-    public long getRouteControllerBackOffMaxDelay() {
-        return routeControllerBackOffMaxDelay;
-    }
-
-    /**
-     * Backoff maximum delay in millis when restarting a route that failed to startup.
-     */
-    public void setRouteControllerBackOffMaxDelay(long routeControllerBackOffMaxDelay) {
-        this.routeControllerBackOffMaxDelay = routeControllerBackOffMaxDelay;
-    }
-
-    public long getRouteControllerBackOffMaxElapsedTime() {
-        return routeControllerBackOffMaxElapsedTime;
-    }
-
-    /**
-     * Backoff maximum elapsed time in millis, after which the backoff should be considered exhausted and no more
-     * attempts should be made.
-     */
-    public void setRouteControllerBackOffMaxElapsedTime(long routeControllerBackOffMaxElapsedTime) {
-        this.routeControllerBackOffMaxElapsedTime = routeControllerBackOffMaxElapsedTime;
-    }
-
-    public long getRouteControllerBackOffMaxAttempts() {
-        return routeControllerBackOffMaxAttempts;
-    }
-
-    /**
-     * Backoff maximum number of attempts to restart a route that failed to startup. When this threshold has been
-     * exceeded then the controller will give up attempting to restart the route, and the route will remain as stopped.
-     */
-    public void setRouteControllerBackOffMaxAttempts(long routeControllerBackOffMaxAttempts) {
-        this.routeControllerBackOffMaxAttempts = routeControllerBackOffMaxAttempts;
-    }
-
-    public double getRouteControllerBackOffMultiplier() {
-        return routeControllerBackOffMultiplier;
-    }
-
-    /**
-     * Backoff multiplier to use for exponential backoff. This is used to extend the delay between restart attempts.
-     */
-    public void setRouteControllerBackOffMultiplier(double routeControllerBackOffMultiplier) {
-        this.routeControllerBackOffMultiplier = routeControllerBackOffMultiplier;
-    }
-
-    public boolean isRouteControllerUnhealthyOnExhausted() {
-        return routeControllerUnhealthyOnExhausted;
-    }
-
-    /**
-     * Whether to mark the route as unhealthy (down) when all restarting attempts (backoff) have failed and the route is
-     * not successfully started and the route manager is giving up.
-     *
-     * Setting this to true allows health checks to know about this and can report the Camel application as DOWN.
-     *
-     * The default is false.
-     */
-    public void setRouteControllerUnhealthyOnExhausted(boolean routeControllerUnhealthyOnExhausted) {
-        this.routeControllerUnhealthyOnExhausted = routeControllerUnhealthyOnExhausted;
-    }
-
     public String getStartupRecorder() {
         return startupRecorder;
     }
 
     /**
      * To use startup recorder for capturing execution time during starting Camel. The recorder can be one of: false (or
-     * off), logging, java-flight-recorder (or jfr).
+     * off), logging, backlog, java-flight-recorder (or jfr).
      */
     public void setStartupRecorder(String startupRecorder) {
         this.startupRecorder = startupRecorder;
@@ -1762,6 +1809,7 @@ public abstract class DefaultConfigurationProperties<T> {
      * Whether camel-k style modeline is also enabled when not using camel-k. Enabling this allows to use a camel-k like
      * experience by being able to configure various settings using modeline directly in your route source code.
      */
+    @Deprecated
     public T withModeline(boolean modeline) {
         this.modeline = modeline;
         return (T) this;
@@ -1804,6 +1852,24 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public T withStreamCachingEnabled(boolean streamCachingEnabled) {
         this.streamCachingEnabled = streamCachingEnabled;
+        return (T) this;
+    }
+
+    /**
+     * To filter stream caching of a given set of allowed/denied classes. By default, all classes that are
+     * {@link java.io.InputStream} is allowed. Multiple class names can be separated by comma.
+     */
+    public T withStreamCachingAllowClasses(String streamCachingAllowClasses) {
+        this.streamCachingAllowClasses = streamCachingAllowClasses;
+        return (T) this;
+    }
+
+    /**
+     * To filter stream caching of a given set of allowed/denied classes. By default, all classes that are
+     * {@link java.io.InputStream} is allowed. Multiple class names can be separated by comma.
+     */
+    public T withStreamCachingDenyClasses(String streamCachingDenyClasses) {
+        this.streamCachingDenyClasses = streamCachingDenyClasses;
         return (T) this;
     }
 
@@ -1935,23 +2001,13 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
-     * Sets whether backlog tracing is enabled or not.
+     * Whether tracing should trace inner details from route templates (or kamelets). Turning this on increases the
+     * verbosity of tracing by including events from internal routes in the templates or kamelets.
      *
      * Default is false.
      */
-    public T withBacklogTracing(boolean backlogTracing) {
-        this.backlogTracing = backlogTracing;
-        return (T) this;
-    }
-
-    /**
-     * Whether to set backlog tracing on standby. If on standby then the backlog tracer is installed and made available.
-     * Then the backlog tracer can be enabled later at runtime via JMX or via Java API.
-     *
-     * Default is false.
-     */
-    public T withBacklogTracingStandby(boolean backlogTracingStandby) {
-        this.backlogTracingStandby = backlogTracingStandby;
+    public T withTracingTemplates(boolean tracingTemplates) {
+        this.tracingTemplates = tracingTemplates;
         return (T) this;
     }
 
@@ -1968,7 +2024,7 @@ public abstract class DefaultConfigurationProperties<T> {
     /**
      * Whether to capture precise source location:line-number for all EIPs in Camel routes.
      *
-     * Enabling this will impact parsing Java based routes (also Groovy, Kotlin, etc.) on startup as this uses JDK
+     * Enabling this will impact parsing Java based routes (also Groovy, etc.) on startup as this uses JDK
      * StackTraceElement to calculate the location from the Camel route, which comes with a performance cost. This only
      * impact startup, not the performance of the routes at runtime.
      */
@@ -1998,6 +2054,39 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
+     * The global name to use for Log EIP
+     *
+     * The name is default the routeId or the source:line if source location is enabled. You can also specify the name
+     * using tokens:
+     *
+     * <br/>
+     * ${class} - the logger class name (org.apache.camel.processor.LogProcessor) <br/>
+     * ${contextId} - the camel context id <br/>
+     * ${routeId} - the route id <br/>
+     * ${groupId} - the route group id <br/>
+     * ${nodeId} - the node id <br/>
+     * ${nodePrefixId} - the node prefix id <br/>
+     * ${source} - the source:line (source location must be enabled) <br/>
+     * ${source.name} - the source filename (source location must be enabled) <br/>
+     * ${source.line} - the source line number (source location must be enabled)
+     *
+     * For example to use the route and node id you can specify the name as: ${routeId}/${nodeId}
+     */
+    public T withLogName(String logName) {
+        this.logName = logName;
+        return (T) this;
+    }
+
+    /**
+     * To configure the language to use for Log EIP. By default, the simple language is used. However, Camel also
+     * supports other languages such as groovy.
+     */
+    public T withLogLanguage(String logLanguage) {
+        this.logLanguage = logLanguage;
+        return (T) this;
+    }
+
+    /**
      * Sets whether the object should automatically start when Camel starts. Important: Currently only routes can be
      * disabled, as CamelContext's are always started. Note: When setting auto startup false on CamelContext then that
      * takes precedence and no routes is started. You would need to start CamelContext explicit using the
@@ -2008,6 +2097,19 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public T withAutoStartup(boolean autoStartup) {
         this.autoStartup = autoStartup;
+        return (T) this;
+    }
+
+    /**
+     * Used for exclusive filtering of routes to not automatically start with Camel starts.
+     *
+     * The pattern support matching by route id or endpoint urls.
+     *
+     * Multiple patterns can be specified separated by comma, as example, to exclude all the routes starting from kafka
+     * or jms use: kafka,jms.
+     */
+    public T withAutoStartupExcludePattern(String autoStartupExcludePattern) {
+        this.autoStartupExcludePattern = autoStartupExcludePattern;
         return (T) this;
     }
 
@@ -2117,7 +2219,7 @@ public abstract class DefaultConfigurationProperties<T> {
      *
      * Turning this off should only be done if you are sure you do not use any of these Camel features.
      *
-     * Not all runtimes allow turning this off (such as camel-blueprint or camel-cdi with XML).
+     * Not all runtimes allow turning this off.
      *
      * The default value is true (enabled).
      */
@@ -2153,6 +2255,35 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public T withJmxManagementNamePattern(String jmxManagementNamePattern) {
         this.jmxManagementNamePattern = jmxManagementNamePattern;
+        return (T) this;
+    }
+
+    /**
+     * Whether routes created by Kamelets should be registered for JMX management. Enabling this allows to have
+     * fine-grained monitoring and management of every route created via Kamelets.
+     *
+     * This is default disabled as a Kamelet is intended as a component (black-box) and its implementation details as
+     * Camel route makes the overall management and monitoring of Camel applications more verbose.
+     *
+     * During development of Kamelets then enabling this will make it possible for developers to do fine-grained
+     * performance inspection and identify potential bottlenecks in the Kamelet routes.
+     *
+     * However, for production usage then keeping this disabled is recommended.
+     */
+    public T withJmxManagementRegisterRoutesCreateByKamelet(boolean jmxManagementRegisterRoutesCreateByKamelet) {
+        this.jmxManagementRegisterRoutesCreateByKamelet = jmxManagementRegisterRoutesCreateByKamelet;
+        return (T) this;
+    }
+
+    /**
+     * Whether routes created by route templates (not Kamelets) should be registered for JMX management. Enabling this
+     * allows to have fine-grained monitoring and management of every route created via route templates.
+     *
+     * This is default enabled (unlike Kamelets) as routes created via templates is regarded as standard routes, and
+     * should be available for management and monitoring.
+     */
+    public T withJmxManagementRegisterRoutesCreateByTemplate(boolean jmxManagementRegisterRoutesCreateByTemplate) {
+        this.jmxManagementRegisterRoutesCreateByTemplate = jmxManagementRegisterRoutesCreateByTemplate;
         return (T) this;
     }
 
@@ -2267,16 +2398,6 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
-     * Sets whether debugging is enabled or not.
-     *
-     * Default is false.
-     */
-    public T withDebugging(boolean debugging) {
-        this.debugging = debugging;
-        return (T) this;
-    }
-
-    /**
      * Sets the pattern used for determine which custom MDC keys to propagate during message routing when the routing
      * engine continues routing asynchronously for the given message. Setting this pattern to * will propagate all
      * custom keys. Or setting the pattern to foo*,bar* will propagate any keys starting with either foo or bar. Notice
@@ -2302,6 +2423,24 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public T withRoutesCollectorEnabled(boolean routesCollectorEnabled) {
         this.routesCollectorEnabled = routesCollectorEnabled;
+        return (T) this;
+    }
+
+    /**
+     * Whether the routes collector should ignore any errors during loading and compiling routes.
+     *
+     * This is only intended for development or tooling.
+     */
+    public T withRoutesCollectorIgnoreLoadingError(boolean routesCollectorIgnoreLoadingError) {
+        this.routesCollectorIgnoreLoadingError = routesCollectorIgnoreLoadingError;
+        return (T) this;
+    }
+
+    /**
+     * Work directory for compiler. Can be used to write compiled classes or other resources.
+     */
+    public T withCompileWorkDir(String compileWorkDir) {
+        this.compileWorkDir = compileWorkDir;
         return (T) this;
     }
 
@@ -2431,18 +2570,6 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
-     * Configure the context to be lightweight. This will trigger some optimizations and memory reduction options.
-     * <p/>
-     * Lightweight context have some limitations. At the moment, dynamic endpoint destinations are not supported. Also,
-     * this should only be done on a JVM with a single Camel application (microservice like camel-main, camel-quarkus,
-     * camel-spring-boot). As this affects the entire JVM where Camel JARs are on the classpath.
-     */
-    public T withLightweight(boolean lightweight) {
-        this.lightweight = lightweight;
-        return (T) this;
-    }
-
-    /**
      * Controls whether to pool (reuse) exchanges or create new fresh exchanges (default). Using pooled will reduce JVM
      * garbage collection overhead by avoiding to re-create Exchange instances per message each consumer receives.
      */
@@ -2468,16 +2595,72 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
-     * If enable then Camel will during startup dump all loaded routes (incl rests and route templates) represented as
-     * XML DSL into the log. This is intended for trouble shooting or to assist during development.
+     * If dumping is enabled then Camel will during startup dump all loaded routes (incl rests and route templates)
+     * represented as XML/YAML DSL into the log. This is intended for trouble shooting or to assist during development.
      *
      * Sensitive information that may be configured in the route endpoints could potentially be included in the dump
-     * output and is therefore not recommended to be used for production usage.
+     * output and is therefore not recommended being used for production usage.
      *
-     * This requires to have camel-xml-jaxb on the classpath to be able to dump the routes as XML.
+     * This requires to have camel-xml-io/camel-yaml-io on the classpath to be able to dump the routes as XML/YAML.
      */
-    public T withDumpRoutes(boolean dumpRoutes) {
+    public T withDumpRoutes(String dumpRoutes) {
         this.dumpRoutes = dumpRoutes;
+        return (T) this;
+    }
+
+    /**
+     * Controls what to include in output for route dumping.
+     *
+     * Possible values: all, routes, rests, routeConfigurations, routeTemplates, beans, dataFormats. Multiple values can
+     * be separated by comma. Default is routes.
+     */
+    public T withDumpRoutesInclude(String dumpRoutesInclude) {
+        this.dumpRoutesInclude = dumpRoutesInclude;
+        return (T) this;
+    }
+
+    /**
+     * Whether to log route dumps to Logger
+     */
+    public T withDumpRoutesLog(boolean dumpRoutesLog) {
+        this.dumpRoutesLog = dumpRoutesLog;
+        return (T) this;
+    }
+
+    /**
+     * Whether to resolve property placeholders in the dumped output. Default is true.
+     */
+    public T withDumpRoutesResolvePlaceholders(boolean dumpRoutesResolvePlaceholders) {
+        this.dumpRoutesResolvePlaceholders = dumpRoutesResolvePlaceholders;
+        return (T) this;
+    }
+
+    /**
+     * When dumping routes to YAML format, then this option controls whether endpoint URIs should be expanded into a
+     * key/value parameters.
+     */
+    public T withDumpRoutesUriAsParameters(boolean dumpRoutesUriAsParameters) {
+        this.dumpRoutesUriAsParameters = dumpRoutesUriAsParameters;
+        return (T) this;
+    }
+
+    /**
+     * Whether to include auto generated IDs in the dumped output. Default is false.
+     */
+    public T withDumpRoutesGeneratedIds(boolean dumpRoutesGeneratedIds) {
+        this.dumpRoutesGeneratedIds = dumpRoutesGeneratedIds;
+        return (T) this;
+    }
+
+    /**
+     * Whether to save route dumps to an output file.
+     *
+     * If the output is a filename, then all content is saved to this file. If the output is a directory name, then one
+     * or more files are saved to the directory, where the names are based on the original source file names, or auto
+     * generated names.
+     */
+    public T withDumpRoutesOutput(String dumpRoutesOutput) {
+        this.dumpRoutesOutput = dumpRoutesOutput;
         return (T) this;
     }
 
@@ -2510,123 +2693,8 @@ public abstract class DefaultConfigurationProperties<T> {
     }
 
     /**
-     * To enable using supervising route controller which allows Camel to startup and then the controller takes care of
-     * starting the routes in a safe manner.
-     *
-     * This can be used when you want to startup Camel despite a route may otherwise fail fast during startup and cause
-     * Camel to fail to startup as well. By delegating the route startup to the supervising route controller then its
-     * manages the startup using a background thread. The controller allows to be configured with various settings to
-     * attempt to restart failing routes.
-     */
-    public T withRouteControllerSuperviseEnabled(boolean routeControllerSuperviseEnabled) {
-        this.routeControllerSuperviseEnabled = routeControllerSuperviseEnabled;
-        return (T) this;
-    }
-
-    /**
-     * Initial delay in milli seconds before the route controller starts, after CamelContext has been started.
-     */
-    public T withRouteControllerInitialDelay(long routeControllerInitialDelay) {
-        this.routeControllerInitialDelay = routeControllerInitialDelay;
-        return (T) this;
-    }
-
-    /**
-     * Backoff delay in millis when restarting a route that failed to startup.
-     */
-    public T withRouteControllerBackOffDelay(long routeControllerBackOffDelay) {
-        this.routeControllerBackOffDelay = routeControllerBackOffDelay;
-        return (T) this;
-    }
-
-    /**
-     * Backoff maximum delay in millis when restarting a route that failed to startup.
-     */
-    public T withRouteControllerBackOffMaxDelay(long routeControllerBackOffMaxDelay) {
-        this.routeControllerBackOffMaxDelay = routeControllerBackOffMaxDelay;
-        return (T) this;
-    }
-
-    /**
-     * Backoff maximum elapsed time in millis, after which the backoff should be considered exhausted and no more
-     * attempts should be made.
-     */
-    public T withRouteControllerBackOffMaxElapsedTime(long routeControllerBackOffMaxElapsedTime) {
-        this.routeControllerBackOffMaxElapsedTime = routeControllerBackOffMaxElapsedTime;
-        return (T) this;
-    }
-
-    /**
-     * Backoff maximum number of attempts to restart a route that failed to startup. When this threshold has been
-     * exceeded then the controller will give up attempting to restart the route, and the route will remain as stopped.
-     */
-    public T withRouteControllerBackOffMaxAttempts(long routeControllerBackOffMaxAttempts) {
-        this.routeControllerBackOffMaxAttempts = routeControllerBackOffMaxAttempts;
-        return (T) this;
-    }
-
-    /**
-     * Backoff multiplier to use for exponential backoff. This is used to extend the delay between restart attempts.
-     */
-    public T withRouteControllerBackOffMultiplier(double routeControllerBackOffMultiplier) {
-        this.routeControllerBackOffMultiplier = routeControllerBackOffMultiplier;
-        return (T) this;
-    }
-
-    /**
-     * The number of threads used by the route controller scheduled thread pool that are used for restarting routes. The
-     * pool uses 1 thread by default, but you can increase this to allow the controller to concurrently attempt to
-     * restart multiple routes in case more than one route has problems starting.
-     */
-    public T withRouteControllerThreadPoolSize(int routeControllerThreadPoolSize) {
-        this.routeControllerThreadPoolSize = routeControllerThreadPoolSize;
-        return (T) this;
-    }
-
-    /**
-     * Pattern for filtering routes to be included as supervised.
-     *
-     * The pattern is matching on route id, and endpoint uri for the route. Multiple patterns can be separated by comma.
-     *
-     * For example to include all kafka routes, you can say <tt>kafka:*</tt>. And to include routes with specific route
-     * ids <tt>myRoute,myOtherRoute</tt>. The pattern supports wildcards and uses the matcher from
-     * org.apache.camel.support.PatternHelper#matchPattern.
-     */
-    public T withRouteControllerIncludeRoutes(String routeControllerIncludeRoutes) {
-        this.routeControllerIncludeRoutes = routeControllerIncludeRoutes;
-        return (T) this;
-    }
-
-    /**
-     * Pattern for filtering routes to be excluded as supervised.
-     *
-     * The pattern is matching on route id, and endpoint uri for the route. Multiple patterns can be separated by comma.
-     *
-     * For example to exclude all JMS routes, you can say <tt>jms:*</tt>. And to exclude routes with specific route ids
-     * <tt>mySpecialRoute,myOtherSpecialRoute</tt>. The pattern supports wildcards and uses the matcher from
-     * org.apache.camel.support.PatternHelper#matchPattern.
-     */
-    public T withRouteControllerExcludeRoutes(String routeControllerExcludeRoutes) {
-        this.routeControllerExcludeRoutes = routeControllerExcludeRoutes;
-        return (T) this;
-    }
-
-    /**
-     * Whether to mark the route as unhealthy (down) when all restarting attempts (backoff) have failed and the route is
-     * not successfully started and the route manager is giving up.
-     *
-     * Setting this to true allows health checks to know about this and can report the Camel application as DOWN.
-     *
-     * The default is false.
-     */
-    public T withRouteControllerUnhealthyOnExhausted(boolean unhealthyOnExhausted) {
-        this.routeControllerUnhealthyOnExhausted = unhealthyOnExhausted;
-        return (T) this;
-    }
-
-    /**
      * To use startup recorder for capturing execution time during starting Camel. The recorder can be one of: false (or
-     * off), logging, java-flight-recorder (or jfr).
+     * off), logging, backlog, java-flight-recorder (or jfr).
      *
      * The default is false.
      */
@@ -2688,6 +2756,26 @@ public abstract class DefaultConfigurationProperties<T> {
      */
     public T withStartupRecorderDir(String startupRecorderDir) {
         this.startupRecorderDir = startupRecorderDir;
+        return (T) this;
+    }
+
+    public String getCloudPropertiesLocation() {
+        return cloudPropertiesLocation;
+    }
+
+    /**
+     * Sets the locations (comma separated values) where to find properties configuration as defined for cloud native
+     * environments such as Kubernetes. You should only scan text based mounted configuration.
+     */
+    public void setCloudPropertiesLocation(String cloudPropertiesLocation) {
+        this.cloudPropertiesLocation = cloudPropertiesLocation;
+    }
+
+    /**
+     * Whether to use cloud properties location setting. Default is none.
+     */
+    public T withCloudPropertiesLocation(boolean dumpRoutesResolvePlaceholders) {
+        this.cloudPropertiesLocation = cloudPropertiesLocation;
         return (T) this;
     }
 

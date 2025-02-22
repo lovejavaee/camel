@@ -21,6 +21,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.model.ProcessorDefinition;
+import org.apache.camel.test.junit5.DebugBreakpoint;
 import org.apache.camel.test.spring.junit5.CamelSpringTestSupport;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -36,19 +37,29 @@ public class DebugSpringTest extends CamelSpringTestSupport {
     private boolean debugged;
 
     @Override
-    public boolean isUseDebugger() {
-        // must enable debugger
-        return true;
+    public void setupResources() throws Exception {
+        camelContextConfiguration()
+                .withBreakpoint(createBreakpoint());
     }
 
-    @Override
-    protected void debugBefore(
-            Exchange exchange, Processor processor,
-            ProcessorDefinition<?> definition, String id, String shortName) {
-        // this method is invoked before we are about to enter the given processor
-        // from your Java editor you can just add a breakpoint in the code line below
-        LOG.info("Before " + definition + " with body " + exchange.getIn().getBody());
-        debugged = true;
+    protected DebugBreakpoint createBreakpoint() {
+        return new DebugBreakpoint() {
+            @Override
+            protected void debugBefore(
+                    Exchange exchange, Processor processor, ProcessorDefinition<?> definition, String id, String label) {
+                // this method is invoked before we are about to enter the given processor
+                // from your Java editor you can add a breakpoint in the code line below
+                LOG.info("Before {} with body {}", definition, exchange.getIn().getBody());
+                debugged = true;
+            }
+
+            @Override
+            protected void debugAfter(
+                    Exchange exchange, Processor processor, ProcessorDefinition<?> definition, String id, String label,
+                    long timeTaken) {
+
+            }
+        };
     }
 
     @Test

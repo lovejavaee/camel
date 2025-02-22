@@ -35,11 +35,14 @@ import org.apache.camel.spi.Registry;
 import org.apache.camel.support.DefaultRegistry;
 import org.apache.camel.support.jndi.JndiBeanRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class ValidatorResourceResolverFactoryTest extends ContextTestSupport {
 
     private Context jndiContext;
@@ -112,7 +115,7 @@ public class ValidatorResourceResolverFactoryTest extends ContextTestSupport {
     }
 
     @Override
-    protected Registry createRegistry() throws Exception {
+    protected Registry createCamelRegistry() throws Exception {
         jndiContext = createJndiContext();
         jndiContext.bind("resourceResolverFactory", new ResourceResolverFactoryImpl());
         return new DefaultRegistry(new JndiBeanRepository(jndiContext));
@@ -120,10 +123,10 @@ public class ValidatorResourceResolverFactoryTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder[] createRouteBuilders() throws Exception {
+    protected RouteBuilder[] createRouteBuilders() {
         return new RouteBuilder[] { new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .setHeader("xsd_file", new ConstantExpression("org/apache/camel/component/validator/xsds/person.xsd"))
                         .recipientList(new SimpleExpression(
@@ -133,7 +136,7 @@ public class ValidatorResourceResolverFactoryTest extends ContextTestSupport {
 
         }, new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
 
                 from("direct:startComponent")
                         .setHeader("xsd_file", new ConstantExpression("org/apache/camel/component/validator/xsds/person.xsd"))

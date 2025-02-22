@@ -16,16 +16,15 @@
  */
 package org.apache.camel.component.timer;
 
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import org.apache.camel.ContextTestSupport;
+import org.apache.camel.FailedToCreateRouteException;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TimerWithTimeOptionTest extends ContextTestSupport {
 
@@ -38,7 +37,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureWithTPattern() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
@@ -61,7 +60,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureWithTPatternNoPeriod() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
@@ -83,7 +82,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureWithTPatternFixedRate() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
@@ -106,7 +105,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureWithoutTPattern() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
@@ -129,7 +128,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureWithoutTPatternNoPeriod() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
@@ -151,7 +150,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureCustomPattern() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss.SSS");
@@ -174,7 +173,7 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureCustomPatternNoPeriod() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Date future = new Date(new Date().getTime() + 10);
 
                 SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss.SSS");
@@ -196,16 +195,12 @@ public class TimerWithTimeOptionTest extends ContextTestSupport {
     public void testFiredInFutureIllegalTime() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 fromF("timer://foo?time=%s", "20090101").to("mock:result");
             }
         });
-        try {
-            context.start();
-            fail("Should throw an exception");
-        } catch (Exception e) {
-            assertIsInstanceOf(ParseException.class, e.getCause().getCause());
-        }
+
+        Assertions.assertThrows(FailedToCreateRouteException.class, () -> context.start(), "Should throw an exception");
     }
 
 }

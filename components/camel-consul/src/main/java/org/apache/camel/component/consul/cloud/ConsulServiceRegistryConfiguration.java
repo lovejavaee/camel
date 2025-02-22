@@ -19,7 +19,9 @@ package org.apache.camel.component.consul.cloud;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.component.consul.ConsulClientConfiguration;
 
+@Deprecated
 public class ConsulServiceRegistryConfiguration extends ConsulClientConfiguration {
+
     /**
      * Should we remove all the registered services know by this registry on stop?
      */

@@ -24,14 +24,13 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -43,22 +42,17 @@ public class SqlConsumerDeleteFailedTest extends CamelTestSupport {
     private JdbcTemplate jdbcTemplate;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         db = new EmbeddedDatabaseBuilder()
                 .setName(getClass().getSimpleName())
                 .setType(EmbeddedDatabaseType.H2)
                 .addScript("sql/createAndPopulateDatabase.sql").build();
 
         jdbcTemplate = new JdbcTemplate(db);
-
-        super.setUp();
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void doPostTearDown() throws Exception {
 
         if (db != null) {
             db.shutdown();
@@ -80,11 +74,8 @@ public class SqlConsumerDeleteFailedTest extends CamelTestSupport {
         assertEquals(3, exchanges.get(1).getIn().getBody(Map.class).get("ID"));
         assertEquals("Linux", exchanges.get(1).getIn().getBody(Map.class).get("PROJECT"));
 
-        // give it a little tine to delete
-        Thread.sleep(500);
-
-        assertEquals(Integer.valueOf(1), jdbcTemplate.queryForObject("select count(*) from projects", Integer.class),
-                "Should have deleted 2 rows");
+        await("Should have deleted 2 rows, keeping 1")
+                .until(() -> jdbcTemplate.queryForObject("select count(*) from projects", Integer.class) == 1);
         assertEquals("AMQ", jdbcTemplate.queryForObject("select PROJECT from projects where license = 'BAD'", String.class),
                 "Should be AMQ project that is BAD");
     }

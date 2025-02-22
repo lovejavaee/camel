@@ -23,7 +23,10 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.support.DefaultMessage;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BeanCreateBodyExceptionTest extends ContextTestSupport {
 
@@ -53,7 +56,7 @@ public class BeanCreateBodyExceptionTest extends ContextTestSupport {
     }
 
     @Test
-    public void testCreateBodyAlwaysException() throws Exception {
+    public void testCreateBodyAlwaysException() {
         getMockEndpoint("mock:result").expectedMessageCount(0);
         getMockEndpoint("mock:dead").expectedMessageCount(1);
 
@@ -76,7 +79,7 @@ public class BeanCreateBodyExceptionTest extends ContextTestSupport {
     }
 
     @Test
-    public void testProducerTemplateCreateBodyAlwaysException() throws Exception {
+    public void testProducerTemplateCreateBodyAlwaysException() {
         template.send("seda:empty", e -> {
             e.setIn(new DefaultMessage(e) {
                 @Override
@@ -88,7 +91,7 @@ public class BeanCreateBodyExceptionTest extends ContextTestSupport {
     }
 
     @Test
-    public void testConsumerTemplateCreateBodyAlwaysException() throws Exception {
+    public void testConsumerTemplateCreateBodyAlwaysException() {
         final AtomicBoolean fail = new AtomicBoolean();
 
         template.send("seda:empty", e -> {
@@ -111,23 +114,25 @@ public class BeanCreateBodyExceptionTest extends ContextTestSupport {
             });
         });
 
-        try {
-            // turn on fail mode
-            fail.set(true);
+        // turn on fail mode
+        fail.set(true);
 
-            consumer.receiveBody("seda:empty", 10000);
-            fail("Should throw exception");
-        } catch (Exception e) {
-            assertIsInstanceOf(IllegalArgumentException.class, e);
-            assertEquals("Forced internal error", e.getMessage());
-        }
+        Exception e = assertThrows(Exception.class,
+                () -> consumer.receiveBody("seda:empty", 1000),
+                "Should throw exception");
+
+        assertIsInstanceOf(IllegalArgumentException.class, e);
+        assertEquals("Forced internal error", e.getMessage());
+
+        fail.set(false);
+        assertDoesNotThrow(() -> consumer.receiveBody("seda:empty", 1000), "");
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .errorHandler(deadLetterChannel("mock:dead"))
                         .bean(BeanCreateBodyExceptionTest.class, "callMe")

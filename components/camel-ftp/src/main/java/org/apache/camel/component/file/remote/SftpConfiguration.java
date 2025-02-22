@@ -20,6 +20,7 @@ import java.net.URI;
 import java.security.KeyPair;
 
 import org.apache.camel.LoggingLevel;
+import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 
@@ -35,13 +36,17 @@ public class SftpConfiguration extends RemoteFileConfiguration {
     private String knownHostsFile;
     @UriParam(label = "security", defaultValue = "true")
     private boolean useUserKnownHostsFile = true;
+    @UriParam(label = "security", defaultValue = "false")
+    private boolean autoCreateKnownHostsFile;
     @UriParam(label = "security", secret = true)
+    @Metadata(supportFileReference = true)
     private String knownHostsUri;
     @UriParam(label = "security", secret = true)
     private byte[] knownHosts;
     @UriParam(label = "security", secret = true)
     private String privateKeyFile;
     @UriParam(label = "security", secret = true)
+    @Metadata(supportFileReference = true)
     private String privateKeyUri;
     @UriParam(label = "security", secret = true)
     private byte[] privateKey;
@@ -65,7 +70,7 @@ public class SftpConfiguration extends RemoteFileConfiguration {
     private int compression;
     @UriParam(label = "security")
     private String preferredAuthentications;
-    @UriParam(defaultValue = "WARN")
+    @UriParam(defaultValue = "WARN", enums = "DEBUG,INFO,WARN,ERROR")
     private LoggingLevel jschLoggingLevel = LoggingLevel.WARN;
     @UriParam(label = "advanced")
     private Integer bulkRequests;
@@ -81,6 +86,10 @@ public class SftpConfiguration extends RemoteFileConfiguration {
     private String serverHostKeys;
     @UriParam(label = "security")
     private String publicKeyAcceptedAlgorithms;
+    @UriParam(label = "advanced")
+    private String filenameEncoding;
+    @UriParam(label = "advanced", defaultValue = "DEBUG")
+    private LoggingLevel serverMessageLoggingLevel = LoggingLevel.DEBUG;
 
     public SftpConfiguration() {
         setProtocol("sftp");
@@ -120,6 +129,18 @@ public class SftpConfiguration extends RemoteFileConfiguration {
      */
     public void setUseUserKnownHostsFile(boolean useUserKnownHostsFile) {
         this.useUserKnownHostsFile = useUserKnownHostsFile;
+    }
+
+    public boolean isAutoCreateKnownHostsFile() {
+        return autoCreateKnownHostsFile;
+    }
+
+    /**
+     * If knownHostFile does not exist, then attempt to auto-create the path and file (beware that the file will be
+     * created by the current user of the running Java process, which may not have file permission).
+     */
+    public void setAutoCreateKnownHostsFile(boolean autoCreateKnownHostsFile) {
+        this.autoCreateKnownHostsFile = autoCreateKnownHostsFile;
     }
 
     /**
@@ -391,5 +412,30 @@ public class SftpConfiguration extends RemoteFileConfiguration {
      */
     public void setPublicKeyAcceptedAlgorithms(String publicKeyAcceptedAlgorithms) {
         this.publicKeyAcceptedAlgorithms = publicKeyAcceptedAlgorithms;
+    }
+
+    public String getFilenameEncoding() {
+        return filenameEncoding;
+    }
+
+    /**
+     * Encoding to use for FTP client when parsing filenames. By default, UTF-8 is used.
+     */
+    public void setFilenameEncoding(String filenameEncoding) {
+        this.filenameEncoding = filenameEncoding;
+    }
+
+    public LoggingLevel getServerMessageLoggingLevel() {
+        return serverMessageLoggingLevel;
+    }
+
+    /**
+     * The logging level used for various human intended log messages from the FTP server.
+     *
+     * This can be used during troubleshooting to raise the logging level and inspect the logs received from the FTP
+     * server.
+     */
+    public void setServerMessageLoggingLevel(LoggingLevel serverMessageLoggingLevel) {
+        this.serverMessageLoggingLevel = serverMessageLoggingLevel;
     }
 }

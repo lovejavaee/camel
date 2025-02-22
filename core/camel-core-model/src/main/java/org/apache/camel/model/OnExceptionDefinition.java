@@ -18,7 +18,6 @@ package org.apache.camel.model;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
@@ -61,9 +60,10 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
 
     @XmlElement(name = "exception", required = true)
     private List<String> exceptions = new ArrayList<>();
-    @XmlElement(name = "onWhen")
+    @Metadata(description = "To use an expression to only trigger this in specific situations")
+    @XmlElement
     @AsPredicate
-    private WhenDefinition onWhen;
+    private OnWhenDefinition onWhen;
     @XmlElement(name = "retryWhile")
     @AsPredicate
     @Metadata(label = "advanced")
@@ -96,12 +96,38 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
     public OnExceptionDefinition() {
     }
 
+    protected OnExceptionDefinition(OnExceptionDefinition source) {
+        super(source);
+        this.handledPolicy = source.handledPolicy;
+        this.continuedPolicy = source.continuedPolicy;
+        this.retryWhilePolicy = source.retryWhilePolicy;
+        this.onRedelivery = source.onRedelivery;
+        this.onExceptionOccurred = source.onExceptionOccurred;
+        this.routeScoped = source.routeScoped;
+        this.exceptions = new ArrayList<>(source.exceptions);
+        this.onWhen = source.onWhen != null ? source.onWhen.copyDefinition() : null;
+        this.retryWhile = source.retryWhile != null ? source.retryWhile.copyDefinition() : null;
+        this.redeliveryPolicyType = source.redeliveryPolicyType != null ? source.redeliveryPolicyType.copyDefinition() : null;
+        this.redeliveryPolicyRef = source.redeliveryPolicyRef;
+        this.handled = source.handled != null ? source.handled.copyDefinition() : null;
+        this.continued = source.continued != null ? source.continued.copyDefinition() : null;
+        this.onRedeliveryRef = source.onRedeliveryRef;
+        this.onExceptionOccurredRef = source.onExceptionOccurredRef;
+        this.useOriginalMessage = source.useOriginalMessage;
+        this.useOriginalBody = source.useOriginalBody;
+    }
+
     public OnExceptionDefinition(List<Class<? extends Throwable>> exceptionClasses) {
-        this.exceptions.addAll(exceptionClasses.stream().map(Class::getName).collect(Collectors.toList()));
+        this.exceptions.addAll(exceptionClasses.stream().map(Class::getName).toList());
     }
 
     public OnExceptionDefinition(Class<? extends Throwable> exceptionType) {
         this.exceptions.add(exceptionType.getName());
+    }
+
+    @Override
+    public OnExceptionDefinition copyDefinition() {
+        return new OnExceptionDefinition(this);
     }
 
     public void setRouteScoped(boolean routeScoped) {
@@ -149,10 +175,6 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
     }
 
     public void validateConfiguration() {
-        if (isInheritErrorHandler() != null && isInheritErrorHandler()) {
-            throw new IllegalArgumentException(this + " cannot have the inheritErrorHandler option set to true");
-        }
-
         if (exceptions == null || exceptions.isEmpty()) {
             throw new IllegalArgumentException("At least one exception must be configured on " + this);
         }
@@ -271,7 +293,7 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
      * @return           the builder
      */
     public OnExceptionDefinition onWhen(@AsPredicate Predicate predicate) {
-        setOnWhen(new WhenDefinition(predicate));
+        setOnWhen(new OnWhenDefinition(predicate));
         return this;
     }
 
@@ -669,9 +691,12 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
      * original message body and headers as they are. You cannot enable both useOriginalMessage and useOriginalBody.
      * <p/>
      * The original input message is defensively copied, and the copied message body is converted to
-     * {@link org.apache.camel.StreamCache} if possible, to ensure the body can be read when the original message is
-     * being used later. If the body is not converted to {@link org.apache.camel.StreamCache} then the body will not be
-     * able to re-read when accessed later.
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
      * <p/>
      * <b>Important:</b> The original input means the input message that are bounded by the current
      * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
@@ -711,9 +736,12 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
      * original message body and headers as they are. You cannot enable both useOriginalMessage and useOriginalBody.
      * <p/>
      * The original input message is defensively copied, and the copied message body is converted to
-     * {@link org.apache.camel.StreamCache} if possible, to ensure the body can be read when the original message is
-     * being used later. If the body is not converted to {@link org.apache.camel.StreamCache} then the body will not be
-     * able to re-read when accessed later.
+     * {@link org.apache.camel.StreamCache} if possible (stream caching is enabled, can be disabled globally or on the
+     * original route), to ensure the body can be read when the original message is being used later. If the body is
+     * converted to {@link org.apache.camel.StreamCache} then the message body on the current
+     * {@link org.apache.camel.Exchange} is replaced with the {@link org.apache.camel.StreamCache} body. If the body is
+     * not converted to {@link org.apache.camel.StreamCache} then the body will not be able to re-read when accessed
+     * later.
      * <p/>
      * <b>Important:</b> The original input means the input message that are bounded by the current
      * {@link org.apache.camel.spi.UnitOfWork}. An unit of work typically spans one route, or multiple routes if they
@@ -855,11 +883,11 @@ public class OnExceptionDefinition extends OutputDefinition<OnExceptionDefinitio
         this.continuedPolicy = continuedPolicy;
     }
 
-    public WhenDefinition getOnWhen() {
+    public OnWhenDefinition getOnWhen() {
         return onWhen;
     }
 
-    public void setOnWhen(WhenDefinition onWhen) {
+    public void setOnWhen(OnWhenDefinition onWhen) {
         this.onWhen = onWhen;
     }
 

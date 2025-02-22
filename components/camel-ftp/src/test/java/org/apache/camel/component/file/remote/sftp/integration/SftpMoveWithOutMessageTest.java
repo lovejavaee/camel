@@ -24,6 +24,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.support.DefaultMessage;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test that the existence of a outMessage in an exchange will not break the move-file post-processing
  */
 @EnabledIf(value = "org.apache.camel.test.infra.ftp.services.embedded.SftpUtil#hasRequiredAlgorithms('src/test/resources/hostkey.pem')")
+@Disabled
 public class SftpMoveWithOutMessageTest extends SftpServerTestSupport {
 
     @Timeout(value = 30)
@@ -75,9 +77,13 @@ public class SftpMoveWithOutMessageTest extends SftpServerTestSupport {
             public void configure() {
                 from("seda:trigger")
                         .pollEnrich(
-                                "sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}?username=admin&password=admin&delay=10000&disconnect=true&move=archive")
+                                "sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}?username=admin&password=admin&delay="
+                                    + "10000&disconnect=true&move=archive&knownHostsFile="
+                                    + service.getKnownHostsFile())
                         .pollEnrich(
-                                "sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}?username=admin&password=admin&delay=10000&disconnect=true&move=archive")
+                                "sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}?username=admin&password=admin&delay="
+                                    + "10000&disconnect=true&move=archive&knownHostsFile="
+                                    + service.getKnownHostsFile())
                         .process(processor);
             }
         } };

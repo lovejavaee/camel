@@ -16,6 +16,8 @@
  */
 package org.apache.camel.component.file;
 
+import java.util.UUID;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -27,13 +29,14 @@ import org.junit.jupiter.api.Test;
  * Unit test that we can chain bean and file producer.
  */
 public class BeanToFileTest extends ContextTestSupport {
+    private static final String TEST_FILE_NAME = "BeanToFileTest" + UUID.randomUUID() + ".txt";
 
     @Test
     public void testBeanToFile() throws Exception {
         MockEndpoint mock = getMockEndpoint("mock:result");
         mock.expectedMessageCount(1);
 
-        mock.expectedFileExists(testFile("BeanToFileTest.txt"), "Bye World");
+        mock.expectedFileExists(testFile(TEST_FILE_NAME), "Bye World");
 
         template.sendBody("direct:in", "World");
 
@@ -41,17 +44,17 @@ public class BeanToFileTest extends ContextTestSupport {
     }
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry answer = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry answer = super.createCamelRegistry();
         answer.bind("myBean", new MyBean());
         return answer;
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
-            public void configure() throws Exception {
-                from("direct:in").to("bean:myBean").setHeader(Exchange.FILE_NAME, constant("BeanToFileTest.txt"))
+            public void configure() {
+                from("direct:in").to("bean:myBean").setHeader(Exchange.FILE_NAME, constant(TEST_FILE_NAME))
                         .to(fileUri("?fileExist=Override"), "mock:result");
             }
         };

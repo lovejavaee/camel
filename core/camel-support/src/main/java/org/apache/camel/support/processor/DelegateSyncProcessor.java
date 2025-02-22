@@ -42,7 +42,7 @@ import org.apache.camel.support.service.ServiceSupport;
  */
 public class DelegateSyncProcessor extends ServiceSupport
         implements org.apache.camel.DelegateProcessor, AsyncProcessor, Navigate<Processor> {
-    protected Processor processor;
+    protected final Processor processor;
 
     public DelegateSyncProcessor(Processor processor) {
         this.processor = processor;
@@ -63,8 +63,8 @@ public class DelegateSyncProcessor extends ServiceSupport
         // force calling the sync method
         try {
             processor.process(exchange);
-        } catch (Throwable e) {
-            // must catch throwable so we catch all
+        } catch (Exception | LinkageError e) {
+            // we catch all exceptions and try to catch relatively manageable low-level errors
             exchange.setException(e);
         } finally {
             // we are bridging a sync processor as async so callback with true

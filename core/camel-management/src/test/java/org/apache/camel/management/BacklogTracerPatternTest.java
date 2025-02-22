@@ -48,7 +48,7 @@ public class BacklogTracerPatternTest extends ManagementTestSupport {
         assertEquals(Boolean.FALSE, enabled, "Should not be enabled");
 
         Integer size = (Integer) mbeanServer.getAttribute(on, "BacklogSize");
-        assertEquals(1000, size.intValue(), "Should be 1000");
+        assertEquals(100, size.intValue(), "Should be 100");
 
         // set the pattern to match only foo*
         mbeanServer.setAttribute(on, new Attribute("TracePattern", "foo*"));
@@ -76,6 +76,9 @@ public class BacklogTracerPatternTest extends ManagementTestSupport {
         assertEquals("foo", event1.getToNode());
         assertEquals("    <message exchangeId=\"" + exchanges.get(0).getExchangeId()
                      + "\" exchangePattern=\"InOnly\" exchangeType=\"org.apache.camel.support.DefaultExchange\" messageType=\"org.apache.camel.support.DefaultMessage\">\n"
+                     + "      <exchangeProperties>\n"
+                     + "        <exchangeProperty key=\"CamelToEndpoint\" type=\"java.lang.String\">direct://start</exchangeProperty>\n"
+                     + "      </exchangeProperties>\n"
                      + "      <body type=\"java.lang.String\">Hello World</body>\n"
                      + "    </message>",
                 event1.getMessageAsXml());
@@ -84,6 +87,9 @@ public class BacklogTracerPatternTest extends ManagementTestSupport {
         assertEquals("foo", event2.getToNode());
         assertEquals("    <message exchangeId=\"" + exchanges.get(1).getExchangeId()
                      + "\" exchangePattern=\"InOnly\" exchangeType=\"org.apache.camel.support.DefaultExchange\" messageType=\"org.apache.camel.support.DefaultMessage\">\n"
+                     + "      <exchangeProperties>\n"
+                     + "        <exchangeProperty key=\"CamelToEndpoint\" type=\"java.lang.String\">direct://start</exchangeProperty>\n"
+                     + "      </exchangeProperties>\n"
                      + "      <body type=\"java.lang.String\">Bye World</body>\n"
                      + "    </message>",
                 event2.getMessageAsXml());
@@ -97,10 +103,10 @@ public class BacklogTracerPatternTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.setUseBreadcrumb(false);
                 context.setBacklogTracingStandby(true);
 

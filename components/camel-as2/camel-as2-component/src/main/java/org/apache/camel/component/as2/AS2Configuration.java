@@ -20,6 +20,9 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.time.Duration;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.component.as2.api.AS2CompressionAlgorithm;
 import org.apache.camel.component.as2.api.AS2EncryptionAlgorithm;
@@ -31,7 +34,7 @@ import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 import org.apache.camel.spi.UriPath;
-import org.apache.http.entity.ContentType;
+import org.apache.hc.core5.http.ContentType;
 
 /**
  * Component configuration for AS2 component.
@@ -41,7 +44,7 @@ import org.apache.http.entity.ContentType;
 public class AS2Configuration {
 
     @UriPath
-    @Metadata(required = true, enums = "client,server")
+    @Metadata(required = true, enums = "client,server,receipt")
     private AS2ApiName apiName;
     @UriPath
     @Metadata(required = true)
@@ -110,6 +113,15 @@ public class AS2Configuration {
     private Duration httpConnectionPoolTtl = Duration.ofMinutes(15);
     @UriParam(label = "security")
     private Certificate[] validateSigningCertificateChain;
+    @UriParam
+    private SSLContext sslContext;
+    // If you use localhost-based AS2 server, you don't need to specify a hostnameVerifier
+    @UriParam
+    private HostnameVerifier hostnameVerifier;
+    @UriParam
+    private Integer asyncMdnPortNumber;
+    @UriParam
+    private String receiptDeliveryOption;
 
     public AS2ApiName getApiName() {
         return apiName;
@@ -251,7 +263,8 @@ public class AS2Configuration {
     }
 
     /**
-     * The content type of EDI message. One of application/edifact, application/edi-x12, application/edi-consent
+     * The content type of EDI message. One of application/edifact, application/edi-x12, application/edi-consent,
+     * application/xml
      */
     public void setEdiMessageType(ContentType ediMessageType) {
         this.ediMessageType = ediMessageType;
@@ -497,11 +510,59 @@ public class AS2Configuration {
     }
 
     /**
-     * Certifiates to validate the messages signature against. If not supplied, validation will not take place. Server:
-     * validates the received message. Client: not yet implemented, should validate the MDN
+     * Certificates to validate the message's signature against. If not supplied, validation will not take place.
+     * Server: validates the received message. Client: not yet implemented, should validate the MDN
      */
     public void setValidateSigningCertificateChain(Certificate[] validateSigningCertificateChain) {
         this.validateSigningCertificateChain = validateSigningCertificateChain;
     }
 
+    public SSLContext getSslContext() {
+        return sslContext;
+    }
+
+    /**
+     * Set SSL context for connection to remote server.
+     *
+     * @param sslContext
+     */
+    public void setSslContext(SSLContext sslContext) {
+        this.sslContext = sslContext;
+    }
+
+    public HostnameVerifier getHostnameVerifier() {
+        return hostnameVerifier;
+    }
+
+    /**
+     * Set hostname verifier for SSL session.
+     *
+     * @param hostnameVerifier
+     */
+    public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
+        this.hostnameVerifier = hostnameVerifier;
+    }
+
+    public Integer getAsyncMdnPortNumber() {
+        return asyncMdnPortNumber;
+    }
+
+    /**
+     * The port number of asynchronous MDN server.
+     */
+    public void setAsyncMdnPortNumber(Integer asyncMdnPortNumber) {
+        this.asyncMdnPortNumber = asyncMdnPortNumber;
+    }
+
+    public String getReceiptDeliveryOption() {
+        return receiptDeliveryOption;
+    }
+
+    /**
+     * The return URL that the message receiver should send an asynchronous MDN to. If not present the receipt is
+     * synchronous. (Client only)
+     */
+    public void setReceiptDeliveryOption(String receiptDeliveryOption) {
+        this.receiptDeliveryOption = receiptDeliveryOption;
+    }
 }

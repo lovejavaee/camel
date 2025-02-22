@@ -18,9 +18,8 @@ package org.apache.camel.component.google.pubsub.consumer;
 
 import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import org.apache.camel.Exchange;
-import org.apache.camel.spi.Synchronization;
 
-public class AcknowledgeAsync implements Synchronization {
+public class AcknowledgeAsync implements GooglePubsubAcknowledge {
 
     private final AckReplyConsumer ackReplyConsumer;
 
@@ -29,12 +28,12 @@ public class AcknowledgeAsync implements Synchronization {
     }
 
     @Override
-    public void onComplete(Exchange exchange) {
+    public void ack(Exchange exchange) {
         ackReplyConsumer.ack();
     }
 
     @Override
-    public void onFailure(Exchange exchange) {
+    public void nack(Exchange exchange) {
         ackReplyConsumer.nack();
     }
 }

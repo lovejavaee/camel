@@ -18,6 +18,8 @@ package org.apache.camel.component.olingo2;
 
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.component.olingo2.api.Olingo2App;
@@ -31,6 +33,7 @@ import org.apache.olingo.odata2.api.edm.Edm;
  */
 public class Olingo2AppWrapper {
 
+    private final Lock lock = new ReentrantLock();
     private final Olingo2App olingo2App;
     private volatile Edm edm;
 
@@ -51,8 +54,8 @@ public class Olingo2AppWrapper {
     public Edm getEdm(Map<String, String> endpointHttpHeaders) throws RuntimeCamelException {
         Edm localEdm = edm;
         if (localEdm == null) {
-
-            synchronized (this) {
+            lock.lock();
+            try {
 
                 localEdm = edm;
                 if (localEdm == null) {
@@ -95,11 +98,14 @@ public class Olingo2AppWrapper {
                         }
 
                     } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         throw new RuntimeCamelException(e.getMessage(), e);
                     }
 
                     localEdm = edm;
                 }
+            } finally {
+                lock.unlock();
             }
         }
 

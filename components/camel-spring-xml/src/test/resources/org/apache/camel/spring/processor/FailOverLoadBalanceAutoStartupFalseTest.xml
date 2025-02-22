@@ -25,11 +25,12 @@
     ">
 
   <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
 
     <route id="foo" autoStartup="false">
       <from uri="direct:start"/>
-      <loadBalance inheritErrorHandler="true">
-        <failover maximumFailoverAttempts="3" roundRobin="true"/>
+      <loadBalance>
+        <failoverLoadBalancer maximumFailoverAttempts="3" roundRobin="true" inheritErrorHandler="true"/>
         <to uri="direct:x"/>
         <to uri="direct:y"/>
         <to uri="direct:z"/>

@@ -24,12 +24,12 @@
   <parent>
     <groupId>org.apache.camel</groupId>
     <artifactId>components</artifactId>
-    <version>4.0.0-SNAPSHOT</version>
+    <version>4.11.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>camel-nitrite</artifactId>
   <packaging>jar</packaging>
-  <name>Camel :: Nitrite</name>
+  <name>Camel :: Nitrite (deprecated)</name>
   <description>Camel Nitrite component</description>
 
   <dependencies>

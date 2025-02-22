@@ -26,10 +26,12 @@ import org.apache.camel.spi.Registry;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static org.apache.camel.test.junit5.TestSupport.body;
 
+@Timeout(30)
 public class JmsJettyAsyncTest extends CamelTestSupport {
     @RegisterExtension
     public static JmsServiceExtension jmsServiceExtension = JmsServiceExtension.createExtension();
@@ -43,7 +45,7 @@ public class JmsJettyAsyncTest extends CamelTestSupport {
         getMockEndpoint("mock:result").expectsNoDuplicates(body());
 
         for (int i = 0; i < size; i++) {
-            template.sendBody("activemq:queue:inbox", "" + i);
+            template.sendBody("activemq:queue:inbox", Integer.toString(i));
         }
 
         MockEndpoint.assertIsSatisfied(context, 2, TimeUnit.MINUTES);
@@ -62,7 +64,7 @@ public class JmsJettyAsyncTest extends CamelTestSupport {
                         .to("log:result?groupSize=10", "mock:result");
 
                 from("jetty:http://0.0.0.0:" + port + "/myapp")
-                        .delay(100)
+                        .delay(10)
                         .transform(body().prepend("Bye "));
             }
         };

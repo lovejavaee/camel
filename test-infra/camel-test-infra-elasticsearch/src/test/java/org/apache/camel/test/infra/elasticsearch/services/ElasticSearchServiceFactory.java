@@ -17,9 +17,57 @@
 
 package org.apache.camel.test.infra.elasticsearch.services;
 
+import java.util.Optional;
+
+import javax.net.ssl.SSLContext;
+
 import org.apache.camel.test.infra.common.services.SimpleTestServiceBuilder;
+import org.apache.camel.test.infra.common.services.SingletonService;
 
 public final class ElasticSearchServiceFactory {
+
+    static class SingletonElasticSearchService extends SingletonService<ElasticSearchService>
+            implements ElasticSearchService {
+        public SingletonElasticSearchService(ElasticSearchService service, String name) {
+            super(service, name);
+        }
+
+        @Override
+        public int getPort() {
+            return getService().getPort();
+        }
+
+        @Override
+        public String getElasticSearchHost() {
+            return getService().getElasticSearchHost();
+        }
+
+        @Override
+        public String getHttpHostAddress() {
+            return getService().getHttpHostAddress();
+        }
+
+        @Override
+        public Optional<String> getCertificatePath() {
+            return getService().getCertificatePath();
+        }
+
+        @Override
+        public Optional<SSLContext> getSslContext() {
+            return getService().getSslContext();
+        }
+
+        @Override
+        public String getUsername() {
+            return getService().getUsername();
+        }
+
+        @Override
+        public String getPassword() {
+            return getService().getPassword();
+        }
+    }
+
     private ElasticSearchServiceFactory() {
 
     }
@@ -30,8 +78,30 @@ public final class ElasticSearchServiceFactory {
 
     public static ElasticSearchService createService() {
         return builder()
-                .addLocalMapping(ElasticSearchLocalContainerService::new)
-                .addRemoteMapping(RemoteElasticSearchService::new)
+                .addLocalMapping(ElasticSearchLocalContainerTestService::new)
+                .addRemoteMapping(RemoteElasticSearchTestService::new)
                 .build();
+    }
+
+    public static ElasticSearchService createSingletonService() {
+        return SingletonServiceHolder.INSTANCE;
+    }
+
+    private static class SingletonServiceHolder {
+        static final ElasticSearchService INSTANCE;
+        static {
+            SimpleTestServiceBuilder<ElasticSearchService> instance = builder();
+            instance.addLocalMapping(
+                    () -> new SingletonElasticSearchService(new ElasticSearchLocalContainerTestService(), "elastic"))
+                    .addRemoteMapping(RemoteElasticSearchTestService::new);
+            INSTANCE = instance.build();
+        }
+    }
+
+    public static class ElasticSearchLocalContainerTestService extends ElasticSearchLocalContainerInfraService
+            implements ElasticSearchService {
+    }
+
+    public static class RemoteElasticSearchTestService extends RemoteElasticSearchInfraService implements ElasticSearchService {
     }
 }

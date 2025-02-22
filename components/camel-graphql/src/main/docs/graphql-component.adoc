@@ -5,6 +5,7 @@
 :description: Send GraphQL queries and mutations to external systems.
 :since: 3.0
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: graphql
@@ -45,7 +46,9 @@ include::partial$component-endpoint-options.adoc[]
 
 == Message Body
 
-If the `variables` and `variablesHeader` parameters are not set and the IN body is a JsonObject instance, Camel will use it for the operation's variables. If the `query` and `queryFile` parameters are not set and the IN body is a String, Camel will use it as the query. Camel will store the GraphQL response from the external server on the OUT message body. All headers from the IN message will be copied to the OUT message, so headers are preserved during routing. Additionally Camel will add the HTTP response headers as well to the OUT message headers.
+If the `variables` and `variablesHeader` parameters are not set and the IN body is a JsonObject instance, Camel will use it for the operation's variables. If the `query` and `queryFile` parameters are not set and the IN body is a String, Camel will use it as the query. Camel will store the GraphQL response from the external server on the OUT message body.
+All headers from the IN message will be copied to the OUT message, so headers are preserved during routing.
+Additionally, Camel will add the HTTP response headers as well to the OUT message headers.
 
 == Examples
 
@@ -105,6 +108,17 @@ from("direct:start")
 
 Queries with variables need to reference a JsonObject instance from the registry:
 
+bookByIdQuery.graphql file:
+----
+query BookById($id: Int!) {
+  bookById(id: $id) {
+    id
+    name
+    author
+  }
+}
+----
+
 [source,java]
 ----
 @BindToRegistry("bookByIdQueryVariables")
@@ -133,7 +147,7 @@ from("direct:start")
 
 === Mutations
 
-Mutations are like queries with variables. They specify a query and a reference to a variables bean:
+Mutations are like queries with variables. They specify a query and a reference to a variables' bean:
 
 addBookMutation.graphql file:
 
@@ -162,7 +176,7 @@ public JsonObject addBookMutationVariables() {
 }
 
 from("direct:start")
-    .to("graphql://http://example.com/graphql?graphql?queryFile=addBookMutation.graphql&variables=#addBookMutationVariables")
+    .to("graphql://http://example.com/graphql?queryFile=addBookMutation.graphql&variables=#addBookMutationVariables")
 ----
 
 

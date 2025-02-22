@@ -53,14 +53,13 @@ public class DumpModelAsXmlTransformRouteTest extends ContextTestSupport {
         assertNotNull(node, "Node <to> expected to be instanceof Element");
         assertEquals("mock:result", node.getAttribute("uri"));
         assertEquals("myMock", node.getAttribute("id"));
-        assertEquals("true", node.getAttribute("customId"));
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").routeId("myRoute").transform().simple("Hello ${body}").to("mock:result").id("myMock");
             }
         };

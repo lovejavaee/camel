@@ -58,8 +58,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 public @interface CamelMainTest {
 
     /**
-     * Allows to specify the main class of the application to test if needed in order to simulate the same behavior as
-     * with {@link org.apache.camel.main.Main#Main(Class)}.
+     * Allows to specify the main class of the application to test if needed to simulate the same behavior as with
+     * {@link org.apache.camel.main.Main#Main(Class)}.
      * <p/>
      * <b>Note:</b> This attribute can be set from a {@code @Nested} test classes. The value of this attribute set on
      * the innermost class is used.
@@ -217,6 +217,17 @@ public @interface CamelMainTest {
      *         directory after the test has finished.
      */
     boolean dumpRouteCoverage() default false;
+
+    /**
+     * Whether to dump the routes loaded into Camel for each test (dumped into files in target/camel-route-dump).
+     * <p/>
+     * The routes can either be dumped into XML or YAML format. Set this value to either <tt>xml</tt> or <tt>yaml</tt>.
+     * <p/>
+     * This allows tooling or manual inspection of the routes.
+     * <p/>
+     * You can also turn on route dump globally via setting JVM system property <tt>CamelTestRouteDump=xml</tt>.
+     */
+    String dumpRoute() default "";
 
     /**
      * Whether JMX should be used during testing.

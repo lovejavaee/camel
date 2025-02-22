@@ -22,10 +22,10 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 @Component("aws2-s3")
-public class AWS2S3Component extends DefaultComponent {
+public class AWS2S3Component extends HealthCheckComponent {
     @Metadata
     private AWS2S3Configuration configuration = new AWS2S3Configuration();
 
@@ -40,7 +40,7 @@ public class AWS2S3Component extends DefaultComponent {
     @Override
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
 
-        if (remaining == null || remaining.trim().length() == 0) {
+        if (remaining == null || remaining.isBlank()) {
             throw new IllegalArgumentException("Bucket name must be specified.");
         }
         if (remaining.startsWith("arn:")) {
@@ -53,10 +53,11 @@ public class AWS2S3Component extends DefaultComponent {
         setProperties(endpoint, parameters);
         if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider())
                 && Boolean.FALSE.equals(configuration.isUseProfileCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseSessionCredentials())
                 && configuration.getAmazonS3Client() == null
                 && (configuration.getAccessKey() == null || configuration.getSecretKey() == null)) {
             throw new IllegalArgumentException(
-                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, AmazonS3Client or accessKey and secretKey must be specified");
+                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, useSessionCredentials is set to false, AmazonS3Client or accessKey and secretKey must be specified");
         }
 
         return endpoint;

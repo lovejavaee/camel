@@ -214,6 +214,24 @@ public class DefaultEventFactory implements EventFactory {
     }
 
     @Override
+    public CamelEvent createRouteRestarting(Route route, long attempt) {
+        CamelEvent answer = new RouteRestartingEvent(route, attempt);
+        if (timestampEnabled) {
+            answer.setTimestamp(System.currentTimeMillis());
+        }
+        return answer;
+    }
+
+    @Override
+    public CamelEvent createRouteRestartingFailure(Route route, long attempt, Throwable cause, boolean exhausted) {
+        CamelEvent answer = new RouteRestartingFailureEvent(route, attempt, cause, exhausted);
+        if (timestampEnabled) {
+            answer.setTimestamp(System.currentTimeMillis());
+        }
+        return answer;
+    }
+
+    @Override
     public CamelEvent createRouteStoppingEvent(Route route) {
         CamelEvent answer = new RouteStoppingEvent(route);
         if (timestampEnabled) {
@@ -293,8 +311,8 @@ public class DefaultEventFactory implements EventFactory {
             Exchange exchange, Processor failureHandler, boolean deadLetterChannel, String deadLetterUri) {
         // unwrap delegate processor
         Processor handler = failureHandler;
-        if (handler instanceof DelegateProcessor) {
-            handler = ((DelegateProcessor) handler).getProcessor();
+        if (handler instanceof DelegateProcessor delegateProcessor) {
+            handler = delegateProcessor.getProcessor();
         }
         CamelEvent answer = new ExchangeFailureHandlingEvent(exchange, handler, deadLetterChannel, deadLetterUri);
         if (timestampEnabled) {
@@ -309,8 +327,8 @@ public class DefaultEventFactory implements EventFactory {
             boolean deadLetterChannel, String deadLetterUri) {
         // unwrap delegate processor
         Processor handler = failureHandler;
-        if (handler instanceof DelegateProcessor) {
-            handler = ((DelegateProcessor) handler).getProcessor();
+        if (handler instanceof DelegateProcessor delegateProcessor) {
+            handler = delegateProcessor.getProcessor();
         }
         CamelEvent answer = new ExchangeFailureHandledEvent(exchange, handler, deadLetterChannel, deadLetterUri);
         if (timestampEnabled) {

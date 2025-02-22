@@ -17,6 +17,7 @@
 package org.apache.camel.component.aws2.ddb;
 
 import java.time.Duration;
+import java.util.Map;
 
 import org.apache.camel.Category;
 import org.apache.camel.Component;
@@ -25,8 +26,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.component.aws2.ddb.client.Ddb2ClientFactory;
-import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.impl.health.ComponentsHealthCheckRepository;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.ScheduledPollEndpoint;
@@ -49,17 +49,14 @@ import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 
 /**
- * Store and retrieve data from AWS DynamoDB service using AWS SDK version 2.x.
+ * Store and retrieve data from AWS DynamoDB.
  */
 @UriEndpoint(firstVersion = "3.1.0", scheme = "aws2-ddb", title = "AWS DynamoDB", syntax = "aws2-ddb:tableName",
-             producerOnly = true, category = { Category.CLOUD, Category.DATABASE, Category.NOSQL },
+             producerOnly = true, category = { Category.CLOUD, Category.DATABASE },
              headersClass = Ddb2Constants.class)
-public class Ddb2Endpoint extends ScheduledPollEndpoint {
+public class Ddb2Endpoint extends ScheduledPollEndpoint implements EndpointServiceLocation {
 
     private static final Logger LOG = LoggerFactory.getLogger(Ddb2Endpoint.class);
-
-    private ComponentsHealthCheckRepository healthCheckRepository;
-    private Ddb2ClientHealthCheck clientHealthCheck;
 
     @UriParam
     private Ddb2Configuration configuration;
@@ -82,17 +79,13 @@ public class Ddb2Endpoint extends ScheduledPollEndpoint {
     }
 
     @Override
+    public Ddb2Component getComponent() {
+        return (Ddb2Component) super.getComponent();
+    }
+
+    @Override
     public void doStart() throws Exception {
         super.doStart();
-
-        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(getCamelContext(),
-                ComponentsHealthCheckRepository.REPOSITORY_ID, ComponentsHealthCheckRepository.class);
-
-        if (healthCheckRepository != null) {
-            // Do not register the health check until we resolve CAMEL-18992
-            //clientHealthCheck = new Ddb2ClientHealthCheck(this, getId());
-            //healthCheckRepository.addHealthCheck(clientHealthCheck);
-        }
 
         ddbClient = configuration.getAmazonDDBClient() != null
                 ? configuration.getAmazonDDBClient() : Ddb2ClientFactory.getDynamoDBClient(configuration).getDynamoDBClient();
@@ -188,5 +181,30 @@ public class Ddb2Endpoint extends ScheduledPollEndpoint {
 
     private boolean isTableActive(TableDescription tableDescription) {
         return tableDescription.tableStatus().toString().equals(TableStatus.ACTIVE.toString());
+    }
+
+    @Override
+    public String getServiceUrl() {
+        if (!configuration.isOverrideEndpoint()) {
+            if (ObjectHelper.isNotEmpty(configuration.getRegion())) {
+                return configuration.getRegion();
+            }
+        } else if (ObjectHelper.isNotEmpty(configuration.getUriEndpointOverride())) {
+            return configuration.getUriEndpointOverride();
+        }
+        return null;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "dynamodb";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (configuration.getTableName() != null) {
+            return Map.of("table", configuration.getTableName());
+        }
+        return null;
     }
 }

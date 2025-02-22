@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * A base class for a test which requires a {@link org.apache.camel.CamelContext} and a populated {@link Exchange}
  */
 public abstract class ExchangeTestSupport extends CamelTestSupport {
+
     protected Exchange exchange;
 
     /**
@@ -48,8 +49,7 @@ public abstract class ExchangeTestSupport extends CamelTestSupport {
 
     @Override
     @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() throws Exception {
         exchange = createExchange();
         assertNotNull(exchange, "No exchange created!");
         populateExchange(exchange);

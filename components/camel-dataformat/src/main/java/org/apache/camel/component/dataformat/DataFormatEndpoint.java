@@ -38,7 +38,7 @@ import org.apache.camel.support.service.ServiceHelper;
  * Use a Camel Data Format as a regular Camel Component.
  */
 @UriEndpoint(firstVersion = "2.12.0", scheme = "dataformat", title = "Data Format", syntax = "dataformat:name:operation",
-             producerOnly = true,
+             remote = false, producerOnly = true,
              category = { Category.CORE, Category.TRANSFORMATION }, lenientProperties = true)
 public class DataFormatEndpoint extends DefaultEndpoint {
 
@@ -58,6 +58,11 @@ public class DataFormatEndpoint extends DefaultEndpoint {
     public DataFormatEndpoint(String endpointUri, Component component, DataFormat dataFormat) {
         super(endpointUri, component);
         this.dataFormat = dataFormat;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     public String getName() {

@@ -18,9 +18,10 @@ package org.apache.camel.component.properties;
 
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PropertiesComponentOnlyUseDefaultValuesTest extends ContextTestSupport {
 
@@ -33,7 +34,7 @@ public class PropertiesComponentOnlyUseDefaultValuesTest extends ContextTestSupp
     public void testOnlyDefaults() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("{{foo:mock:foo}}").to("{{bar:mock:bar}}");
             }
         });
@@ -51,34 +52,23 @@ public class PropertiesComponentOnlyUseDefaultValuesTest extends ContextTestSupp
     public void testOneMissing() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("{{foo:mock:foo}}").to("{{bar}}");
             }
         });
 
-        try {
-            context.start();
-            fail("Should have thrown exception");
-        } catch (Exception e) {
-            // expected
-        }
+        assertThrows(Exception.class, () -> context.start(), "Should have thrown exception");
     }
 
     @Test
     public void testAllMissing() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("{{foo:mock:foo}}").to("{{bar}}");
             }
         });
 
-        try {
-            context.start();
-            fail("Should have thrown exception");
-        } catch (Exception e) {
-            // expected
-        }
+        Assertions.assertThrows(Exception.class, () -> context.start(), "Should have thrown exception");
     }
-
 }

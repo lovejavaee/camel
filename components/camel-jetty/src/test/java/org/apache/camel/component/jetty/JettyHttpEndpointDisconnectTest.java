@@ -16,11 +16,9 @@
  */
 package org.apache.camel.component.jetty;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.component.jetty11.JettyHttpComponent11;
+import org.apache.camel.component.jetty12.JettyHttpComponent12;
+import org.apache.camel.support.ExceptionHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
@@ -32,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Isolated
 public class JettyHttpEndpointDisconnectTest extends BaseJettyTest {
 
-    private String serverUri = "http://localhost:" + getPort() + "/myservice";
+    private final String serverUri = "http://localhost:" + getPort() + "/myservice";
 
     @Test
     public void testContextShutdownRemovesHttpConnector() {
@@ -41,15 +39,14 @@ public class JettyHttpEndpointDisconnectTest extends BaseJettyTest {
                 () -> {
                     StringBuilder sb = new StringBuilder("Connector should have been removed\n");
                     for (String key : JettyHttpComponent.CONNECTORS.keySet()) {
-                        Throwable t = JettyHttpComponent11.connectorCreation.get(key);
+                        Throwable t = JettyHttpComponent12.connectorCreation.get(key);
                         if (t == null) {
                             t = new Throwable("Unable to find connector creation");
                         }
-                        StringWriter sw = new StringWriter();
-                        try (PrintWriter pw = new PrintWriter(sw)) {
-                            t.printStackTrace(pw);
-                        }
-                        sb.append(key).append(": ").append(sw.toString());
+
+                        final String stackTrace = ExceptionHelper.stackTraceToString(t);
+
+                        sb.append(key).append(": ").append(stackTrace);
                     }
                     return sb.toString();
                 });

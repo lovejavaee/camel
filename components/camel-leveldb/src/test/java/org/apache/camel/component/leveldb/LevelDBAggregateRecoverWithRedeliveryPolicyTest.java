@@ -26,7 +26,6 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.params.Test;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
@@ -47,14 +46,12 @@ public class LevelDBAggregateRecoverWithRedeliveryPolicyTest extends LevelDBTest
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         deleteDirectory("target/data");
         // enable recovery
         getRepo().setUseRecovery(true);
         // check faster
         getRepo().setRecoveryInterval(500, TimeUnit.MILLISECONDS);
-        super.setUp();
     }
 
     @Test
@@ -85,25 +82,23 @@ public class LevelDBAggregateRecoverWithRedeliveryPolicyTest extends LevelDBTest
         return new RouteBuilder() {
             @Override
             public void configure() {
-                // CHECKSTYLE:OFF
                 from("direct:start")
                         .aggregate(header("id"), new StringAggregationStrategy())
-                            .completionSize(5).aggregationRepository(getRepo())
-                            // this is the output from the aggregator
-                            .log("aggregated exchange id ${exchangeId} with ${body}")
-                            .to("mock:aggregated")
-                            // simulate errors the first three times
-                            .process(new Processor() {
-                                public void process(Exchange exchange) {
-                                    int count = getCounter(getSerializerType()).incrementAndGet();
-                                    if (count <= 3) {
-                                        throw new IllegalArgumentException("Damn");
-                                    }
+                        .completionSize(5).aggregationRepository(getRepo())
+                        // this is the output from the aggregator
+                        .log("aggregated exchange id ${exchangeId} with ${body}")
+                        .to("mock:aggregated")
+                        // simulate errors the first three times
+                        .process(new Processor() {
+                            public void process(Exchange exchange) {
+                                int count = getCounter(getSerializerType()).incrementAndGet();
+                                if (count <= 3) {
+                                    throw new IllegalArgumentException("Damn");
                                 }
-                            })
-                            .to("mock:result")
+                            }
+                        })
+                        .to("mock:result")
                         .end();
-                // CHECKSTYLE:ON
             }
         };
     }

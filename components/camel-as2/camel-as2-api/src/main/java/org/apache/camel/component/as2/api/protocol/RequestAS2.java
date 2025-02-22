@@ -23,11 +23,13 @@ import org.apache.camel.component.as2.api.AS2Constants;
 import org.apache.camel.component.as2.api.AS2Header;
 import org.apache.camel.component.as2.api.InvalidAS2NameException;
 import org.apache.camel.component.as2.api.util.AS2Utils;
-import org.apache.http.HttpException;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpRequestInterceptor;
-import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpCoreContext;
+import org.apache.camel.util.StringHelper;
+import org.apache.hc.core5.http.EntityDetails;
+import org.apache.hc.core5.http.HttpException;
+import org.apache.hc.core5.http.HttpRequest;
+import org.apache.hc.core5.http.HttpRequestInterceptor;
+import org.apache.hc.core5.http.protocol.HttpContext;
+import org.apache.hc.core5.http.protocol.HttpCoreContext;
 
 public class RequestAS2 implements HttpRequestInterceptor {
 
@@ -40,7 +42,7 @@ public class RequestAS2 implements HttpRequestInterceptor {
     }
 
     @Override
-    public void process(HttpRequest request, HttpContext context) throws HttpException, IOException {
+    public void process(HttpRequest request, EntityDetails entity, HttpContext context) throws HttpException, IOException {
 
         HttpCoreContext coreContext = HttpCoreContext.adapt(context);
 
@@ -75,6 +77,12 @@ public class RequestAS2 implements HttpRequestInterceptor {
             throw new HttpException("Invalid AS-To name", e);
         }
         request.addHeader(AS2Header.AS2_TO, as2To);
+
+        /* AS2-Receipt-Delivery-Option header */
+        String receiptDeliveryOption = coreContext.getAttribute(AS2ClientManager.RECEIPT_DELIVERY_OPTION, String.class);
+        if (StringHelper.trimToNull(receiptDeliveryOption) != null) {
+            request.addHeader(AS2Header.RECEIPT_DELIVERY_OPTION, receiptDeliveryOption);
+        }
 
         /* Message-Id header*/
         // SHOULD be set to aid in message reconciliation

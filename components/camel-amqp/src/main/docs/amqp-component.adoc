@@ -5,6 +5,7 @@
 :description: Messaging with AMQP protocol using Apache QPid Client.
 :since: 1.2
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :camel-spring-boot-name: amqp
@@ -65,7 +66,7 @@ former is almost identical to the latter:
 from("amqp:queue:incoming").
   to(...);
  
-// Sending message to the AMQP topic
+// Sending messages to the AMQP topic
 from(...).
   to("amqp:topic:notify");
 ----
@@ -74,6 +75,7 @@ from(...).
 
 *Creating AMQP 1.0 component*
 
+AMQPComponents may be created using the provided factory methods, for example:
 [source,java]
 ----
 AMQPComponent amqp = AMQPComponent.amqpComponent("amqp://localhost:5672");
@@ -81,11 +83,53 @@ AMQPComponent amqp = AMQPComponent.amqpComponent("amqp://localhost:5672");
 AMQPComponent authorizedAmqp = AMQPComponent.amqpComponent("amqp://localhost:5672", "user", "password");
 ----
 
-You can also add an instance
-of `org.apache.camel.component.amqp.AMQPConnectionDetails` to the
-registry in order to automatically configure the AMQP component. For example for Spring Boot you just have to define bean:
+Alternatively, the AMQP Component can be initialized by providing one or more of the available options for
+configuring SSL, authentication, and AMQP Broker host and port.
 
-*AMQP connection details auto-configuration*
+*SSL configuration*
+
+The component can be configured to connect to an AMQP broker using SSL by setting the
+`useSsl` option and providing keystore and truststore details, for example:
+
+[source,java]
+----
+AMQPComponent component = new AMQPComponent();
+component.setUseSsl(true);
+component.setTrustStoreLocation(
+        getClass().getClassLoader().getResource("server-ca-truststore.p12").getFile());
+component.setTrustStorePassword("securepass");
+component.setTrustStoreType("PKCS12");
+component.setKeyStoreLocation(
+        getClass().getClassLoader().getResource("server-keystore.p12").getFile());
+component.setKeyStorePassword("securepass");
+component.setKeyStoreType("PKCS12");
+----
+
+*Authentication configuration*
+
+A username and password may be provided for AMQP broker authentication:
+
+[source,java]
+----
+AMQPComponent component = new AMQPComponent();
+component.setUsername("camel");
+component.setPassword("rider");
+----
+
+*AMQP Broker host and port configuration*
+
+[source,java]
+----
+AMQPComponent amqpComponent = new AMQPComponent();
+amqpComponent.setHost("remoteHost");
+amqpComponent.setPort(5555);
+----
+
+If `host` or `port` options have not been provided and the component is initialized using one or more of the other available
+options the host on the AMQP JMSConnectionFactory URI is set to 'localhost' if not provided, and the port is set to '5672'
+if not provided.
+
+*Spring AMQP connection details auto-configuration*
 
 [source,java]
 ----
@@ -144,7 +188,7 @@ If you, for example, need to enable `amqp.traceFrames` you can do that by append
 AMQPComponent amqp = AMQPComponent.amqpComponent("amqp://localhost:5672?amqp.traceFrames=true");
 ----
 
-For reference take a look at the https://qpid.apache.org/releases/qpid-jms-1.7.0/docs/index.html[QPID JMS client configuration]
+For reference, take a look at the https://qpid.apache.org/releases/qpid-jms-1.7.0/docs/index.html[QPID JMS client configuration]
 
 == Using topics
 
@@ -163,10 +207,9 @@ component to use `topic://` as topic prefix, as shown below:
  </bean>
 ----
 
-Keep in mind that both  `AMQPComponent#amqpComponent()` methods and
-`AMQPConnectionDetails` pre-configure the component with the topic
-prefix, so you don't have to configure it explicitly.
 
+Keep in mind that the factory methods `AMQPComponent#amqpComponent(String)` and `AMQPComponent#amqpComponent(String, String, String)` configure
+the Topic prefix as `topic://` by default, so you don't have to configure it explicitly.
 
 
 include::spring-boot:partial$starter.adoc[]

@@ -5,6 +5,7 @@
 :description: Perform operations on Kubernetes Horizontal Pod Autoscalers (HPA) and get notified on HPA changes.
 :since: 2.23
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Both producer and consumer are supported
 //Manually maintained attributes
 :group: Kubernetes
@@ -34,18 +35,22 @@ include::partial$component-endpoint-options.adoc[]
 include::partial$component-endpoint-headers.adoc[]
 // component headers: END
 
-== Supported producer operation
+== Usage
 
-- listHPA
-- listHPAByLabels
-- getHPA
-- createHPA
-- updateHPA
-- deleteHPA
+=== Supported producer operation
 
-== Kubernetes HPA Producer Examples
+- `listHPA`
+- `listHPAByLabels`
+- `getHPA`
+- `createHPA`
+- `updateHPA`
+- `deleteHPA`
 
-- listHPA: this operation list the HPAs on a kubernetes cluster
+== Examples
+
+=== Kubernetes HPA Producer Examples
+
+- `listHPA`: this operation lists the HPAs on a kubernetes cluster
 
 [source,java]
 --------------------------------------------------------------------------------
@@ -54,9 +59,9 @@ from("direct:list").
     to("mock:result");
 --------------------------------------------------------------------------------
 
-This operation return a List of HPAs from your cluster
+This operation returns a list of HPAs from your cluster
 
-- listDeploymentsByLabels:  this operation list the HPAs by labels on a kubernetes cluster
+- `listDeploymentsByLabels`: this operation lists the HPAs by labels on a kubernetes cluster
 
 [source,java]
 --------------------------------------------------------------------------------
@@ -73,14 +78,16 @@ from("direct:listByLabels").process(new Processor() {
     to("mock:result");
 --------------------------------------------------------------------------------
 
-This operation return a List of HPAs from your cluster, using a label selector (with key1 and key2, with value value1 and value2)
+This operation returns a List of HPAs from your cluster using a label selector (with key1 and key2, with value value1 and value2)
 
-== Kubernetes HPA Consumer Example
+=== Kubernetes HPA Consumer Example
 
 [source,java]
 --------------------------------------------------------------------------------
-fromF("kubernetes-hpa://%s?oauthToken=%s&namespace=default&resourceName=test", host, authToken).process(new KubernertesProcessor()).to("mock:result");
-    public class KubernertesProcessor implements Processor {
+fromF("kubernetes-hpa://%s?oauthToken=%s", host, authToken)
+    .process(new KubernetesProcessor()).to("mock:result");
+
+    public class KubernetesProcessor implements Processor {
         @Override
         public void process(Exchange exchange) throws Exception {
             Message in = exchange.getIn();
@@ -90,8 +97,14 @@ fromF("kubernetes-hpa://%s?oauthToken=%s&namespace=default&resourceName=test", h
     }
 --------------------------------------------------------------------------------
 
-This consumer will return a list of events on the namespace default for the hpa test.
+This consumer returns a message per event received for all HorizontalPodAutoscalers from all namespaces in the cluster.
 
+You can narrow the scope of the consumer using the following query parameter combinations:
+
+- `labelKey` + `labelValue` - Watch HorizontalPodAutoscalers with the specified label in any namespace.
+- `namespace` - Watch all HorizontalPodAutoscalers in the specified namespace.
+- `namespace` + `resourceName` - Watch the HorizontalPodAutoscaler with the specified name in the given namespace.
+- `namespace` + `labelKey` + `labelValue` - Watch HorizontalPodAutoscalers with the specified label in the given namespace.
 
 
 include::spring-boot:partial$starter.adoc[]

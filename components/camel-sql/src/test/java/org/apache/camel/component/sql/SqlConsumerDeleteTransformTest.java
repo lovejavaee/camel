@@ -19,15 +19,13 @@ package org.apache.camel.component.sql;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.awaitility.Awaitility.await;
 
 /**
  *
@@ -38,8 +36,8 @@ public class SqlConsumerDeleteTransformTest extends CamelTestSupport {
     private JdbcTemplate jdbcTemplate;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+
+    public void doPreSetup() throws Exception {
         db = new EmbeddedDatabaseBuilder()
                 .setName(getClass().getSimpleName())
                 .setType(EmbeddedDatabaseType.H2)
@@ -47,13 +45,10 @@ public class SqlConsumerDeleteTransformTest extends CamelTestSupport {
 
         jdbcTemplate = new JdbcTemplate(db);
 
-        super.setUp();
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void doPostTearDown() throws Exception {
 
         if (db != null) {
             db.shutdown();
@@ -67,17 +62,8 @@ public class SqlConsumerDeleteTransformTest extends CamelTestSupport {
 
         MockEndpoint.assertIsSatisfied(context);
 
-        // some servers may be a bit slow for this
-        for (int i = 0; i < 5; i++) {
-            // give it a little time to delete
-            Thread.sleep(200);
-            int rows = jdbcTemplate.queryForObject("select count(*) from projects", Integer.class);
-            if (rows == 0) {
-                break;
-            }
-        }
-        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject("select count(*) from projects", Integer.class),
-                "Should have deleted all 3 rows");
+        await("Should have deleted all 3 rows")
+                .until(() -> jdbcTemplate.queryForObject("select count(*) from projects", Integer.class) == 0);
     }
 
     @Override

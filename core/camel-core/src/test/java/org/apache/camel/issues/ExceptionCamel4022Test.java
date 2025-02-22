@@ -23,7 +23,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ExceptionCamel4022Test extends ContextTestSupport {
 
@@ -36,33 +36,31 @@ public class ExceptionCamel4022Test extends ContextTestSupport {
         getMockEndpoint("mock:onexception").expectedMessageCount(0);
         getMockEndpoint("mock:dlc").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:start", "<body/>");
-            fail("Should throw an exception");
-        } catch (Exception e) {
-            IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertEquals("Damn Again", cause.getMessage());
-        }
+        Exception e = assertThrows(Exception.class, () -> template.sendBody("direct:start", "<body/>"),
+                "Should throw an exception");
+
+        IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertEquals("Damn Again", cause.getMessage());
 
         assertMockEndpointsSatisfied();
     }
 
     public static class MyExceptionThrower implements Processor {
 
-        private String msg;
+        private final String msg;
 
         public MyExceptionThrower(String msg) {
             this.msg = msg;
         }
 
         @Override
-        public void process(Exchange exchange) throws Exception {
+        public void process(Exchange exchange) {
             throw new IllegalArgumentException(msg);
         }
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             public void configure() {
                 // DLC

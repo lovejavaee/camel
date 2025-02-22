@@ -41,13 +41,13 @@ public abstract class AbstractIecComponent<T1, T2 extends BaseOptions<T2>> exten
 
     private T2 defaultConnectionOptions;
 
-    public AbstractIecComponent(final Class<T2> connectionOptionsClazz, final T2 defaultConnectionOptions) {
+    protected AbstractIecComponent(final Class<T2> connectionOptionsClazz, final T2 defaultConnectionOptions) {
         this.connectionOptionsClazz = connectionOptionsClazz;
         this.defaultConnectionOptions = defaultConnectionOptions;
     }
 
-    public AbstractIecComponent(final Class<T2> connectionOptionsClazz, final T2 defaultConnectionOptions,
-                                final CamelContext context) {
+    protected AbstractIecComponent(final Class<T2> connectionOptionsClazz, final T2 defaultConnectionOptions,
+                                   final CamelContext context) {
         super(context);
         this.connectionOptionsClazz = connectionOptionsClazz;
         this.defaultConnectionOptions = defaultConnectionOptions;
@@ -133,7 +133,8 @@ public abstract class AbstractIecComponent<T1, T2 extends BaseOptions<T2>> exten
 
         LOG.debug("parse connection - fullUri: {} -> {}", fullUri, id);
 
-        synchronized (this) {
+        lock.lock();
+        try {
             LOG.debug("Locating connection - {}", id);
 
             T1 connection = this.connections.get(id);
@@ -148,6 +149,8 @@ public abstract class AbstractIecComponent<T1, T2 extends BaseOptions<T2>> exten
                 this.connections.put(id, connection);
             }
             return connection;
+        } finally {
+            lock.unlock();
         }
     }
 

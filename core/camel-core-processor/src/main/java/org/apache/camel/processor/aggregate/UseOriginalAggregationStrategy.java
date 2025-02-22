@@ -18,6 +18,8 @@ package org.apache.camel.processor.aggregate;
 
 import org.apache.camel.AggregationStrategy;
 import org.apache.camel.Exchange;
+import org.apache.camel.spi.Configurer;
+import org.apache.camel.spi.Metadata;
 
 /**
  * An {@link AggregationStrategy} which just uses the original exchange which can be needed when you want to preserve
@@ -26,6 +28,12 @@ import org.apache.camel.Exchange;
  *
  * @see org.apache.camel.processor.Splitter
  */
+@Metadata(label = "bean",
+          description = "An AggregationStrategy which just uses the original exchange which can be needed when you want to preserve"
+                        + " the original Exchange. For example when splitting an Exchange and then you may want to keep routing using the"
+                        + " original Exchange.",
+          annotations = { "interfaceName=org.apache.camel.AggregationStrategy" })
+@Configurer(metadataOnly = true)
 public class UseOriginalAggregationStrategy implements AggregationStrategy {
 
     private final Exchange original;
@@ -62,6 +70,14 @@ public class UseOriginalAggregationStrategy implements AggregationStrategy {
                     oldExchange.setException(exception);
                 }
             }
+            exception = checkCaughtException(oldExchange, newExchange);
+            if (exception != null) {
+                if (original != null) {
+                    original.setProperty(Exchange.EXCEPTION_CAUGHT, exception);
+                } else if (oldExchange != null) {
+                    oldExchange.setProperty(Exchange.EXCEPTION_CAUGHT, exception);
+                }
+            }
         }
         return original != null ? original : oldExchange;
     }
@@ -74,6 +90,14 @@ public class UseOriginalAggregationStrategy implements AggregationStrategy {
                     ? newExchange.getException()
                     : oldExchange.getException();
         }
+    }
+
+    protected Exception checkCaughtException(Exchange oldExchange, Exchange newExchange) {
+        Exception caught = newExchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
+        if (caught == null && oldExchange != null) {
+            caught = oldExchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
+        }
+        return caught;
     }
 
     public Exchange getOriginal() {

@@ -21,13 +21,12 @@ import java.io.File;
 import org.apache.camel.Exchange;
 import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.test.junit5.params.Test;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @DisabledOnOs({ OS.AIX, OS.OTHER })
 public class LevelDBAggregationRepositoryLoadExistingTest extends LevelDBTestSupport {
@@ -35,9 +34,7 @@ public class LevelDBAggregationRepositoryLoadExistingTest extends LevelDBTestSup
     private LevelDBFile levelDBFile;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() {
         deleteDirectory("target/data");
         File file = new File("target/data/leveldb.dat");
         levelDBFile = new LevelDBFile();
@@ -46,10 +43,8 @@ public class LevelDBAggregationRepositoryLoadExistingTest extends LevelDBTestSup
     }
 
     @Override
-    @AfterEach
-    public void tearDown() throws Exception {
+    public void doPostTearDown() {
         levelDBFile.stop();
-        super.tearDown();
     }
 
     @Test
@@ -63,7 +58,7 @@ public class LevelDBAggregationRepositoryLoadExistingTest extends LevelDBTestSup
         Exchange exchange1 = new DefaultExchange(context);
         exchange1.getIn().setBody("counter:1");
         Exchange actual = repo.add(context, "foo", exchange1);
-        assertEquals(null, actual);
+        assertNull(actual);
 
         // stop the repo
         levelDBFile.stop();

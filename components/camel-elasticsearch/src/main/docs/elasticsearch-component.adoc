@@ -5,6 +5,7 @@
 :description: Send requests to ElasticSearch via Java Client API.
 :since: 3.19
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: elasticsearch
@@ -55,8 +56,8 @@ include::partial$component-endpoint-headers.adoc[]
 
 == Message Operations
 
-The following ElasticSearch operations are currently supported. Simply
-set an endpoint URI option or exchange header with a key of "operation"
+The following ElasticSearch operations are currently supported.
+Set an endpoint URI option or exchange header with a key of "operation"
 and a value set to one of the following. Some operations also require
 other parameters or the message body to be set.
 
@@ -69,7 +70,7 @@ You can set the name of the target index by setting the message header with the 
 You can set the indexId by setting the message header with
 the key "indexId".
 
-|GetById |*String* or *GetRequest.Builder* index id of content to retrieve |Retrieves the document corresponding to the given index id and returns a GetResponse object in the body.
+|GetById |*String* or *GetRequest.Builder* index id of content to retrieve |Retrieves the document corresponding to the given index id and returns a `GetResponse` object in the body.
 You can set the name of the target index by setting the message header with the key "indexName".
 You can set the type of document by setting the message header with
 the key "documentClass".
@@ -94,21 +95,25 @@ You can set the starting document offset by setting the message header with the 
 
 You can set the name of the target index by setting the message header with the key "indexName".
 
-|Exists |None |Checks whether the index exists or not and returns a Boolean flag in the body.
+|Exists |None |Check whether the index exists or not and returns a Boolean flag in the body.
 
 You must set the name of the target index by setting the message header with the key "indexName".
 
 |Update |*byte[]*, *InputStream*, *String*, *Reader*, *Map* or any document type content to update |Updates content to an index and returns the content's indexId in the body.
 You can set the name of the target index by setting the message header with the key "indexName".
 You can set the indexId by setting the message header with
-the key "indexId".
-
+the key "indexId". Be aware of the fact that unlike the component _camel-elasticsearch-rest_, by default, the expected content of
+an update request must be the same as what the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Update API expects], consequently
+if you want to update one part of an existing document, you need to embed the content to update into a "doc" object. To change the default behavior, it is possible
+to configure it globally at the component level thanks to the option _enableDocumentOnlyMode_ or by request by setting the header _ElasticsearchConstants.PARAM_DOCUMENT_MODE_ to true.
 |Ping |None  |Pings the Elasticsearch cluster and returns true if the ping succeeded, false otherwise
 
 |===
 
-== Configure the component and enable basic authentication
-To use the Elasticsearch component it has to be configured with a minimum configuration.
+== Usage
+
+=== Configure the component and enable basic authentication
+To use the Elasticsearch component, it has to be configured with a minimum configuration.
 
 [source,java]
 ----
@@ -132,7 +137,55 @@ elasticsearchComponent.setCertificatePath(certPath);
 camelContext.addComponent("elasticsearch", elasticsearchComponent);
 ----
 
-== Index Example
+=== Document type
+
+For all the search operations, it is possible to indicate the type of document to retrieve to get the result already unmarshalled with the expected type.
+
+The document type can be set using the header "documentClass" or via the uri parameter of the same name.
+
+=== Using Camel Elasticsearch with Spring Boot
+
+When you use `camel-elasticsearch-starter` with Spring Boot v2, then you must declare the following
+dependency in your own `pom.xml`.
+
+[source,xml]
+----
+<dependency>
+  <groupId>jakarta.json</groupId>
+  <artifactId>jakarta.json-api</artifactId>
+  <version>2.0.2</version>
+</dependency>
+----
+
+This is needed because Spring Boot v2 provides jakarta.json-api:1.1.6, and Elasticsearch requires to use json-api v2.
+
+=== Use RestClient provided by Spring Boot
+
+By default, Spring Boot will auto configure an Elasticsearch RestClient that will be used by camel, it is possible to customize the client with the following basic properties:
+
+[source,properties]
+----
+spring.elasticsearch.uris=myelkhost:9200
+spring.elasticsearch.username=elkuser
+spring.elasticsearch.password=secure!!
+----
+
+More information can be found in https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html#application-properties.data.spring.elasticsearch.connection-timeout
+
+=== Disable Sniffer when using Spring Boot
+
+When Spring Boot is on the classpath, the Sniffer client for Elasticsearch is enabled by default. This option can be disabled in the Spring Boot Configuration:
+
+[source,yaml]
+----
+spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+----
+
+== Examples
+
+=== Index Example
 
 Below is a simple INDEX example
 
@@ -150,7 +203,7 @@ from("direct:index")
 </route>
 ----
 
-*For this operation you'll need to specify a indexId header.*
+*For this operation, you'll need to specify an `indexId` header.*
 
 A client would simply need to pass a body message containing a Map to
 the route. The result body contains the indexId created.
@@ -162,7 +215,7 @@ map.put("content", "test");
 String indexId = template.requestBody("direct:index", map, String.class);
 ----
 
-== Search Example
+=== Search Example
 
 Searching on specific field(s) and value use the Operation ´Search´.
 Pass in the query JSON String or the Map
@@ -183,7 +236,7 @@ from("direct:search")
 
 [source,java]
 ----
-String query = "{\"query\":{\"match\":{\"doc.content\":\"new release of ApacheCamel\"}}}";
+String query = "{\"query\":{\"match\":{\"content\":\"new release of ApacheCamel\"}}}";
 HitsMetadata<?> response = template.requestBody("direct:search", query, HitsMetadata.class);
 
 ----
@@ -193,7 +246,7 @@ Search on specific field(s) using Map.
 [source,java]
 ----
 Map<String, Object> actualQuery = new HashMap<>();
-actualQuery.put("doc.content", "new release of ApacheCamel");
+actualQuery.put("content", "new release of ApacheCamel");
 
 Map<String, Object> match = new HashMap<>();
 match.put("match", actualQuery);
@@ -204,7 +257,7 @@ HitsMetadata<?> response = template.requestBody("direct:search", query, HitsMeta
 
 ----
 
-Search using Elasticsearch scroll api in order to fetch all results.
+Search using Elasticsearch scroll api to fetch all results.
 
 [source,java]
 ----
@@ -222,7 +275,7 @@ from("direct:search")
 
 [source,java]
 ----
-String query = "{\"query\":{\"match\":{\"doc.content\":\"new release of ApacheCamel\"}}}";
+String query = "{\"query\":{\"match\":{\"content\":\"new release of ApacheCamel\"}}}";
 try (ElasticsearchScrollRequestIterator response = template.requestBody("direct:search", query, ElasticsearchScrollRequestIterator.class)) {
     // do something smart with results
 }
@@ -241,9 +294,9 @@ from("direct:search")
   .end();
 ----
 
-== MultiSearch Example
+=== MultiSearch Example
 
-MultiSearching on specific field(s) and value use the Operation ´MultiSearch´.
+MultiSearching on specific field(s) and value uses the Operation ´MultiSearch´.
 Pass in the MultiSearchRequest instance
 
 [source,java]
@@ -270,52 +323,6 @@ MsearchRequest.Builder builder = new MsearchRequest.Builder().index("twitter").s
         new RequestItem.Builder().header(new MultisearchHeader.Builder().build())
                 .body(new MultisearchBody.Builder().query(b -> b.matchAll(x -> x)).build()).build());
 List<MultiSearchResponseItem<?>> response = template.requestBody("direct:multiSearch", builder, List.class);
-----
-
-== Document type
-
-For all the search operations, it is possible to indicate the type of document to retrieve in order to get the result already unmarshalled with the expected type.
-
-The document type can be set using the header "documentClass" or via the uri parameter of the same name.
-
-== Using Camel Elasticsearch with Spring Boot
-
-When you use `camel-elasticsearch-starter` with Spring Boot v2, then you must declare the following
-dependency in your own `pom.xml`.
-
-[source,xml]
-----
-<dependency>
-  <groupId>jakarta.json</groupId>
-  <artifactId>jakarta.json-api</artifactId>
-  <version>2.0.2</version>
-</dependency>
-----
-
-This is needed because Spring Boot v2 provides jakarta.json-api:1.1.6, and Elasticsearch requires to use json-api v2.
-
-=== Use RestClient provided by Spring Boot
-
-By default Spring Boot will auto configure an Elasticsearch RestClient that will be used by camel, it is possible to customize the client with the following basic properties:
-
-[source,properties]
-----
-spring.elasticsearch.uris=myelkhost:9200
-spring.elasticsearch.username=elkuser
-spring.elasticsearch.password=secure!!
-----
-
-More information can be found in https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html#application-properties.data.spring.elasticsearch.connection-timeout
-
-=== Disable Sniffer when using Spring Boot
-
-When Spring Boot is on the classpath the Sniffer client for Elasticsearch is enabled by default. This option can be disabled in the Spring Boot Configuration:
-
-[source,yaml]
-----
-spring:
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
 ----
 
 include::spring-boot:partial$starter.adoc[]

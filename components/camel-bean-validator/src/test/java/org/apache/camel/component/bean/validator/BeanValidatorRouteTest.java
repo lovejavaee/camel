@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static org.apache.camel.test.junit5.TestSupport.assertIsInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.condition.OS.AIX;
 
@@ -101,7 +102,7 @@ class BeanValidatorRouteTest extends CamelTestSupport {
             assertEquals(numberOfViolations, constraintViolations.size());
             constraintViolations.forEach(cv -> {
                 assertEquals("licensePlate", cv.getPropertyPath().toString());
-                assertEquals(null, cv.getInvalidValue());
+                assertNull(cv.getInvalidValue());
                 assertEquals("must not be null", cv.getMessage());
             });
         }
@@ -135,7 +136,7 @@ class BeanValidatorRouteTest extends CamelTestSupport {
             assertEquals(numberOfViolations, constraintViolations.size());
             constraintViolations.forEach(cv -> {
                 assertEquals("licensePlate", cv.getPropertyPath().toString());
-                assertEquals(null, cv.getInvalidValue());
+                assertNull(cv.getInvalidValue());
                 assertEquals("must not be null", cv.getMessage());
             });
         }
@@ -203,7 +204,7 @@ class BeanValidatorRouteTest extends CamelTestSupport {
             assertEquals(numberOfViolations, constraintViolations.size());
             constraintViolations.forEach(cv -> {
                 assertEquals("manufacturer", cv.getPropertyPath().toString());
-                assertEquals(null, cv.getInvalidValue());
+                assertNull(cv.getInvalidValue());
                 assertEquals("must not be null", cv.getMessage());
             });
         }
@@ -330,16 +331,16 @@ class BeanValidatorRouteTest extends CamelTestSupport {
     }
 
     private void setLicensePlates(Object cars, String licensePlate) {
-        if (cars instanceof Car) {
-            ((Car) cars).setLicensePlate(licensePlate);
+        if (cars instanceof Car car) {
+            car.setLicensePlate(licensePlate);
         } else {
             ((Iterable) cars).forEach(car -> ((Car) car).setLicensePlate(licensePlate));
         }
     }
 
     private void setManufacturer(Object cars, String manufacturer) {
-        if (cars instanceof Car) {
-            ((Car) cars).setManufacturer(manufacturer);
+        if (cars instanceof Car car) {
+            car.setManufacturer(manufacturer);
         } else {
             ((Iterable) cars).forEach(car -> ((Car) car).setManufacturer(manufacturer));
         }

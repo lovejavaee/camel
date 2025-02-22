@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.camel.component.kafka.consumer.support.resume;
 
 import java.util.Collection;
 
 import org.apache.camel.component.kafka.KafkaConfiguration;
 import org.apache.camel.component.kafka.consumer.CommitManager;
-import org.apache.camel.component.kafka.consumer.support.classic.ClassicRebalanceListener;
 import org.apache.camel.resume.ResumeStrategy;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -30,7 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ResumeRebalanceListener implements ConsumerRebalanceListener {
-    private static final Logger LOG = LoggerFactory.getLogger(ClassicRebalanceListener.class);
+
+    private static final Logger LOG = LoggerFactory.getLogger(ResumeRebalanceListener.class);
 
     private final String threadId;
     private final KafkaConfiguration configuration;

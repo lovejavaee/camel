@@ -60,6 +60,9 @@ public class CamelRouteControllerDefinition extends IdentifiedType {
     @Metadata(defaultValue = "false", javaType = "java.lang.Boolean")
     private String unhealthyOnExhausted;
     @XmlAttribute
+    @Metadata(defaultValue = "false", javaType = "java.lang.Boolean")
+    private String unhealthyOnRestarting;
+    @XmlAttribute
     @Metadata(javaType = "org.apache.camel.LoggingLevel", defaultValue = "DEBUG", enums = "TRACE,DEBUG,INFO,WARN,ERROR,OFF")
     private String loggingLevel;
 
@@ -68,11 +71,11 @@ public class CamelRouteControllerDefinition extends IdentifiedType {
     }
 
     /**
-     * To enable using supervising route controller which allows Camel to startup and then the controller takes care of
-     * starting the routes in a safe manner.
+     * To enable using supervising route controller which allows Camel to start up and then, the controller takes care
+     * of starting the routes in a safe manner.
      *
-     * This can be used when you want to startup Camel despite a route may otherwise fail fast during startup and cause
-     * Camel to fail to startup as well. By delegating the route startup to the supervising route controller then its
+     * This can be used when you want to start up Camel despite a route may otherwise fail fast during startup and cause
+     * Camel to fail to start up as well. By delegating the route startup to the supervising route controller then its
      * manages the startup using a background thread. The controller allows to be configured with various settings to
      * attempt to restart failing routes.
      */
@@ -207,6 +210,20 @@ public class CamelRouteControllerDefinition extends IdentifiedType {
      */
     public void setUnhealthyOnExhausted(String unhealthyOnExhausted) {
         this.unhealthyOnExhausted = unhealthyOnExhausted;
+    }
+
+    public String getUnhealthyOnRestarting() {
+        return unhealthyOnRestarting;
+    }
+
+    /**
+     * Whether to mark the route as unhealthy (down) when the route failed to initially start, and is being controlled
+     * for restarting (backoff).
+     *
+     * Setting this to true allows health checks to know about this and can report the Camel application as DOWN.
+     */
+    public void setUnhealthyOnRestarting(String unhealthyOnRestarting) {
+        this.unhealthyOnRestarting = unhealthyOnRestarting;
     }
 
     public String getLoggingLevel() {

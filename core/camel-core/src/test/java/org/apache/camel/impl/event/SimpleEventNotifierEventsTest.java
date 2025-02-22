@@ -31,7 +31,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.TestSupport.assertIsInstanceOf;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SimpleEventNotifierEventsTest {
 
@@ -49,16 +51,16 @@ public class SimpleEventNotifierEventsTest {
     }
 
     @AfterEach
-    public void tearDown() throws Exception {
+    public void tearDown() {
         if (context != null) {
             context.stop();
         }
     }
 
-    protected CamelContext createCamelContext() throws Exception {
+    protected CamelContext createCamelContext() {
         DefaultCamelContext context = new DefaultCamelContext();
         context.getManagementStrategy().addEventNotifier(new SimpleEventNotifierSupport() {
-            public void notify(CamelEvent event) throws Exception {
+            public void notify(CamelEvent event) {
                 events.add(event);
             }
         });
@@ -107,17 +109,15 @@ public class SimpleEventNotifierEventsTest {
     }
 
     @Test
-    public void testExchangeFailed() throws Exception {
+    public void testExchangeFailed() {
         // optimized as this does not require exchange events
         assertFalse(context.getCamelContextExtension().isEventNotificationApplicable());
 
-        try {
-            template.sendBody("direct:fail", "Hello World");
-            fail("Should have thrown an exception");
-        } catch (Exception e) {
-            // expected
-            assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-        }
+        Exception e = assertThrows(Exception.class,
+                () -> template.sendBody("direct:fail", "Hello World"),
+                "Should have thrown an exception");
+
+        assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
 
         assertEquals(12, events.size());
         assertIsInstanceOf(CamelEvent.CamelContextInitializingEvent.class, events.get(0));
@@ -149,7 +149,7 @@ public class SimpleEventNotifierEventsTest {
     }
 
     @Test
-    public void testSuspendResume() throws Exception {
+    public void testSuspendResume() {
         // optimized as this does not require exchange events
         assertFalse(context.getCamelContextExtension().isEventNotificationApplicable());
 
@@ -181,10 +181,10 @@ public class SimpleEventNotifierEventsTest {
         assertIsInstanceOf(CamelContextResumedEvent.class, events.get(15));
     }
 
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("log:foo").to("mock:result");
 
                 from("direct:fail").throwException(new IllegalArgumentException("Damn"));

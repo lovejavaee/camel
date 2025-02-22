@@ -29,7 +29,6 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.spi.IdempotentRepository;
 import org.apache.camel.support.processor.idempotent.FileIdempotentRepository;
 import org.apache.camel.util.FileUtil;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -41,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisabledOnOs(OS.AIX)
 public class ManagedFileIdempotentClearTest extends ManagementTestSupport {
 
-    private File store = testFile("idempotentfilestore.dat").toFile();
     private IdempotentRepository repo;
 
     @Test
@@ -112,13 +110,8 @@ public class ManagedFileIdempotentClearTest extends ManagementTestSupport {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-    }
-
-    @Override
     protected RouteBuilder createRouteBuilder() {
+        File store = testFile("idempotentfilestore.dat").toFile();
         return new RouteBuilder() {
             public void configure() {
                 repo = FileIdempotentRepository.fileIdempotentRepository(store);

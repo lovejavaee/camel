@@ -80,7 +80,7 @@ public class ZooKeeperServiceCallRouteIT extends CamelTestSupport {
             ServiceInstance<MetaData> instance
                     = ServiceInstance.<MetaData> builder()
                             .address("127.0.0.1")
-                            .port(AvailablePortFinder.getNextAvailable())
+                            .port(AvailablePortFinder.getNextRandomAvailable())
                             .name(SERVICE_NAME)
                             .id("service-" + i)
                             .build();
@@ -92,9 +92,7 @@ public class ZooKeeperServiceCallRouteIT extends CamelTestSupport {
     }
 
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-
+    public void doPostTearDown() {
         for (ServiceInstance<MetaData> instace : instances) {
             try {
                 discovery.unregisterService(instace);

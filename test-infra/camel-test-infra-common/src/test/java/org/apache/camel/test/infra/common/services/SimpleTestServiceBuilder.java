@@ -20,12 +20,11 @@ package org.apache.camel.test.infra.common.services;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SimpleTestServiceBuilder<T extends TestService> implements TestServiceBuilder<T> {
+public class SimpleTestServiceBuilder<T extends InfrastructureService> implements TestServiceBuilder<T> {
     private static final Logger LOG = LoggerFactory.getLogger(SimpleTestServiceBuilder.class);
 
     private final Map<String, Supplier<T>> mappings = new HashMap<>();
@@ -68,7 +67,7 @@ public class SimpleTestServiceBuilder<T extends TestService> implements TestServ
 
         Supplier<T> supplier = mappings.get(instanceType);
         if (supplier == null) {
-            String valid = mappings.keySet().stream().collect(Collectors.joining(", "));
+            String valid = String.join(", ", mappings.keySet());
 
             LOG.error("Invalid instance type: {}. Must one of: {}", instanceType, valid);
             throw new UnsupportedOperationException("Invalid instance type: " + instanceType);

@@ -23,6 +23,9 @@ import org.apache.ibatis.session.ExecutorType;
 import org.apache.ibatis.session.SqlSessionFactory;
 
 public abstract class BaseMyBatisEndpoint extends DefaultPollingEndpoint {
+
+    private SqlSessionFactory sqlSessionFactory;
+
     @UriParam(label = "producer", defaultValue = "SIMPLE")
     private ExecutorType executorType;
     @UriParam(label = "producer")
@@ -30,10 +33,10 @@ public abstract class BaseMyBatisEndpoint extends DefaultPollingEndpoint {
     @UriParam(label = "producer")
     private String outputHeader;
 
-    public BaseMyBatisEndpoint() {
+    protected BaseMyBatisEndpoint() {
     }
 
-    public BaseMyBatisEndpoint(String endpointUri, Component component) {
+    protected BaseMyBatisEndpoint(String endpointUri, Component component) {
         super(endpointUri, component);
     }
 
@@ -42,8 +45,17 @@ public abstract class BaseMyBatisEndpoint extends DefaultPollingEndpoint {
         return (MyBatisComponent) super.getComponent();
     }
 
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+
+        if (sqlSessionFactory == null) {
+            sqlSessionFactory = getComponent().createSqlSessionFactory();
+        }
+    }
+
     public SqlSessionFactory getSqlSessionFactory() {
-        return getComponent().getSqlSessionFactory();
+        return sqlSessionFactory;
     }
 
     public ExecutorType getExecutorType() {

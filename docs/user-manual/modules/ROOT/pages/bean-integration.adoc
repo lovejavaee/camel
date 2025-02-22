@@ -19,12 +19,12 @@ The following annotations is supported and inject by Camel's
 |`@EndpointInject` |To inject an endpoint, see more details at xref:pojo-producing.adoc[POJO Producing].
 |`@BeanInject` |To inject a bean obtained from the xref:registry.adoc[Registry]. See xref:bean-injection.adoc[Bean Injection].
 |`@BeanConfigInject` |To inject a configuration bean obtained from the xref:registry.adoc[Registry]. The bean is a POJO that represents
-a set of configuration options, which is automatic configured with values loaded via Camel xref:using-propertyplaceholder.adoc[Property Placeholders].
+a set of configuration options, which is automatically configured with values loaded via Camel xref:using-propertyplaceholder.adoc[Property Placeholders].
 |`@PropertyInject` |To inject a value using property placeholder.
-|`@Produce` |To inject a producer to send message to an endpoint. See xref:pojo-producing.adoc[POJO Producing].
+|`@Produce` |To inject a producer to send a message to an endpoint. See xref:pojo-producing.adoc[POJO Producing].
 |`@Consume` |To inject a consumer on a method. See xref:pojo-consuming.adoc[POJO Consuming].
 |`@BindToRegistry` |Used for binding a bean to the registry.
-  If no name is specified then the bean will have its name auto computed based on the class name,
+  If no name is specified, then the bean will have its name auto computed based on the class name,
  field name, or method name where the annotation is configured.
 |`@DeferredContextBinding` | Used to indicate that if the target type is `CamelContextAware` then the `CamelContext` is deferred and injected later; after the bootstrap of Camel so the `CamelContext` is ready for use.
 |=======================================================================
@@ -43,7 +43,7 @@ See more details at:
 
 *Example*
 
-See the https://github.com/apache/camel-examples/tree/main/examples/pojo-messaging[POJO Messaging Example]
+See the https://github.com/apache/camel-examples/tree/main/pojo-messaging[POJO Messaging Example]
 for how to use the annotations for routing and messaging.
 
 == Using @PropertyInject
@@ -91,6 +91,54 @@ You can also add a default value if the key does not exist, such as:
 @PropertyInject(value = "myTimeout", defaultValue = "5000")
 private int timeout;
 ----
+
+=== Using @PropertyInject with arrays, lists, sets or maps
+
+You can also use `@PropertyInject` to inject an array of values. For example, you may configure multiple hostnames
+in the configuration file, and need to inject this into an `String[]` or `List<String>` field.
+To do this, you need to tell Camel that the property value should be split using a separator, as follows:
+
+[source,java]
+----
+@PropertyInject(value = "myHostnames", separator = ",")
+private String[] servers;
+----
+
+TIP: You can also use list/set types, such as `List<String>` or `Set<String>` instead of array.
+
+Then in the `application.properties` file you can define the servers:
+
+[source,properties]
+----
+myHostnames = serverA, serverB, serverC
+----
+
+TIP: This also works for fields that are not String based, such as `int[]` for numeric values.
+
+For `Map` types then the values are expected to be in `_key=value_` format, such as:
+
+[source,properties]
+----
+myServers = serverA=http://coolstore:4444,serverB=http://megastore:5555
+----
+
+You can then inject this into a `Map` as follows:
+
+[source,java]
+----
+@PropertyInject(value = "myServers", separator = ",")
+private Map servers;
+----
+
+You can use generic types in the Map such as the values should be `Integer` values:
+
+[source,java]
+----
+@PropertyInject(value = "ports", separator = ",")
+private Map<String, Integer> ports;
+----
+
+NOTE: The generic type can only be a single class type, and cannot be a nested complex type such as `Map<String,Map<Kind,Priority>>`.
 
 == See Also
 

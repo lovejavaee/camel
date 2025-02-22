@@ -43,12 +43,12 @@ import org.apache.camel.support.processor.validation.ValidatorErrorHandler;
  */
 @ManagedResource(description = "Managed ValidatorEndpoint")
 @UriEndpoint(firstVersion = "1.1.0", scheme = "validator", title = "Validator", syntax = "validator:resourceUri",
-             producerOnly = true, category = { Category.CORE, Category.VALIDATION })
+             remote = false, producerOnly = true, category = { Category.CORE, Category.VALIDATION })
 public class ValidatorEndpoint extends DefaultEndpoint {
 
     @UriPath(description = "URL to a local resource on the classpath, or a reference to lookup a bean in the Registry,"
                            + " or a full URL to a remote resource or resource on the file system which contains the XSD to validate against.")
-    @Metadata(required = true)
+    @Metadata(required = true, supportFileReference = true)
     private String resourceUri;
     @UriParam(defaultValue = XMLConstants.W3C_XML_SCHEMA_NS_URI, label = "advanced",
               description = "Configures the W3C XML Schema Namespace URI.")
@@ -66,7 +66,7 @@ public class ValidatorEndpoint extends DefaultEndpoint {
     private LSResourceResolver resourceResolver;
     @UriParam(label = "advanced",
               description = "To use a custom LSResourceResolver which depends on a dynamic endpoint resource URI. " + //
-                            "The default resource resolver factory resturns a resource resolver which can read files from the class path and file system. Do not use together with resourceResolver.")
+                            "The default resource resolver factory returns a resource resolver which can read files from the class path and file system. Do not use together with resourceResolver.")
     private ValidatorResourceResolverFactory resourceResolverFactory;
     @UriParam(defaultValue = "true", description = "Whether to fail if no body exists.")
     private boolean failOnNullBody = true;
@@ -90,6 +90,11 @@ public class ValidatorEndpoint extends DefaultEndpoint {
         super(endpointUri, component);
         this.resourceUri = resourceUri;
         schemaReader = new SchemaReader(getCamelContext(), resourceUri);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @ManagedOperation(description = "Clears the cached schema, forcing to re-load the schema on next request")

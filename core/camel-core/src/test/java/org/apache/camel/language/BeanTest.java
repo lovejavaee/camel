@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class BeanTest extends LanguageTestSupport {
 
     @Test
-    public void testSimpleExpressions() throws Exception {
+    public void testSimpleExpressions() {
         assertExpression("foo.echo('e::o')", "e::o");
         assertExpression("foo.echo('e.o')", "e.o");
         assertExpression("my.company.MyClass::echo('a')", "a");
@@ -45,25 +45,24 @@ public class BeanTest extends LanguageTestSupport {
     }
 
     @Test
-    public void testPredicates() throws Exception {
+    public void testPredicates() {
         assertPredicate("foo.isFooHeaderAbc");
         assertPredicate("foo?method=isFooHeaderAbc");
         assertPredicate("my.company.MyClass::isFooHeaderAbc");
     }
 
     @Test
-    public void testDoubleColon() throws Exception {
+    public void testDoubleColon() {
         assertPredicate("foo::isFooHeaderAbc");
-        try {
-            assertPredicateFails("foo:isFooHeaderAbc");
-            fail("Should throw exception");
-        } catch (NoSuchBeanException e) {
-            assertEquals("foo:isFooHeaderAbc", e.getName());
-        }
+        NoSuchBeanException e = assertThrows(NoSuchBeanException.class,
+                () -> assertPredicateFails("foo:isFooHeaderAbc"),
+                "Should throw exception");
+
+        assertEquals("foo:isFooHeaderAbc", e.getName());
     }
 
     @Test
-    public void testBeanTypeExpression() throws Exception {
+    public void testBeanTypeExpression() {
         Expression exp = new BeanExpression(MyUser.class, null);
         exp.init(context);
         Exchange exchange = createExchangeWithBody("Claus");
@@ -73,7 +72,7 @@ public class BeanTest extends LanguageTestSupport {
     }
 
     @Test
-    public void testBeanTypeAndMethodExpression() throws Exception {
+    public void testBeanTypeAndMethodExpression() {
         Expression exp = new BeanExpression(MyUser.class, "hello");
         exp.init(context);
         Exchange exchange = createExchangeWithBody("Claus");
@@ -83,7 +82,7 @@ public class BeanTest extends LanguageTestSupport {
     }
 
     @Test
-    public void testBeanInstanceAndMethodExpression() throws Exception {
+    public void testBeanInstanceAndMethodExpression() {
         MyUser user = new MyUser();
         Expression exp = new BeanExpression(user, "hello");
         exp.init(context);
@@ -94,28 +93,26 @@ public class BeanTest extends LanguageTestSupport {
     }
 
     @Test
-    public void testNoMethod() throws Exception {
+    public void testNoMethod() {
         MyUser user = new MyUser();
-        try {
+        Exception e = assertThrows(Exception.class, () -> {
             Expression exp = new BeanExpression(user, "unknown");
             exp.init(context);
-            fail("Should throw exception");
-        } catch (Exception e) {
-            MethodNotFoundException mnfe = assertIsInstanceOf(MethodNotFoundException.class, e);
-            assertSame(user, mnfe.getBean());
-            assertEquals("unknown", mnfe.getMethodName());
-        }
+        }, "Should throw exception");
+
+        MethodNotFoundException mnfe = assertIsInstanceOf(MethodNotFoundException.class, e);
+        assertSame(user, mnfe.getBean());
+        assertEquals("unknown", mnfe.getMethodName());
     }
 
     @Test
-    public void testNoMethodBeanLookup() throws Exception {
-        try {
+    public void testNoMethodBeanLookup() {
+        MethodNotFoundException e = assertThrows(MethodNotFoundException.class, () -> {
             Expression exp = new BeanExpression("foo", "cake");
             exp.init(context);
-            fail("Should throw exception");
-        } catch (MethodNotFoundException e) {
-            assertEquals("cake", e.getMethodName());
-        }
+        }, "Should throw exception");
+
+        assertEquals("cake", e.getMethodName());
     }
 
     @Override
@@ -124,8 +121,8 @@ public class BeanTest extends LanguageTestSupport {
     }
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry answer = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry answer = super.createCamelRegistry();
         answer.bind("foo", new MyBean());
         answer.bind("my.company.MyClass", new MyBean());
         return answer;

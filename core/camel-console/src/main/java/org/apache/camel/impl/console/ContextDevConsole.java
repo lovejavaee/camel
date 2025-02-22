@@ -16,20 +16,24 @@
  */
 package org.apache.camel.impl.console;
 
+import java.util.Collections;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.camel.api.management.ManagedCamelContext;
 import org.apache.camel.api.management.mbean.ManagedCamelContextMBean;
-import org.apache.camel.spi.ContextReloadStrategy;
-import org.apache.camel.spi.ResourceReloadStrategy;
+import org.apache.camel.spi.ReloadStrategy;
 import org.apache.camel.spi.annotations.DevConsole;
+import org.apache.camel.support.CamelContextHelper;
+import org.apache.camel.support.ExceptionHelper;
 import org.apache.camel.support.console.AbstractDevConsole;
 import org.apache.camel.util.TimeUtils;
+import org.apache.camel.util.json.JsonArray;
 import org.apache.camel.util.json.JsonObject;
 
-@DevConsole("context")
+@DevConsole(name = "context", displayName = "CamelContext", description = "Overall information about the CamelContext")
 public class ContextDevConsole extends AbstractDevConsole {
 
     public ContextDevConsole() {
@@ -39,9 +43,13 @@ public class ContextDevConsole extends AbstractDevConsole {
     protected String doCallText(Map<String, Object> options) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append(String.format("Apache Camel %s %s (%s) uptime %s", getCamelContext().getVersion(),
+        String profile = "";
+        if (getCamelContext().getCamelContextExtension().getProfile() != null) {
+            profile = " (profile: " + getCamelContext().getCamelContextExtension().getProfile() + ")";
+        }
+        sb.append(String.format("Apache Camel %s %s (%s)%s uptime %s", getCamelContext().getVersion(),
                 getCamelContext().getStatus().name().toLowerCase(Locale.ROOT), getCamelContext().getName(),
-                getCamelContext().getUptime()));
+                profile, CamelContextHelper.getUptime(getCamelContext())));
         if (getCamelContext().getDescription() != null) {
             sb.append(String.format("\n    %s", getCamelContext().getDescription()));
         }
@@ -52,28 +60,32 @@ public class ContextDevConsole extends AbstractDevConsole {
             ManagedCamelContextMBean mb = mcc.getManagedCamelContext();
             if (mb != null) {
                 int reloaded = 0;
-                ResourceReloadStrategy rrs = getCamelContext().hasService(ResourceReloadStrategy.class);
-                if (rrs != null) {
-                    reloaded += rrs.getReloadCounter();
-                }
-                ContextReloadStrategy crs = getCamelContext().hasService(ContextReloadStrategy.class);
-                if (crs != null) {
-                    reloaded += crs.getReloadCounter();
+                int reloadedFailed = 0;
+                Set<ReloadStrategy> rs = getCamelContext().hasServices(ReloadStrategy.class);
+                for (ReloadStrategy r : rs) {
+                    reloaded += r.getReloadCounter();
+                    reloadedFailed += r.getFailedCounter();
                 }
                 String load1 = getLoad1(mb);
                 String load5 = getLoad5(mb);
                 String load15 = getLoad15(mb);
                 if (!load1.isEmpty() || !load5.isEmpty() || !load15.isEmpty()) {
-                    sb.append(String.format("\n    Load Average: %s %s %s\n", load1, load5, load15));
+                    sb.append(String.format("\n    Load Average: %s %s %s", load1, load5, load15));
                 }
                 String thp = getThroughput(mb);
                 if (!thp.isEmpty()) {
                     sb.append(String.format("\n    Messages/Sec: %s", thp));
                 }
-                sb.append(String.format("\n    Total: %s", mb.getExchangesTotal()));
-                sb.append(String.format("\n    Failed: %s", mb.getExchangesFailed()));
-                sb.append(String.format("\n    Inflight: %s", mb.getExchangesInflight()));
-                sb.append(String.format("\n    Reloaded: %s", reloaded));
+                sb.append(String.format("\n    Total: %s/%s", mb.getRemoteExchangesTotal(), mb.getExchangesTotal()));
+                sb.append(String.format("\n    Failed: %s/%s", mb.getRemoteExchangesFailed(), mb.getExchangesFailed()));
+                sb.append(String.format("\n    Inflight: %s/%s", mb.getRemoteExchangesInflight(), mb.getExchangesInflight()));
+                long idle = mb.getIdleSince();
+                if (idle > 0) {
+                    sb.append(String.format("\n    Idle Since: %s", TimeUtils.printDuration(idle)));
+                } else {
+                    sb.append(String.format("\n    Idle Since: %s", ""));
+                }
+                sb.append(String.format("\n    Reloaded: %s/%s", reloaded, reloadedFailed));
                 sb.append(String.format("\n    Mean Time: %s", TimeUtils.printDuration(mb.getMeanProcessingTime(), true)));
                 sb.append(String.format("\n    Max Time: %s", TimeUtils.printDuration(mb.getMaxProcessingTime(), true)));
                 sb.append(String.format("\n    Min Time: %s", TimeUtils.printDuration(mb.getMinProcessingTime(), true)));
@@ -110,10 +122,13 @@ public class ContextDevConsole extends AbstractDevConsole {
         if (getCamelContext().getDescription() != null) {
             root.put("description", getCamelContext().getDescription());
         }
+        if (getCamelContext().getCamelContextExtension().getProfile() != null) {
+            root.put("profile", getCamelContext().getCamelContextExtension().getProfile());
+        }
         root.put("version", getCamelContext().getVersion());
         root.put("state", getCamelContext().getStatus().name());
         root.put("phase", getCamelContext().getCamelContextExtension().getStatusPhase());
-        root.put("uptime", getCamelContext().getUptime());
+        root.put("uptime", getCamelContext().getUptime().toMillis());
 
         ManagedCamelContext mcc = getCamelContext().getCamelContextExtension().getContextPlugin(ManagedCamelContext.class);
         if (mcc != null) {
@@ -121,15 +136,6 @@ public class ContextDevConsole extends AbstractDevConsole {
             if (mb != null) {
                 JsonObject stats = new JsonObject();
 
-                int reloaded = 0;
-                ResourceReloadStrategy rrs = getCamelContext().hasService(ResourceReloadStrategy.class);
-                if (rrs != null) {
-                    reloaded += rrs.getReloadCounter();
-                }
-                ContextReloadStrategy crs = getCamelContext().hasService(ContextReloadStrategy.class);
-                if (crs != null) {
-                    reloaded += crs.getReloadCounter();
-                }
                 String load1 = getLoad1(mb);
                 String load5 = getLoad5(mb);
                 String load15 = getLoad15(mb);
@@ -142,10 +148,13 @@ public class ContextDevConsole extends AbstractDevConsole {
                 if (!thp.isEmpty()) {
                     stats.put("exchangesThroughput", thp);
                 }
+                stats.put("idleSince", mb.getIdleSince());
                 stats.put("exchangesTotal", mb.getExchangesTotal());
                 stats.put("exchangesFailed", mb.getExchangesFailed());
                 stats.put("exchangesInflight", mb.getExchangesInflight());
-                stats.put("reloaded", reloaded);
+                stats.put("remoteExchangesTotal", mb.getRemoteExchangesTotal());
+                stats.put("remoteExchangesFailed", mb.getRemoteExchangesFailed());
+                stats.put("remoteExchangesInflight", mb.getRemoteExchangesInflight());
                 stats.put("meanProcessingTime", mb.getMeanProcessingTime());
                 stats.put("maxProcessingTime", mb.getMaxProcessingTime());
                 stats.put("minProcessingTime", mb.getMinProcessingTime());
@@ -155,19 +164,42 @@ public class ContextDevConsole extends AbstractDevConsole {
                 }
                 Date last = mb.getLastExchangeCreatedTimestamp();
                 if (last != null) {
-                    String ago = TimeUtils.printSince(last.getTime());
-                    stats.put("sinceLastCreatedExchange", ago);
+                    stats.put("lastCreatedExchangeTimestamp", last.getTime());
                 }
                 last = mb.getLastExchangeCompletedTimestamp();
                 if (last != null) {
-                    String ago = TimeUtils.printSince(last.getTime());
-                    stats.put("sinceLastCompletedExchange", ago);
+                    stats.put("lastCompletedExchangeTimestamp", last.getTime());
                 }
                 last = mb.getLastExchangeFailureTimestamp();
                 if (last != null) {
-                    String ago = TimeUtils.printSince(last.getTime());
-                    stats.put("sinceLastFailedExchange", ago);
+                    stats.put("lastFailedExchangeTimestamp", last.getTime());
                 }
+                // reload stats
+                int reloaded = 0;
+                int reloadedFailed = 0;
+                Exception reloadCause = null;
+                Set<ReloadStrategy> rs = getCamelContext().hasServices(ReloadStrategy.class);
+                for (ReloadStrategy r : rs) {
+                    reloaded += r.getReloadCounter();
+                    reloadedFailed += r.getFailedCounter();
+                    if (reloadCause == null) {
+                        reloadCause = r.getLastError();
+                    }
+                }
+                JsonObject ro = new JsonObject();
+                ro.put("reloaded", reloaded);
+                ro.put("failed", reloadedFailed);
+                if (reloadCause != null) {
+                    JsonObject eo = new JsonObject();
+                    eo.put("message", reloadCause.getMessage());
+                    JsonArray arr2 = new JsonArray();
+                    final String trace = ExceptionHelper.stackTraceToString(reloadCause);
+                    eo.put("stackTrace", arr2);
+                    Collections.addAll(arr2, trace.split("\n"));
+                    ro.put("lastError", eo);
+                }
+                stats.put("reload", ro);
+
                 root.put("statistics", stats);
             }
         }

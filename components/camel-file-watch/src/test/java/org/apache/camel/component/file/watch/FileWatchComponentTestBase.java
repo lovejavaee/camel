@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -29,7 +28,10 @@ import java.util.List;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.file.watch.constants.FileEventEnum;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.apache.camel.test.junit5.TestNameExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,41 +40,37 @@ import static org.springframework.test.util.AssertionErrors.assertTrue;
 
 public class FileWatchComponentTestBase extends CamelTestSupport {
 
+    @RegisterExtension
+    @Order(10)
+    TestNameExtension testNameExtension = new TestNameExtension();
+
     @TempDir
     public Path folder;
 
     protected List<Path> testFiles = new ArrayList<>();
-
-    protected String testMethod;
 
     static void assertFileEvent(String expectedFileName, FileEventEnum expectedEventType, Exchange exchange) {
         assertEquals(expectedFileName, exchange.getIn().getBody(File.class).getName());
         assertEquals(expectedEventType, exchange.getIn().getHeader(FileWatchConstants.EVENT_TYPE_HEADER, FileEventEnum.class));
     }
 
-    public void beforeEach(ExtensionContext context) throws Exception {
-        super.beforeEach(context);
-        this.testMethod = context.getTestMethod().map(Method::getName).orElse("");
-    }
-
     @Override
     protected void doPreSetup() throws Exception {
         cleanTestDir(new File(testPath()));
-        new File(testPath()).mkdirs();
+        Files.createDirectories(Path.of(testPath()));
         for (int i = 0; i < 10; i++) {
-            File newFile = new File(testPath(), testMethod + "-" + i);
+            File newFile = new File(testPath(), testNameExtension.getCurrentTestName() + "-" + i);
             assumeTrue(newFile.createNewFile());
             testFiles.add(newFile.toPath());
         }
     }
 
-    @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    @AfterEach
+    public void cleanupTestDir() throws Exception {
         cleanTestDir(new File(testPath()));
     }
 
-    private void cleanTestDir(File file) throws Exception {
+    private static void cleanTestDir(File file) throws Exception {
         if (file == null || !file.exists() || file.listFiles() == null) {
             return;
         }
@@ -95,7 +93,7 @@ public class FileWatchComponentTestBase extends CamelTestSupport {
         try {
             return folder.toRealPath()
                    + folder.getFileSystem().getSeparator()
-                   + getClass().getSimpleName() + "_" + testMethod
+                   + getClass().getSimpleName() + "_" + testNameExtension.getCurrentTestName()
                    + folder.getFileSystem().getSeparator();
         } catch (IOException e) {
             throw new IOError(e);

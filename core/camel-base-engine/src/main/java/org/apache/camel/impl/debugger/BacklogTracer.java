@@ -45,8 +45,8 @@ import org.apache.camel.util.json.Jsoner;
  */
 public final class BacklogTracer extends ServiceSupport implements org.apache.camel.spi.BacklogTracer {
 
-    // lets limit the tracer to 10 thousand messages in total
-    public static final int MAX_BACKLOG_SIZE = 10 * 1000;
+    // limit the tracer to a thousand messages in total
+    public static final int MAX_BACKLOG_SIZE = 1000;
     private final CamelContext camelContext;
     private final Language simple;
     private boolean enabled;
@@ -55,13 +55,16 @@ public final class BacklogTracer extends ServiceSupport implements org.apache.ca
     // use a queue with an upper limit to avoid storing too many messages
     private final Queue<BacklogTracerEventMessage> queue = new LinkedBlockingQueue<>(MAX_BACKLOG_SIZE);
     // how many of the last messages to keep in the backlog at total
-    private int backlogSize = 1000;
+    private int backlogSize = 100;
     private boolean removeOnDump = true;
-    private int bodyMaxChars = 128 * 1024;
+    private int bodyMaxChars = 32 * 1024;
     private boolean bodyIncludeStreams;
     private boolean bodyIncludeFiles = true;
     private boolean includeExchangeProperties = true;
+    private boolean includeExchangeVariables = true;
     private boolean includeException = true;
+    private boolean traceRests;
+    private boolean traceTemplates;
     // a pattern to filter tracing nodes
     private String tracePattern;
     private String[] patterns;
@@ -235,6 +238,16 @@ public final class BacklogTracer extends ServiceSupport implements org.apache.ca
     }
 
     @Override
+    public boolean isIncludeExchangeVariables() {
+        return includeExchangeVariables;
+    }
+
+    @Override
+    public void setIncludeExchangeVariables(boolean includeExchangeVariables) {
+        this.includeExchangeVariables = includeExchangeVariables;
+    }
+
+    @Override
     public boolean isIncludeException() {
         return includeException;
     }
@@ -242,6 +255,23 @@ public final class BacklogTracer extends ServiceSupport implements org.apache.ca
     @Override
     public void setIncludeException(boolean includeException) {
         this.includeException = includeException;
+    }
+
+    @Override
+    public boolean isTraceRests() {
+        return traceRests;
+    }
+
+    public void setTraceRests(boolean traceRests) {
+        this.traceRests = traceRests;
+    }
+
+    public boolean isTraceTemplates() {
+        return traceTemplates;
+    }
+
+    public void setTraceTemplates(boolean traceTemplates) {
+        this.traceTemplates = traceTemplates;
     }
 
     @Override
@@ -316,13 +346,7 @@ public final class BacklogTracer extends ServiceSupport implements org.apache.ca
     public String dumpTracedMessagesAsXml(String nodeId) {
         List<BacklogTracerEventMessage> events = dumpTracedMessages(nodeId);
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("<").append(BacklogTracerEventMessage.ROOT_TAG).append("s>");
-        for (BacklogTracerEventMessage event : events) {
-            sb.append("\n").append(event.toXml(2));
-        }
-        sb.append("\n</").append(BacklogTracerEventMessage.ROOT_TAG).append("s>");
-        return sb.toString();
+        return wrapAroundRootTag(events);
     }
 
     @Override
@@ -351,7 +375,11 @@ public final class BacklogTracer extends ServiceSupport implements org.apache.ca
     public String dumpAllTracedMessagesAsXml() {
         List<BacklogTracerEventMessage> events = dumpAllTracedMessages();
 
-        StringBuilder sb = new StringBuilder();
+        return wrapAroundRootTag(events);
+    }
+
+    private static String wrapAroundRootTag(List<BacklogTracerEventMessage> events) {
+        StringBuilder sb = new StringBuilder(512);
         sb.append("<").append(BacklogTracerEventMessage.ROOT_TAG).append("s>");
         for (BacklogTracerEventMessage event : events) {
             sb.append("\n").append(event.toXml(2));
@@ -380,10 +408,6 @@ public final class BacklogTracer extends ServiceSupport implements org.apache.ca
 
     public long incrementTraceCounter() {
         return traceCounter.incrementAndGet();
-    }
-
-    @Override
-    protected void doStart() throws Exception {
     }
 
     @Override

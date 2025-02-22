@@ -16,12 +16,16 @@
  */
 package org.apache.camel.component.seda;
 
+import java.util.concurrent.TimeUnit;
+
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests that a Seda producer supports the blockWhenFull option by blocking when a message is sent while the queue is
@@ -44,7 +48,7 @@ public class SedaBlockWhenFullTest extends ContextTestSupport {
     protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(BLOCK_WHEN_FULL_URI).delay(DELAY_LONG).syncDelayed().to(MOCK_URI);
 
                 // use same delay as above on purpose
@@ -54,32 +58,24 @@ public class SedaBlockWhenFullTest extends ContextTestSupport {
     }
 
     @Test
-    public void testSedaOfferTimeoutWhenFull() throws Exception {
-        try {
-            SedaEndpoint seda = context.getEndpoint(SEDA_WITH_OFFER_TIMEOUT_URI, SedaEndpoint.class);
-            assertEquals(QUEUE_SIZE, seda.getQueue().remainingCapacity());
+    public void testSedaOfferTimeoutWhenFull() {
+        SedaEndpoint seda = context.getEndpoint(SEDA_WITH_OFFER_TIMEOUT_URI, SedaEndpoint.class);
+        assertEquals(QUEUE_SIZE, seda.getQueue().remainingCapacity());
 
-            sendTwoOverCapacity(SEDA_WITH_OFFER_TIMEOUT_URI, QUEUE_SIZE);
-
-            fail("Failed to insert element into queue, " + "after timeout of " + seda.getOfferTimeout() + " milliseconds");
-        } catch (Exception e) {
-            assertIsInstanceOf(IllegalStateException.class, e.getCause());
-        }
+        Exception e = assertThrows(Exception.class, () -> sendTwoOverCapacity(SEDA_WITH_OFFER_TIMEOUT_URI, QUEUE_SIZE),
+                "Failed to insert element into queue, " + "after timeout of " + seda.getOfferTimeout() + " milliseconds");
+        assertIsInstanceOf(IllegalStateException.class, e.getCause());
     }
 
     @Test
-    public void testSedaDefaultWhenFull() throws Exception {
-        try {
-            SedaEndpoint seda = context.getEndpoint(DEFAULT_URI, SedaEndpoint.class);
-            assertFalse(seda.isBlockWhenFull(),
-                    "Seda Endpoint is not setting the correct default (should be false) for \"blockWhenFull\"");
+    public void testSedaDefaultWhenFull() {
+        SedaEndpoint seda = context.getEndpoint(DEFAULT_URI, SedaEndpoint.class);
+        assertFalse(seda.isBlockWhenFull(),
+                "Seda Endpoint is not setting the correct default (should be false) for \"blockWhenFull\"");
 
-            sendTwoOverCapacity(DEFAULT_URI, QUEUE_SIZE);
-
-            fail("The route didn't fill the queue beyond capacity: test class isn't working as intended");
-        } catch (Exception e) {
-            assertIsInstanceOf(IllegalStateException.class, e.getCause());
-        }
+        Exception e = assertThrows(Exception.class, () -> sendTwoOverCapacity(DEFAULT_URI, QUEUE_SIZE),
+                "The route didn't fill the queue beyond capacity: test class isn't working as intended");
+        assertIsInstanceOf(IllegalStateException.class, e.getCause());
     }
 
     @Test
@@ -101,7 +97,8 @@ public class SedaBlockWhenFullTest extends ContextTestSupport {
         assertEquals(QUEUE_SIZE, seda.getQueue().remainingCapacity());
 
         asyncSendTwoOverCapacity(BLOCK_WHEN_FULL_URI, QUEUE_SIZE + 4);
-        assertMockEndpointsSatisfied();
+        // wait a bit to allow the async processing to complete
+        assertMockEndpointsSatisfied(2, TimeUnit.SECONDS);
     }
 
     /**

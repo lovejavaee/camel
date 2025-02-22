@@ -30,11 +30,12 @@ public class SpanTestData {
     private String uri;
     private String operation;
     private SpanKind kind = SpanKind.INTERNAL;
+    private String traceId;
     private int parentId = -1;
-    private List<String> logMessages = new ArrayList<>();
-    private Map<String, String> tags = new HashMap<>();
-    private ArrayList<SpanTestData> childs = new ArrayList<>();
-    private Map<String, String> baggage = new HashMap<>();
+    private final List<String> logMessages = new ArrayList<>();
+    private final Map<String, String> tags = new HashMap<>();
+    private final ArrayList<SpanTestData> children = new ArrayList<>();
+    private final Map<String, String> baggage = new HashMap<>();
 
     public String getLabel() {
         return label;
@@ -72,6 +73,15 @@ public class SpanTestData {
         return this;
     }
 
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public SpanTestData setTraceId(String traceId) {
+        this.traceId = traceId;
+        return this;
+    }
+
     public int getParentId() {
         return parentId;
     }
@@ -81,8 +91,8 @@ public class SpanTestData {
         return this;
     }
 
-    public SpanTestData addLogMessage(String mesg) {
-        logMessages.add(mesg);
+    public SpanTestData addLogMessage(String logMessage) {
+        logMessages.add(logMessage);
         return this;
     }
 
@@ -99,8 +109,8 @@ public class SpanTestData {
         return tags;
     }
 
-    public SpanTestData setChilds(SpanTestData[] childs) {
-        Collections.addAll(this.childs, childs);
+    public SpanTestData setChildren(SpanTestData[] children) {
+        Collections.addAll(this.children, children);
         return this;
     }
 

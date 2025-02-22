@@ -14,32 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.camel.test.infra.azure.common.services;
 
-import org.apache.camel.test.infra.azure.common.AzureCredentialsHolder;
+import org.apache.camel.test.infra.common.services.ContainerTestService;
 import org.apache.camel.test.infra.common.services.TestService;
-import org.apache.camel.test.infra.common.services.TestServiceUtil;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
 
-public interface AzureService extends TestService, BeforeAllCallback, AfterAllCallback {
-
-    /**
-     * Gets the credentials for the test service
-     *
-     * @return
-     */
-    AzureCredentialsHolder azureCredentials();
-
-    @Override
-    default void beforeAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryInitialize(this, extensionContext);
-    }
-
-    @Override
-    default void afterAll(ExtensionContext extensionContext) throws Exception {
-        TestServiceUtil.tryShutdown(this, extensionContext);
-    }
+public interface AzureService extends AzureInfraService, TestService, ContainerTestService {
 }

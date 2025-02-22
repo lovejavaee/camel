@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-sjms</artifactId>
@@ -32,6 +32,12 @@
     <description>A pure Java JMS Camel Component</description>
 
     <properties>
+        <camel.surefire.reuseForks>true</camel.surefire.reuseForks>
+        <camel.surefire.forkCount>1</camel.surefire.forkCount>
+        <camel.surefire.forkTimeout>1200</camel.surefire.forkTimeout>
+        <camel.surefire.parallel>true</camel.surefire.parallel>
+        <camel.surefire.parallel.factor>0.5</camel.surefire.parallel.factor>
+        <camel.surefire.fork.additional-vmargs>-Xmx1G</camel.surefire.fork.additional-vmargs>
     </properties>
 
     <dependencies>
@@ -55,7 +61,7 @@
         </dependency>
 
         <!-- test infra -->
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-artemis</artifactId>
             <version>${project.version}</version>
@@ -79,12 +85,6 @@
     <build>
         <plugins>
             <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <forkedProcessTimeoutInSeconds>6000</forkedProcessTimeoutInSeconds>
-                </configuration>
-            </plugin>
-            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
                 <configuration>
@@ -97,5 +97,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

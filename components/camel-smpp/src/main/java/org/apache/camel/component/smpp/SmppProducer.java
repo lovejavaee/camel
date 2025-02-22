@@ -71,10 +71,12 @@ public class SmppProducer extends DefaultProducer {
                 configuration.getSessionStateListener().onStateChange(newState, oldState, source);
             }
 
-            if (newState.equals(SessionState.CLOSED)) {
-                LOG.warn("Lost connection to: {} - trying to reconnect...", getEndpoint().getConnectionString());
+            if (newState.equals(SessionState.UNBOUND) || newState.equals(SessionState.CLOSED)) {
+                LOG.warn(newState.equals(SessionState.UNBOUND)
+                        ? "Session to {} was unbound - trying to reconnect" : "Lost connection to: {} - trying to reconnect...",
+                        getEndpoint().getConnectionString());
                 closeSession();
-                reconnect(configuration.getInitialReconnectDelay());
+                reconnect();
             }
         };
     }
@@ -123,7 +125,8 @@ public class SmppProducer extends DefaultProducer {
                         this.configuration.getSystemType(),
                         TypeOfNumber.valueOf(configuration.getTypeOfNumber()),
                         NumberingPlanIndicator.valueOf(configuration.getNumberingPlanIndicator()),
-                        ""));
+                        "",
+                        configuration.getInterfaceVersionByte()));
 
         LOG.info("Connected to: {}", getEndpoint().getConnectionString());
 
@@ -202,9 +205,10 @@ public class SmppProducer extends DefaultProducer {
         }
     }
 
-    private void reconnect(final long initialReconnectDelay) {
+    private void reconnect() {
         if (connectLock.tryLock()) {
-            BlockingTask task = newReconnectTask(reconnectService, RECONNECT_TASK_NAME, initialReconnectDelay,
+            BlockingTask task = newReconnectTask(reconnectService, RECONNECT_TASK_NAME,
+                    configuration.getInitialReconnectDelay(),
                     configuration.getReconnectDelay(), configuration.getMaxReconnect());
 
             try {

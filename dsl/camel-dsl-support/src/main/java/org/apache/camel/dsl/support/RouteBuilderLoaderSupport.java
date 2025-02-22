@@ -16,11 +16,9 @@
  */
 package org.apache.camel.dsl.support;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,22 +28,25 @@ import org.apache.camel.CamelContextAware;
 import org.apache.camel.RoutesBuilder;
 import org.apache.camel.StartupStep;
 import org.apache.camel.api.management.ManagedAttribute;
+import org.apache.camel.api.management.ManagedOperation;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.builder.RouteBuilderLifecycleStrategy;
 import org.apache.camel.spi.CompilePostProcessor;
+import org.apache.camel.spi.CompilePreProcessor;
 import org.apache.camel.spi.Resource;
 import org.apache.camel.spi.RoutesBuilderLoader;
 import org.apache.camel.spi.StartupStepRecorder;
 import org.apache.camel.support.RoutesBuilderLoaderSupport;
-import org.apache.camel.util.IOHelper;
 
 /**
  * Base class for {@link RoutesBuilderLoader} implementations.
  */
 public abstract class RouteBuilderLoaderSupport extends RoutesBuilderLoaderSupport {
     private final String extension;
+    private final List<CompilePreProcessor> compilePreProcessors = new ArrayList<>();
     private final List<CompilePostProcessor> compilePostProcessors = new ArrayList<>();
     private StartupStepRecorder recorder;
+    private SourceLoader sourceLoader = new DefaultSourceLoader();
 
     protected RouteBuilderLoaderSupport(String extension) {
         this.extension = extension;
@@ -55,6 +56,27 @@ public abstract class RouteBuilderLoaderSupport extends RoutesBuilderLoaderSuppo
     @Override
     public String getSupportedExtension() {
         return extension;
+    }
+
+    @ManagedOperation(description = "Is the file extension supported by this route loader")
+    @Override
+    public boolean isSupportedExtension(String extension) {
+        return super.isSupportedExtension(extension);
+    }
+
+    /**
+     * Gets the registered {@link CompilePreProcessor}.
+     */
+    public List<CompilePreProcessor> getCompilePreProcessors() {
+        return compilePreProcessors;
+    }
+
+    /**
+     * Add a custom {@link CompilePreProcessor} to handle specific pre-processing before compiling the source into a
+     * Java object.
+     */
+    public void addCompilePreProcessor(CompilePreProcessor preProcessor) {
+        this.compilePreProcessors.add(preProcessor);
     }
 
     /**
@@ -86,12 +108,24 @@ public abstract class RouteBuilderLoaderSupport extends RoutesBuilderLoaderSuppo
         super.doStart();
 
         if (getCamelContext() != null) {
-            // discover optional compile post-processors to be used
-            Set<CompilePostProcessor> pres = getCamelContext().getRegistry().findByType(CompilePostProcessor.class);
+            // discover optional compile pre-processors to be used
+            Set<CompilePreProcessor> pres = getCamelContext().getRegistry().findByType(CompilePreProcessor.class);
             if (pres != null && !pres.isEmpty()) {
-                for (CompilePostProcessor pre : pres) {
-                    addCompilePostProcessor(pre);
+                for (CompilePreProcessor pre : pres) {
+                    addCompilePreProcessor(pre);
                 }
+            }
+            // discover optional compile post-processors to be used
+            Set<CompilePostProcessor> posts = getCamelContext().getRegistry().findByType(CompilePostProcessor.class);
+            if (posts != null && !posts.isEmpty()) {
+                for (CompilePostProcessor post : posts) {
+                    addCompilePostProcessor(post);
+                }
+            }
+            // discover a special source loader to be used
+            SourceLoader sl = getCamelContext().getRegistry().findSingleByType(SourceLoader.class);
+            if (sl != null) {
+                this.sourceLoader = sl;
             }
         }
     }
@@ -129,8 +163,8 @@ public abstract class RouteBuilderLoaderSupport extends RoutesBuilderLoaderSuppo
      */
     protected InputStream resourceInputStream(Resource resource) throws IOException {
         // load into memory as we need to skip a specific first-line if present
-        String data = loadResource(resource.getInputStream());
-        if (data.trim().isEmpty()) {
+        String data = sourceLoader.loadResource(resource);
+        if (data.isBlank()) {
             throw new IOException("Resource is empty: " + resource.getLocation());
         }
         return new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
@@ -143,31 +177,5 @@ public abstract class RouteBuilderLoaderSupport extends RoutesBuilderLoaderSuppo
      * @return          a {@link RoutesBuilder}
      */
     protected abstract RouteBuilder doLoadRouteBuilder(Resource resource) throws Exception;
-
-    private static String loadResource(InputStream in) throws IOException {
-        StringBuilder builder = new StringBuilder();
-        InputStreamReader isr = new InputStreamReader(in);
-        boolean first = true;
-        try {
-            BufferedReader reader = IOHelper.buffered(isr);
-            while (true) {
-                String line = reader.readLine();
-                if (line != null) {
-                    // we need to skip first line if it starts with a special script marker for camel-jbang in pipe mode
-                    if (first && line.startsWith("///usr/bin/env jbang") && line.contains("camel@apache/camel pipe")) {
-                        line = ""; // use an empty line so line numbers still matches
-                    }
-                    builder.append(line);
-                    builder.append("\n");
-                    first = false;
-                } else {
-                    break;
-                }
-            }
-            return builder.toString();
-        } finally {
-            IOHelper.close(isr, in);
-        }
-    }
 
 }

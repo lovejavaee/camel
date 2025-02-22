@@ -139,11 +139,7 @@ public final class OgnlHelper {
      * @return                the Camel OGNL expression without any trailing operators.
      */
     public static String removeTrailingOperators(String ognlExpression) {
-        int pos = ognlExpression.indexOf('[');
-        if (pos != -1) {
-            return ognlExpression.substring(0, pos);
-        }
-        return ognlExpression;
+        return StringHelper.before(ognlExpression, "[", ognlExpression);
     }
 
     public static String removeOperators(String ognlExpression) {
@@ -182,12 +178,12 @@ public final class OgnlHelper {
      */
     public static List<String> splitOgnl(String ognl) {
         // return an empty list if ognl is empty
-        if (ognl == null || ognl.isEmpty() || ognl.trim().isEmpty()) {
+        if (ognl == null || ognl.isBlank()) {
             return Collections.emptyList();
         }
 
         List<String> methods = new ArrayList<>(4);
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(256);
 
         int j = 0; // j is used as counter per method
         int squareBracketCnt = 0; // special to keep track if and how deep we are inside a square bracket block, eg: [foo]
@@ -276,7 +272,7 @@ public final class OgnlHelper {
         }
 
         // add remainder in buffer when reached end of data
-        if (sb.length() > 0) {
+        if (!sb.isEmpty()) {
             methods.add(sb.toString());
         }
 
@@ -292,7 +288,7 @@ public final class OgnlHelper {
     }
 
     public static String methodAsDoubleQuotes(String ognl) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(ognl.length() + 32);
 
         int singleBracketCnt = 0;
         int doubleBracketCnt = 0;

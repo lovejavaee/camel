@@ -173,7 +173,6 @@ public class DefaultHealthCheckRegistry extends ServiceSupport implements Health
         return answer;
     }
 
-    @SuppressWarnings("unchecked")
     private HealthCheck resolveHealthCheckById(String id) {
         HealthCheck answer = checks.stream().filter(h -> h.getId().equals(id)).findFirst()
                 .orElse(camelContext.getRegistry().findByTypeWithName(HealthCheck.class).get(id));
@@ -185,7 +184,6 @@ public class DefaultHealthCheckRegistry extends ServiceSupport implements Health
         return answer;
     }
 
-    @SuppressWarnings("unchecked")
     private HealthCheckRepository resolveHealthCheckRepositoryById(String id) {
         HealthCheckRepository answer = repositories.stream().filter(h -> h.getId().equals(id)).findFirst()
                 .orElse(camelContext.getRegistry().findByTypeWithName(HealthCheckRepository.class).get(id));
@@ -207,8 +205,7 @@ public class DefaultHealthCheckRegistry extends ServiceSupport implements Health
         // inject context
         CamelContextAware.trySetCamelContext(obj, camelContext);
 
-        if (obj instanceof HealthCheck) {
-            HealthCheck healthCheck = (HealthCheck) obj;
+        if (obj instanceof HealthCheck healthCheck) {
             // do we have this already
             if (getCheck(healthCheck.getId()).isPresent()) {
                 return false;
@@ -245,8 +242,7 @@ public class DefaultHealthCheckRegistry extends ServiceSupport implements Health
 
         checkIfAccepted(obj);
 
-        if (obj instanceof HealthCheck) {
-            HealthCheck healthCheck = (HealthCheck) obj;
+        if (obj instanceof HealthCheck healthCheck) {
             result = checks.remove(healthCheck);
             if (result) {
                 LOG.debug("HealthCheck with id {} successfully un-registered", healthCheck.getId());
@@ -317,11 +313,14 @@ public class DefaultHealthCheckRegistry extends ServiceSupport implements Health
             if (PatternHelper.matchPatterns(id, s)) {
                 return true;
             }
-            // special for route and consumer health checks
+            // special for route, consumer and producer health checks
             if (id.startsWith("route:")) {
                 id = id.substring(6);
                 return PatternHelper.matchPatterns(id, s);
             } else if (id.startsWith("consumer:")) {
+                id = id.substring(9);
+                return PatternHelper.matchPatterns(id, s);
+            } else if (id.startsWith("producer:")) {
                 id = id.substring(9);
                 return PatternHelper.matchPatterns(id, s);
             }

@@ -22,10 +22,8 @@ import ca.uhn.hl7v2.util.Terser;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Expression;
-import org.apache.camel.Predicate;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.support.ExpressionAdapter;
-import org.apache.camel.support.ExpressionToPredicateAdapter;
 import org.apache.camel.support.SingleInputTypedLanguageSupport;
 import org.apache.camel.support.builder.ExpressionBuilder;
 import org.apache.camel.util.ObjectHelper;
@@ -37,7 +35,7 @@ public class Hl7TerserLanguage extends SingleInputTypedLanguageSupport {
         return terser(ExpressionBuilder.bodyExpression(), expression);
     }
 
-    private static Expression terser(final Expression source, final String expression) {
+    public static Expression terser(final Expression source, final String expression) {
         ObjectHelper.notNull(expression, "expression");
         return new ExpressionAdapter() {
 
@@ -65,17 +63,7 @@ public class Hl7TerserLanguage extends SingleInputTypedLanguageSupport {
     }
 
     @Override
-    public Predicate createPredicate(String expression) {
-        return ExpressionToPredicateAdapter.toPredicate(createExpression(expression));
-    }
-
-    @Override
-    public Expression createExpression(String expression) {
-        return terser(expression);
-    }
-
-    @Override
-    protected Expression createExpression(Expression source, String expression, Object[] properties) {
+    public Expression createExpression(Expression source, String expression, Object[] properties) {
         return terser(source, expression);
     }
 }

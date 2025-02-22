@@ -16,8 +16,9 @@
  */
 package org.apache.camel.component.github.consumer;
 
+import java.util.ArrayDeque;
 import java.util.List;
-import java.util.Stack;
+import java.util.Queue;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -61,7 +62,7 @@ public class PullRequestConsumer extends AbstractGitHubConsumer {
     protected int poll() throws Exception {
         List<PullRequest> openPullRequests = pullRequestService.getPullRequests(getRepository(), "open");
         // In the end, we want PRs oldest to newest.
-        Stack<PullRequest> newPullRequests = new Stack<>();
+        ArrayDeque<PullRequest> newPullRequests = new ArrayDeque<>();
         for (PullRequest pullRequest : openPullRequests) {
             if (pullRequest.getNumber() > lastOpenPullRequest) {
                 newPullRequests.push(pullRequest);
@@ -74,7 +75,8 @@ public class PullRequestConsumer extends AbstractGitHubConsumer {
             lastOpenPullRequest = openPullRequests.get(0).getNumber();
         }
 
-        while (!newPullRequests.empty()) {
+        Queue<Object> exchanges = new ArrayDeque<>();
+        while (!newPullRequests.isEmpty()) {
             PullRequest newPullRequest = newPullRequests.pop();
             Exchange e = createExchange(true);
 
@@ -85,9 +87,9 @@ public class PullRequestConsumer extends AbstractGitHubConsumer {
             if (newPullRequest.getHead() != null) {
                 e.getIn().setHeader(GitHubConstants.GITHUB_PULLREQUEST_HEAD_COMMIT_SHA, newPullRequest.getHead().getSha());
             }
-
-            getProcessor().process(e);
+            exchanges.add(e);
         }
-        return newPullRequests.size();
+        return processBatch(exchanges);
     }
+
 }

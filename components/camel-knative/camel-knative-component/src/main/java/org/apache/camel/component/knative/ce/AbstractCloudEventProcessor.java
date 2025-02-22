@@ -17,8 +17,6 @@
 package org.apache.camel.component.knative.ce;
 
 import java.io.InputStream;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -27,10 +25,11 @@ import java.util.function.Supplier;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
-import org.apache.camel.component.cloudevents.CloudEvent;
+import org.apache.camel.cloudevents.CloudEvent;
 import org.apache.camel.component.knative.KnativeEndpoint;
 import org.apache.camel.component.knative.spi.Knative;
 import org.apache.camel.component.knative.spi.KnativeResource;
+import org.apache.camel.util.StringHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,8 +93,8 @@ abstract class AbstractCloudEventProcessor implements CloudEventProcessor {
             }
 
             //
-            // in case of events, if the type of the event is defined as URI param so we need
-            // to override it to avoid the event type be overridden by Messages's headers
+            // in case of events, if the type of the event is defined as URI param we need
+            // to override it to avoid the event type be overridden by Message's headers
             //
             if (endpoint.getType() == Knative.Type.event && endpoint.getTypeId() != null) {
                 final Object eventType = headers.get(CloudEvent.CAMEL_CLOUD_EVENT_TYPE);
@@ -122,13 +121,16 @@ abstract class AbstractCloudEventProcessor implements CloudEventProcessor {
             setCloudEventHeader(headers, CloudEvent.CAMEL_CLOUD_EVENT_SOURCE, exchange::getFromRouteId);
             setCloudEventHeader(headers, CloudEvent.CAMEL_CLOUD_EVENT_VERSION, ce::version);
             setCloudEventHeader(headers, CloudEvent.CAMEL_CLOUD_EVENT_TIME, () -> {
-                final ZonedDateTime created
-                        = ZonedDateTime.ofInstant(Instant.ofEpochMilli(exchange.getCreated()), ZoneId.systemDefault());
+                final ZonedDateTime created = exchange.getClock().asZonedCreationDateTime();
 
                 return DateTimeFormatter.ISO_INSTANT.format(created);
             });
 
-            headers.putAll(service.getCeOverrides());
+            for (Map.Entry<String, String> ceOverride : service.getCeOverrides().entrySet()) {
+                // when using keys in YAML DSL camelCase is being used by default -convert to dash due to CloudEvents spec
+                headers.put(StringHelper.camelCaseToDash(ceOverride.getKey()),
+                        exchange.getContext().resolvePropertyPlaceholders(ceOverride.getValue()));
+            }
         };
     }
 

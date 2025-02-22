@@ -22,6 +22,7 @@ import java.util.Timer;
 import org.apache.camel.Category;
 import org.apache.camel.Component;
 import org.apache.camel.Consumer;
+import org.apache.camel.LoggingLevel;
 import org.apache.camel.MultipleConsumersSupport;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
@@ -41,21 +42,24 @@ import org.apache.camel.support.DefaultEndpoint;
  */
 @ManagedResource(description = "Managed TimerEndpoint")
 @UriEndpoint(firstVersion = "1.0.0", scheme = "timer", title = "Timer", syntax = "timer:timerName", consumerOnly = true,
-             category = { Category.CORE, Category.SCHEDULING }, headersClass = TimerConstants.class)
+             remote = false, category = { Category.CORE, Category.SCHEDULING }, headersClass = TimerConstants.class)
 public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersSupport {
     @UriPath
     @Metadata(required = true)
     private String timerName;
-    @UriParam(defaultValue = "1000", description = "If greater than 0, generate periodic events every period.",
-              javaType = "java.time.Duration")
+    @UriParam(defaultValue = "1000", javaType = "java.time.Duration")
     private long period = 1000;
-    @UriParam(defaultValue = "1000", description = "Delay before first event is triggered.", javaType = "java.time.Duration")
+    @UriParam(defaultValue = "1000", javaType = "java.time.Duration")
     private long delay = 1000;
     @UriParam
     private long repeatCount;
     @UriParam
     private boolean fixedRate;
-    @UriParam(defaultValue = "true", label = "advanced")
+    @UriParam
+    private boolean includeMetadata;
+    @UriParam(defaultValue = "TRACE", label = "consumer,scheduler")
+    private LoggingLevel runLoggingLevel = LoggingLevel.TRACE;
+    @UriParam(label = "advanced", defaultValue = "true")
     private boolean daemon = true;
     @UriParam(label = "advanced")
     private Date time;
@@ -63,10 +67,7 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
     private String pattern;
     @UriParam(label = "advanced")
     private Timer timer;
-    @UriParam(defaultValue = "true")
-    private boolean includeMetadata = true;
-    @UriParam(defaultValue = "false", label = "advanced",
-              description = "Sets whether synchronous processing should be strictly used")
+    @UriParam(label = "advanced")
     private boolean synchronous;
 
     public TimerEndpoint() {
@@ -79,6 +80,11 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
 
     protected TimerEndpoint(String endpointUri, Component component) {
         super(endpointUri, component);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override
@@ -104,7 +110,7 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
         if (timerName == null) {
             timerName = getEndpointUri();
         }
-        // do nothing in regards to setTimer, the timer will be set when the first consumer will request it
+        // do nothing in regard to setTimer, the timer will be set when the first consumer requests it
     }
 
     @Override
@@ -138,7 +144,7 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
     }
 
     /**
-     * Specifies whether or not the thread associated with the timer endpoint runs as a daemon.
+     * Specifies whether the thread associated with the timer endpoint runs as a daemon.
      * <p/>
      * The default value is true.
      */
@@ -176,13 +182,27 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
         this.fixedRate = fixedRate;
     }
 
+    @ManagedAttribute(description = "The consumer logs a start/complete log line when it polls. This option allows you to configure the logging level for that.")
+    public LoggingLevel getRunLoggingLevel() {
+        return runLoggingLevel;
+    }
+
+    /**
+     * The consumer logs a start/complete log line when it polls. This option allows you to configure the logging level
+     * for that.
+     */
+    @ManagedAttribute(description = "The consumer logs a start/complete log line when it polls. This option allows you to configure the logging level for that.")
+    public void setRunLoggingLevel(LoggingLevel runLoggingLevel) {
+        this.runLoggingLevel = runLoggingLevel;
+    }
+
     @ManagedAttribute(description = "Timer Period")
     public long getPeriod() {
         return period;
     }
 
     /**
-     * If greater than 0, generate periodic events every period milliseconds.
+     * Generate periodic events every period. Must be zero or positive value.
      * <p/>
      * The default value is 1000.
      */
@@ -197,8 +217,8 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
     }
 
     /**
-     * Specifies a maximum limit of number of fires. So if you set it to 1, the timer will only fire once. If you set it
-     * to 5, it will only fire five times. A value of zero or negative means fire forever.
+     * Specifies a maximum limit for the number of fires. Therefore, if you set it to 1, the timer will only fire once.
+     * If you set it to 5, it will only fire five times. A value of zero or negative means fire forever.
      */
     @ManagedAttribute(description = "Repeat Count")
     public void setRepeatCount(long repeatCount) {
@@ -253,18 +273,21 @@ public class TimerEndpoint extends DefaultEndpoint implements MultipleConsumersS
     }
 
     /**
-     * Whether to include metadata in the exchange such as fired time, timer name, timer count etc. This information is
-     * default included.
+     * Whether to include metadata in the exchange such as fired time, timer name, timer count etc.
      */
     @ManagedAttribute(description = "Include metadata")
     public void setIncludeMetadata(boolean includeMetadata) {
         this.includeMetadata = includeMetadata;
     }
 
+    @ManagedAttribute(description = "Whether synchronous processing should be strictly used")
     public boolean isSynchronous() {
         return synchronous;
     }
 
+    /**
+     * Sets whether synchronous processing should be strictly used
+     */
     public void setSynchronous(boolean synchronous) {
         this.synchronous = synchronous;
     }

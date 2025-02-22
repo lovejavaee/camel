@@ -17,11 +17,15 @@
 package org.apache.camel.jsonpath;
 
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import com.jayway.jsonpath.Option;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
+import org.apache.camel.Expression;
 import org.apache.camel.ExpressionEvaluationException;
 import org.apache.camel.ExpressionIllegalSyntaxException;
 import org.apache.camel.jsonpath.easypredicate.EasyPredicateParser;
@@ -43,8 +47,7 @@ public class JsonPathExpression extends ExpressionAdapter {
     private boolean allowEasyPredicate = true;
     private boolean writeAsString;
     private boolean unpackArray;
-    private String headerName;
-    private String propertyName;
+    private Expression source;
     private Option[] options;
 
     public JsonPathExpression(String expression) {
@@ -129,28 +132,12 @@ public class JsonPathExpression extends ExpressionAdapter {
         this.unpackArray = unpackArray;
     }
 
-    public String getHeaderName() {
-        return headerName;
+    public Expression getSource() {
+        return source;
     }
 
-    /**
-     * Name of header to use as input, instead of the message body
-     */
-    public void setHeaderName(String headerName) {
-        this.headerName = headerName;
-    }
-
-    public String getPropertyName() {
-        return propertyName;
-    }
-
-    /**
-     * Name of property to use as input, instead of the message body.
-     * <p>
-     * It has a lower precedent than the name of header if both are set.
-     */
-    public void setPropertyName(String propertyName) {
-        this.propertyName = propertyName;
+    public void setSource(Expression source) {
+        this.source = source;
     }
 
     public Option[] getOptions() {
@@ -168,22 +155,40 @@ public class JsonPathExpression extends ExpressionAdapter {
     public Object evaluate(Exchange exchange) {
         try {
             Object result = evaluateJsonPath(exchange, engine);
-            if (resultType != null) {
-                if (unpackArray) {
-                    // in some cases we get a single element that is wrapped in a List, so unwrap that
-                    // if we for example want to grab the single entity and convert that to a int/boolean/String etc
-                    boolean resultIsCollection = Collection.class.isAssignableFrom(resultType);
-                    boolean singleElement = result instanceof List && ((List) result).size() == 1;
-                    if (singleElement && !resultIsCollection) {
-                        result = ((List) result).get(0);
-                        LOG.trace("Unwrapping result: {} from single element List before converting to: {}", result,
-                                resultType);
-                    }
+            boolean resultTypeIsCollection = resultType != null && Collection.class.isAssignableFrom(resultType);
+            if (unpackArray) {
+                // in some cases we get a single element that is wrapped in a List, so unwrap that
+                // if we for example want to grab the single entity and convert that to an int/boolean/String etc
+                boolean singleElement = result instanceof List && ((List<?>) result).size() == 1;
+                if (singleElement && !resultTypeIsCollection) {
+                    result = ((List<?>) result).get(0);
+                    LOG.trace("Unwrapping result: {} from single element List before converting to: {}", result,
+                            resultType);
                 }
-                return exchange.getContext().getTypeConverter().convertTo(resultType, exchange, result);
-            } else {
+            }
+            if (resultType == null) {
                 return result;
             }
+            if (resultTypeIsCollection) {
+                // we want a list as output
+                boolean resultIsCollection = result instanceof List;
+                if (!resultIsCollection) {
+                    var list = new LinkedList<>();
+                    list.add(result);
+                    result = list;
+                }
+                return exchange.getContext().getTypeConverter().convertTo(resultType, exchange, result);
+            } else if (result instanceof Collection<?> col) {
+                // convert each element in the list
+                result = col.stream()
+                        .filter(Objects::nonNull) // skip null
+                        .map(item -> exchange.getContext().getTypeConverter().convertTo(resultType, exchange, item))
+                        .collect(Collectors.toList());
+            }
+            if (result instanceof Collection<?> col && col.size() == 1) {
+                result = col.stream().findFirst().get();
+            }
+            return exchange.getContext().getTypeConverter().convertTo(resultType, exchange, result);
         } catch (Exception e) {
             throw new ExpressionEvaluationException(this, exchange, e);
         }
@@ -205,7 +210,7 @@ public class JsonPathExpression extends ExpressionAdapter {
         LOG.debug("Initializing {} using: {}", predicate ? "predicate" : "expression", exp);
         try {
             engine = new JsonPathEngine(
-                    exp, writeAsString, suppressExceptions, allowSimple, headerName, propertyName, options, context);
+                    exp, source, writeAsString, suppressExceptions, allowSimple, options, context);
         } catch (Exception e) {
             throw new ExpressionIllegalSyntaxException(exp, e);
         }

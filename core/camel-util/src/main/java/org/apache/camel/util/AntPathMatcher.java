@@ -405,7 +405,7 @@ public class AntPathMatcher {
         String[] patternParts = tokenizeToStringArray(pattern, this.pathSeparator);
         String[] pathParts = tokenizeToStringArray(path, this.pathSeparator);
 
-        StringBuilder buffer = new StringBuilder();
+        StringBuilder buffer = new StringBuilder(path.length());
 
         // Add any path parts that have a wildcarded pattern part.
         int puts = 0;
@@ -454,7 +454,7 @@ public class AntPathMatcher {
         while (st.hasMoreTokens()) {
             String token = st.nextToken();
             token = token.trim();
-            if (token.length() > 0) {
+            if (!token.isEmpty()) {
                 tokens.add(token);
             }
         }

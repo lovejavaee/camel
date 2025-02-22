@@ -111,7 +111,7 @@ public final class BackOff {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(256);
         sb.append("BackOff[");
         sb.append("delay=").append(delay.toMillis());
         if (maxDelay != MAX_DURATION) {
@@ -120,8 +120,12 @@ public final class BackOff {
         if (maxElapsedTime != MAX_DURATION) {
             sb.append(", maxElapsedTime=").append(maxElapsedTime.toMillis());
         }
-        sb.append(", maxAttempts=").append(maxAttempts);
-        sb.append(", multiplier=").append(multiplier);
+        if (maxAttempts != Long.MAX_VALUE) {
+            sb.append(", maxAttempts=").append(maxAttempts);
+        }
+        if (multiplier != DEFAULT_MULTIPLIER) {
+            sb.append(", multiplier=").append(multiplier);
+        }
         sb.append("]");
         return sb.toString();
     }

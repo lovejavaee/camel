@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Disabled("TODO: fix me")
 public class ExceptionThrownFromOnExceptionNoEndlessLoopTest extends ContextTestSupport {
@@ -50,10 +50,10 @@ public class ExceptionThrownFromOnExceptionNoEndlessLoopTest extends ContextTest
 
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 onException(IOException.class).redeliveryDelay(0).maximumRedeliveries(3).to("mock:b").process(new Processor() {
                     @Override
-                    public void process(Exchange exchange) throws Exception {
+                    public void process(Exchange exchange) {
                         ON_EXCEPTION_RETRY.incrementAndGet();
                         // exception thrown here, should not trigger the
                         // onException(IllegalArgumentException.class) as we
@@ -92,13 +92,12 @@ public class ExceptionThrownFromOnExceptionNoEndlessLoopTest extends ContextTest
         getMockEndpoint("mock:result").expectedMessageCount(0);
         getMockEndpoint("mock:end").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:start", "Hello World");
-            fail("Should have thrown an exception");
-        } catch (CamelExecutionException e) {
-            IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertEquals("Not supported", cause.getMessage());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("direct:start", "Hello World"),
+                "Should have thrown an exception");
+
+        IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertEquals("Not supported", cause.getMessage());
 
         assertMockEndpointsSatisfied();
 

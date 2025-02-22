@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
  * Read from system-in and write to system-out and system-err streams.
  */
 @UriEndpoint(firstVersion = "1.3.0", scheme = "stream", title = "Stream", syntax = "stream:kind",
-             category = { Category.FILE, Category.SYSTEM }, headersClass = StreamConstants.class)
+             category = { Category.FILE, Category.CORE }, headersClass = StreamConstants.class)
 public class StreamEndpoint extends DefaultEndpoint {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamEndpoint.class);
@@ -145,7 +145,8 @@ public class StreamEndpoint extends DefaultEndpoint {
 
     /**
      * When using stream:http format, this option specifies optional http headers, such as Accept: application/json.
-     * Multiple headers can be separated by comma.
+     * Multiple headers can be separated by comma. The format of headers can be either "HEADER=VALUE" or "HEADER:VALUE".
+     * In accordance with the HTTP/1.1 specification, leading and/or trailing whitespace is ignored
      */
     public void setHttpHeaders(String httpHeaders) {
         this.httpHeaders = httpHeaders;

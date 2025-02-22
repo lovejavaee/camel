@@ -22,20 +22,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.Component;
-import org.apache.camel.Exchange;
-import org.apache.camel.Expression;
 import org.apache.camel.FailedToCreateRouteFromTemplateException;
-import org.apache.camel.NoSuchBeanException;
-import org.apache.camel.PropertyBindingException;
 import org.apache.camel.RouteTemplateContext;
 import org.apache.camel.model.BeanFactoryDefinition;
+import org.apache.camel.model.BeanModelHelper;
 import org.apache.camel.model.DataFormatDefinition;
 import org.apache.camel.model.DefaultRouteTemplateContext;
 import org.apache.camel.model.FaultToleranceConfigurationDefinition;
@@ -50,11 +45,9 @@ import org.apache.camel.model.RouteConfigurationDefinition;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.model.RouteDefinitionHelper;
 import org.apache.camel.model.RouteFilters;
-import org.apache.camel.model.RouteTemplateBeanDefinition;
 import org.apache.camel.model.RouteTemplateDefinition;
 import org.apache.camel.model.RouteTemplateParameterDefinition;
 import org.apache.camel.model.RoutesDefinition;
-import org.apache.camel.model.TemplatedRouteBeanDefinition;
 import org.apache.camel.model.TemplatedRouteDefinition;
 import org.apache.camel.model.TemplatedRouteParameterDefinition;
 import org.apache.camel.model.ToDefinition;
@@ -62,25 +55,16 @@ import org.apache.camel.model.cloud.ServiceCallConfigurationDefinition;
 import org.apache.camel.model.rest.RestDefinition;
 import org.apache.camel.model.transformer.TransformerDefinition;
 import org.apache.camel.model.validator.ValidatorDefinition;
-import org.apache.camel.spi.ExchangeFactory;
-import org.apache.camel.spi.Language;
 import org.apache.camel.spi.ModelReifierFactory;
 import org.apache.camel.spi.NodeIdFactory;
-import org.apache.camel.spi.PropertyConfigurer;
 import org.apache.camel.spi.RouteTemplateLoaderListener;
 import org.apache.camel.spi.RouteTemplateParameterSource;
-import org.apache.camel.spi.ScriptingLanguage;
 import org.apache.camel.support.CamelContextHelper;
 import org.apache.camel.support.PatternHelper;
-import org.apache.camel.support.PluginHelper;
-import org.apache.camel.support.PropertyBindingSupport;
 import org.apache.camel.support.RouteTemplateHelper;
-import org.apache.camel.support.ScriptHelper;
-import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.AntPathMatcher;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.camel.util.StringHelper;
-import org.apache.camel.util.function.Suppliers;
 
 public class DefaultModel implements Model {
 
@@ -96,6 +80,8 @@ public class DefaultModel implements Model {
     private Map<String, DataFormatDefinition> dataFormats = new HashMap<>();
     private List<TransformerDefinition> transformers = new ArrayList<>();
     private List<ValidatorDefinition> validators = new ArrayList<>();
+    // XML and YAML DSL allows to declare beans in the DSL
+    private final List<BeanFactoryDefinition<?>> beans = new ArrayList<>();
     private final Map<String, ServiceCallConfigurationDefinition> serviceCallConfigurations = new ConcurrentHashMap<>();
     private final Map<String, Resilience4jConfigurationDefinition> resilience4jConfigurations = new ConcurrentHashMap<>();
     private final Map<String, FaultToleranceConfigurationDefinition> faultToleranceConfigurations = new ConcurrentHashMap<>();
@@ -219,17 +205,71 @@ public class DefaultModel implements Model {
             for (RouteDefinition r : allRoutes) {
                 // loop all rest routes
                 FromDefinition from = r.getInput();
-                if (from != null) {
+                if (from != null && !r.isInlined()) {
+                    // only attempt to inline if not already inlined
                     String uri = from.getEndpointUri();
                     if (uri != null && uri.startsWith("rest:")) {
-                        ToDefinition to = (ToDefinition) r.getOutputs().get(0);
-                        String toUri = to.getEndpointUri();
-                        RouteDefinition toBeInlined = directs.get(toUri);
-                        if (toBeInlined != null) {
-                            toBeRemoved.add(toBeInlined);
-                            // inline by replacing the outputs
-                            r.getOutputs().clear();
-                            r.getOutputs().addAll(toBeInlined.getOutputs());
+                        // find first EIP in the outputs (skip abstract which are onException/intercept etc)
+                        ToDefinition to = null;
+                        for (ProcessorDefinition<?> def : r.getOutputs()) {
+                            if (def.isAbstract()) {
+                                continue;
+                            }
+                            if (def instanceof ToDefinition toDefinition) {
+                                to = toDefinition;
+                            }
+                            break;
+                        }
+                        if (to != null) {
+                            String toUri = to.getEndpointUri();
+                            RouteDefinition toBeInlined = directs.get(toUri);
+                            if (toBeInlined != null) {
+                                toBeRemoved.add(toBeInlined);
+                                // inline the source loc:line as starting from this direct input
+                                FromDefinition inlinedFrom = toBeInlined.getInput();
+                                from.setLocation(inlinedFrom.getLocation());
+                                from.setLineNumber(inlinedFrom.getLineNumber());
+                                // inline by replacing the outputs (preserve all abstracts such as interceptors)
+                                List<ProcessorDefinition<?>> toBeRemovedOut = new ArrayList<>();
+                                for (ProcessorDefinition<?> out : r.getOutputs()) {
+                                    // should be removed if to be added via inlined
+                                    boolean remove = toBeInlined.getOutputs().stream().anyMatch(o -> o == out);
+                                    if (!remove) {
+                                        remove = !out.isAbstract(); // remove all non abstract
+                                    }
+                                    if (remove) {
+                                        toBeRemovedOut.add(out);
+                                    }
+                                }
+                                r.getOutputs().removeAll(toBeRemovedOut);
+                                r.getOutputs().addAll(toBeInlined.getOutputs());
+                                // and copy over various configurations
+                                if (toBeInlined.getRouteId() != null) {
+                                    r.setId(toBeInlined.getRouteId());
+                                }
+                                r.setNodePrefixId(toBeInlined.getNodePrefixId());
+                                r.setGroup(toBeInlined.getGroup());
+                                r.setAutoStartup(toBeInlined.getAutoStartup());
+                                r.setDelayer(toBeInlined.getDelayer());
+                                r.setInputType(toBeInlined.getInputType());
+                                r.setOutputType(toBeInlined.getOutputType());
+                                r.setLogMask(toBeInlined.getLogMask());
+                                r.setMessageHistory(toBeInlined.getMessageHistory());
+                                r.setStreamCache(toBeInlined.getStreamCache());
+                                r.setTrace(toBeInlined.getTrace());
+                                r.setStartupOrder(toBeInlined.getStartupOrder());
+                                r.setRoutePolicyRef(toBeInlined.getRoutePolicyRef());
+                                r.setRouteConfigurationId(toBeInlined.getRouteConfigurationId());
+                                r.setRoutePolicies(toBeInlined.getRoutePolicies());
+                                r.setShutdownRoute(toBeInlined.getShutdownRoute());
+                                r.setShutdownRunningTask(toBeInlined.getShutdownRunningTask());
+                                r.setErrorHandlerRef(toBeInlined.getErrorHandlerRef());
+                                r.setPrecondition(toBeInlined.getPrecondition());
+                                if (toBeInlined.isErrorHandlerFactorySet()) {
+                                    r.setErrorHandler(toBeInlined.getErrorHandler());
+                                }
+                                r.markInlined();
+                            }
                         }
                     }
                 }
@@ -358,7 +398,7 @@ public class DefaultModel implements Model {
     }
 
     @Override
-    @Deprecated
+    @Deprecated(since = "3.10.0")
     public String addRouteFromTemplate(final String routeId, final String routeTemplateId, final Map<String, Object> parameters)
             throws Exception {
         RouteTemplateContext rtc = new DefaultRouteTemplateContext(camelContext);
@@ -386,6 +426,26 @@ public class DefaultModel implements Model {
     @Override
     public String addRouteFromTemplate(
             String routeId, String routeTemplateId, String prefixId,
+            RouteTemplateContext routeTemplateContext)
+            throws Exception {
+        return doAddRouteFromTemplate(routeId, routeTemplateId, prefixId, null, null, routeTemplateContext);
+    }
+
+    @Override
+    public String addRouteFromKamelet(
+            String routeId, String routeTemplateId, String prefixId,
+            String parentRouteId, String parentProcessorId, Map<String, Object> parameters)
+            throws Exception {
+        RouteTemplateContext rtc = new DefaultRouteTemplateContext(camelContext);
+        if (parameters != null) {
+            parameters.forEach(rtc::setParameter);
+        }
+        return doAddRouteFromTemplate(routeId, routeTemplateId, prefixId, parentRouteId, parentProcessorId, rtc);
+    }
+
+    protected String doAddRouteFromTemplate(
+            String routeId, String routeTemplateId, String prefixId,
+            String parentRouteId, String parentProcessorId,
             RouteTemplateContext routeTemplateContext)
             throws Exception {
 
@@ -422,23 +482,24 @@ public class DefaultModel implements Model {
         final Map<String, Object> propDefaultValues = new HashMap<>();
         // include default values first from the template (and validate that we have inputs for all required parameters)
         if (target.getTemplateParameters() != null) {
-            StringJoiner templatesBuilder = new StringJoiner(", ");
+            StringJoiner missingParameters = new StringJoiner(", ");
 
             for (RouteTemplateParameterDefinition temp : target.getTemplateParameters()) {
                 if (temp.getDefaultValue() != null) {
                     addProperty(prop, temp.getName(), temp.getDefaultValue());
                     addProperty(propDefaultValues, temp.getName(), temp.getDefaultValue());
-                } else {
-                    if (temp.isRequired() && !routeTemplateContext.hasParameter(temp.getName())) {
-                        // this is a required parameter which is missing
-                        templatesBuilder.add(temp.getName());
-                    }
+                } else if (routeTemplateContext.hasEnvironmentVariable(temp.getName())) {
+                    // property is configured via environment variables
+                    addProperty(prop, temp.getName(), routeTemplateContext.getEnvironmentVariable(temp.getName()));
+                } else if (temp.isRequired() && !routeTemplateContext.hasParameter(temp.getName())) {
+                    // this is a required parameter which is missing
+                    missingParameters.add(temp.getName());
                 }
             }
-            if (templatesBuilder.length() > 0) {
+            if (missingParameters.length() > 0) {
                 throw new IllegalArgumentException(
                         "Route template " + routeTemplateId + " the following mandatory parameters must be provided: "
-                                                   + templatesBuilder);
+                                                   + missingParameters);
             }
         }
 
@@ -474,6 +535,12 @@ public class DefaultModel implements Model {
             }
         }
 
+        if (parentRouteId != null) {
+            addProperty(prop, "parentRouteId", parentRouteId);
+        }
+        if (parentProcessorId != null) {
+            addProperty(prop, "parentProcessorId", parentProcessorId);
+        }
         RouteDefinition def = converter.apply(target, prop);
         if (routeId != null) {
             def.setId(routeId);
@@ -495,6 +562,9 @@ public class DefaultModel implements Model {
         }
 
         // assign ids to the routes and validate that the id's are all unique
+        if (prefixId == null) {
+            prefixId = def.getNodePrefixId();
+        }
         String duplicate = RouteDefinitionHelper.validateUniqueIds(def, routeDefinitions, prefixId);
         if (duplicate != null) {
             throw new FailedToCreateRouteFromTemplateException(
@@ -526,234 +596,8 @@ public class DefaultModel implements Model {
 
     private static void addTemplateBeans(RouteTemplateContext routeTemplateContext, RouteTemplateDefinition target)
             throws Exception {
-        for (RouteTemplateBeanDefinition b : target.getTemplateBeans()) {
-            bind(b, routeTemplateContext);
-        }
-    }
-
-    /**
-     * Binds the bean factory to the repository (if possible).
-     *
-     * @param  beanFactory          the bean factory to bind.
-     * @param  routeTemplateContext the context into which the bean factory should be bound.
-     * @throws Exception            if an error occurs while trying to bind the bean factory
-     */
-    private static void bind(BeanFactoryDefinition<?, ?> beanFactory, RouteTemplateContext routeTemplateContext)
-            throws Exception {
-        final Map<String, Object> props = new HashMap<>();
-        if (beanFactory.getProperties() != null) {
-            beanFactory.getProperties().forEach(p -> props.put(p.getKey(), p.getValue()));
-        }
-        if (beanFactory.getBeanSupplier() != null) {
-            if (props.isEmpty()) {
-                // bean class is optional for supplier
-                if (beanFactory.getBeanClass() != null) {
-                    routeTemplateContext.bind(beanFactory.getName(), beanFactory.getBeanClass(), beanFactory.getBeanSupplier());
-                } else {
-                    routeTemplateContext.bind(beanFactory.getName(), beanFactory.getBeanSupplier());
-                }
-            }
-        } else if (beanFactory.getScript() != null) {
-            final String script = beanFactory.getScript();
-            final CamelContext camelContext = routeTemplateContext.getCamelContext();
-            final Language lan = camelContext.resolveLanguage(beanFactory.getType());
-            final Class<?> clazz;
-            if (beanFactory.getBeanType() != null) {
-                clazz = camelContext.getClassResolver().resolveMandatoryClass(beanFactory.getBeanType());
-            } else {
-                if (beanFactory.getBeanClass() != null) {
-                    clazz = beanFactory.getBeanClass();
-                } else {
-                    clazz = Object.class;
-                }
-            }
-            final ScriptingLanguage slan = lan instanceof ScriptingLanguage ? (ScriptingLanguage) lan : null;
-            if (slan != null) {
-                // scripting language should be evaluated with route template context as binding
-                // and memorize so the script is only evaluated once and the local bean is the same
-                // if a route template refers to the local bean multiple times
-                routeTemplateContext.bind(beanFactory.getName(), clazz, Suppliers.memorize(() -> {
-                    Map<String, Object> bindings = new HashMap<>();
-                    // use rtx as the short-hand name, as context would imply its CamelContext
-                    bindings.put("rtc", routeTemplateContext);
-                    Object local = slan.evaluate(script, bindings, clazz);
-                    if (!props.isEmpty()) {
-                        setPropertiesOnTarget(camelContext, local, props);
-                    }
-                    return local;
-                }));
-            } else {
-                // exchange based languages needs a dummy exchange to be evaluated
-                // and memorize so the script is only evaluated once and the local bean is the same
-                // if a route template refers to the local bean multiple times
-                routeTemplateContext.bind(beanFactory.getName(), clazz, Suppliers.memorize(() -> {
-                    ExchangeFactory ef = camelContext.getCamelContextExtension().getExchangeFactory();
-                    Exchange dummy = ef.create(false);
-                    try {
-                        String text = ScriptHelper.resolveOptionalExternalScript(camelContext, dummy, script);
-                        if (text != null) {
-                            Expression exp = lan.createExpression(text);
-                            Object local = exp.evaluate(dummy, clazz);
-                            if (!props.isEmpty()) {
-                                setPropertiesOnTarget(camelContext, local, props);
-                            }
-                            return local;
-                        } else {
-                            return null;
-                        }
-                    } finally {
-                        ef.release(dummy);
-                    }
-                }));
-            }
-        } else if (beanFactory.getBeanClass() != null
-                || beanFactory.getType() != null && beanFactory.getType().startsWith("#class:")) {
-            // if there is a factory method then the class/bean should be created in a different way
-            String className = null;
-            String factoryMethod = null;
-            String parameters = null;
-            if (beanFactory.getType() != null) {
-                className = beanFactory.getType().substring(7);
-                if (className.endsWith(")") && className.indexOf('(') != -1) {
-                    parameters = StringHelper.after(className, "(");
-                    parameters = parameters.substring(0, parameters.length() - 1); // clip last )
-                    className = StringHelper.before(className, "(");
-                }
-                if (className != null && className.indexOf('#') != -1) {
-                    factoryMethod = StringHelper.after(className, "#");
-                    className = StringHelper.before(className, "#");
-                }
-            }
-            if (className != null && (factoryMethod != null || parameters != null)) {
-                final CamelContext camelContext = routeTemplateContext.getCamelContext();
-                final Class<?> clazz = camelContext.getClassResolver().resolveMandatoryClass(className);
-                final String fqn = className;
-                final String fm = factoryMethod;
-                final String fp = parameters;
-                routeTemplateContext.bind(beanFactory.getName(), Object.class, Suppliers.memorize(() -> {
-                    // resolve placeholders in parameters
-                    String params = camelContext.resolvePropertyPlaceholders(fp);
-                    try {
-                        Object local;
-                        if (fm != null) {
-                            if (fp != null) {
-                                // special to support factory method parameters
-                                local = PropertyBindingSupport.newInstanceFactoryParameters(camelContext, clazz, fm, params);
-                            } else {
-                                local = camelContext.getInjector().newInstance(clazz, fm);
-                            }
-                            if (local == null) {
-                                throw new IllegalStateException(
-                                        "Cannot create bean instance using factory method: " + fqn + "#" + fm);
-                            }
-                        } else {
-                            // special to support constructor parameters
-                            local = PropertyBindingSupport.newInstanceConstructorParameters(camelContext, clazz, params);
-                        }
-                        if (!props.isEmpty()) {
-                            setPropertiesOnTarget(camelContext, local, props);
-                        }
-                        return local;
-                    } catch (Exception e) {
-                        throw new IllegalStateException(
-                                "Cannot create bean: " + beanFactory.getType());
-                    }
-                }));
-            } else {
-                final CamelContext camelContext = routeTemplateContext.getCamelContext();
-                Class<?> clazz = beanFactory.getBeanClass() != null
-                        ? beanFactory.getBeanClass() : camelContext.getClassResolver().resolveMandatoryClass(className);
-                // we only have the bean class so we use that to create a new bean via the injector
-                // and memorize so the bean is only created once and the local bean is the same
-                // if a route template refers to the local bean multiple times
-                routeTemplateContext.bind(beanFactory.getName(), clazz,
-                        Suppliers.memorize(() -> {
-                            Object local = camelContext.getInjector().newInstance(clazz);
-                            if (!props.isEmpty()) {
-                                setPropertiesOnTarget(camelContext, local, props);
-                            }
-                            return local;
-                        }));
-            }
-        } else if (beanFactory.getType() != null && beanFactory.getType().startsWith("#type:")) {
-            final CamelContext camelContext = routeTemplateContext.getCamelContext();
-            Class<?> clazz = camelContext.getClassResolver().resolveMandatoryClass(beanFactory.getType().substring(6));
-            Set<?> found = camelContext.getRegistry().findByType(clazz);
-            if (found == null || found.isEmpty()) {
-                throw new NoSuchBeanException(null, clazz.getName());
-            } else if (found.size() > 1) {
-                throw new NoSuchBeanException(
-                        "Found " + found.size() + " beans of type: " + clazz + ". Only one bean expected.");
-            } else {
-                // do not set properties when using #type as it uses an existing shared bean
-                routeTemplateContext.bind(beanFactory.getName(), clazz, found.iterator().next());
-            }
-        } else {
-            // invalid syntax for the local bean, so lets report an exception
-            throw new IllegalArgumentException(
-                    "Route template local bean: " + beanFactory.getName() + " has invalid type syntax: " + beanFactory.getType()
-                                               + ". To refer to a class then prefix the value with #class such as: #class:fullyQualifiedClassName");
-        }
-    }
-
-    /**
-     * Sets the properties to the given target.
-     *
-     * @param context    the context into which the properties must be set.
-     * @param target     the object to which the properties must be set.
-     * @param properties the properties to set.
-     */
-    private static void setPropertiesOnTarget(CamelContext context, Object target, Map<String, Object> properties) {
-        ObjectHelper.notNull(context, "context");
-        ObjectHelper.notNull(target, "target");
-        ObjectHelper.notNull(properties, "properties");
-
-        if (target instanceof CamelContext) {
-            throw new UnsupportedOperationException("Configuring the Camel Context is not supported");
-        }
-
-        PropertyConfigurer configurer = null;
-        if (target instanceof Component) {
-            // the component needs to be initialized to have the configurer ready
-            ServiceHelper.initService(target);
-            configurer = ((Component) target).getComponentPropertyConfigurer();
-        }
-
-        if (configurer == null) {
-            // see if there is a configurer for it
-            configurer = PluginHelper.getConfigurerResolver(context)
-                    .resolvePropertyConfigurer(target.getClass().getSimpleName(), context);
-        }
-
-        try {
-            PropertyBindingSupport.build()
-                    .withMandatory(true)
-                    .withRemoveParameters(false)
-                    .withConfigurer(configurer)
-                    .withIgnoreCase(true)
-                    .withFlattenProperties(true)
-                    .bind(context, target, properties);
-        } catch (PropertyBindingException e) {
-            String key = e.getOptionKey();
-            if (key == null) {
-                String prefix = e.getOptionPrefix();
-                if (prefix != null && !prefix.endsWith(".")) {
-                    prefix = "." + prefix;
-                }
-
-                key = prefix != null
-                        ? prefix + "." + e.getPropertyName()
-                        : e.getPropertyName();
-            }
-
-            // enrich the error with more precise details with option prefix and key
-            throw new PropertyBindingException(
-                    e.getTarget(),
-                    e.getPropertyName(),
-                    e.getValue(),
-                    null,
-                    key,
-                    e.getCause());
+        for (BeanFactoryDefinition b : target.getTemplateBeans()) {
+            BeanModelHelper.bind(b, routeTemplateContext);
         }
     }
 
@@ -762,6 +606,20 @@ public class DefaultModel implements Model {
             throws Exception {
         ObjectHelper.notNull(templatedRouteDefinition, "templatedRouteDefinition");
 
+        final RouteTemplateContext routeTemplateContext = toRouteTemplateContext(templatedRouteDefinition);
+        // Bind the beans into the context
+        final List<BeanFactoryDefinition<TemplatedRouteDefinition>> beans = templatedRouteDefinition.getBeans();
+        if (beans != null) {
+            for (BeanFactoryDefinition<TemplatedRouteDefinition> beanDefinition : beans) {
+                BeanModelHelper.bind(beanDefinition, routeTemplateContext);
+            }
+        }
+        // Add the route
+        addRouteFromTemplate(templatedRouteDefinition.getRouteId(), templatedRouteDefinition.getRouteTemplateRef(),
+                templatedRouteDefinition.getPrefixId(), routeTemplateContext);
+    }
+
+    private RouteTemplateContext toRouteTemplateContext(TemplatedRouteDefinition templatedRouteDefinition) {
         final RouteTemplateContext routeTemplateContext = new DefaultRouteTemplateContext(camelContext);
         // Load the parameters into the context
         final List<TemplatedRouteParameterDefinition> parameters = templatedRouteDefinition.getParameters();
@@ -770,16 +628,7 @@ public class DefaultModel implements Model {
                 routeTemplateContext.setParameter(parameterDefinition.getName(), parameterDefinition.getValue());
             }
         }
-        // Bind the beans into the context
-        final List<TemplatedRouteBeanDefinition> beans = templatedRouteDefinition.getBeans();
-        if (beans != null) {
-            for (TemplatedRouteBeanDefinition beanDefinition : beans) {
-                bind(beanDefinition, routeTemplateContext);
-            }
-        }
-        // Add the route
-        addRouteFromTemplate(templatedRouteDefinition.getRouteId(), templatedRouteDefinition.getRouteTemplateRef(),
-                templatedRouteDefinition.getPrefixId(), routeTemplateContext);
+        return routeTemplateContext;
     }
 
     @Override
@@ -905,8 +754,17 @@ public class DefaultModel implements Model {
             Collection<ProcessorDefinition> col
                     = ProcessorDefinitionHelper.filterTypeInOutputs(route.getOutputs(), ProcessorDefinition.class);
             for (ProcessorDefinition proc : col) {
-                if (id.equals(proc.getId())) {
+                String pid = proc.getId();
+                // match direct by ids
+                if (id.equals(pid)) {
                     return proc;
+                }
+                // try to match via node prefix id
+                if (proc.getNodePrefixId() != null) {
+                    pid = proc.getNodePrefixId() + pid;
+                    if (id.equals(pid)) {
+                        return proc;
+                    }
                 }
             }
         }
@@ -975,6 +833,18 @@ public class DefaultModel implements Model {
     @Override
     public void setModelReifierFactory(ModelReifierFactory modelReifierFactory) {
         this.modelReifierFactory = modelReifierFactory;
+    }
+
+    @Override
+    public void addCustomBean(BeanFactoryDefinition<?> bean) {
+        // remove exiting bean with same name to update
+        beans.removeIf(b -> bean.getName().equals(b.getName()));
+        beans.add(bean);
+    }
+
+    @Override
+    public List<BeanFactoryDefinition<?>> getCustomBeans() {
+        return beans;
     }
 
     /**

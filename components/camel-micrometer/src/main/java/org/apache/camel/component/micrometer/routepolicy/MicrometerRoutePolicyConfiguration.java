@@ -23,6 +23,9 @@ import io.micrometer.core.instrument.Timer;
 
 public class MicrometerRoutePolicyConfiguration {
     public static final MicrometerRoutePolicyConfiguration DEFAULT = new MicrometerRoutePolicyConfiguration();
+    private boolean contextEnabled = true;
+    private boolean routeEnabled = true;
+    private String excludePattern;
     private boolean additionalCounters = true;
     private boolean exchangesSucceeded = true;
     private boolean exchangesFailed = true;
@@ -32,6 +35,30 @@ public class MicrometerRoutePolicyConfiguration {
     private boolean longTask;
     private Consumer<Timer.Builder> timerInitiator;
     private Consumer<LongTaskTimer.Builder> longTaskInitiator;
+
+    public boolean isContextEnabled() {
+        return contextEnabled;
+    }
+
+    public void setContextEnabled(boolean contextEnabled) {
+        this.contextEnabled = contextEnabled;
+    }
+
+    public boolean isRouteEnabled() {
+        return routeEnabled;
+    }
+
+    public void setRouteEnabled(boolean routeEnabled) {
+        this.routeEnabled = routeEnabled;
+    }
+
+    public String getExcludePattern() {
+        return excludePattern;
+    }
+
+    public void setExcludePattern(String excludePattern) {
+        this.excludePattern = excludePattern;
+    }
 
     public boolean isAdditionalCounters() {
         return additionalCounters;

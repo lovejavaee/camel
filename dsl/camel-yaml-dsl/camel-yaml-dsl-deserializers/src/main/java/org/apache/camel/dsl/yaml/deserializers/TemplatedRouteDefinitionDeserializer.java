@@ -19,7 +19,7 @@ package org.apache.camel.dsl.yaml.deserializers;
 import java.util.List;
 
 import org.apache.camel.dsl.yaml.common.YamlDeserializerBase;
-import org.apache.camel.model.TemplatedRouteBeanDefinition;
+import org.apache.camel.model.BeanFactoryDefinition;
 import org.apache.camel.model.TemplatedRouteDefinition;
 import org.apache.camel.model.TemplatedRouteParameterDefinition;
 import org.apache.camel.spi.annotations.YamlIn;
@@ -43,9 +43,10 @@ import org.snakeyaml.engine.v2.nodes.Node;
                   @YamlProperty(name = "parameters",
                                 type = "array:org.apache.camel.model.TemplatedRouteParameterDefinition"),
                   @YamlProperty(name = "beans",
-                                type = "array:org.apache.camel.dsl.yaml.deserializers.NamedBeanDefinition")
+                                type = "array:org.apache.camel.model.BeanFactoryDefinition")
           })
 public class TemplatedRouteDefinitionDeserializer extends YamlDeserializerBase<TemplatedRouteDefinition> {
+
     public TemplatedRouteDefinitionDeserializer() {
         super(TemplatedRouteDefinition.class);
     }
@@ -59,18 +60,17 @@ public class TemplatedRouteDefinitionDeserializer extends YamlDeserializerBase<T
     protected boolean setProperty(
             TemplatedRouteDefinition target, String propertyKey, String propertyName, Node node) {
 
+        propertyKey = org.apache.camel.util.StringHelper.dashToCamelCase(propertyKey);
         switch (propertyKey) {
-            case "routeId":
-            case "route-id": {
+            case "routeId": {
                 target.setRouteId(asText(node));
                 break;
             }
-            case "prefixId":
-            case "prefix-id":
+            case "prefixId": {
                 target.setPrefixId(asText(node));
                 break;
-            case "routeTemplateRef":
-            case "route-template-ref": {
+            }
+            case "routeTemplateRef": {
                 target.setRouteTemplateRef(asText(node));
                 break;
             }
@@ -80,7 +80,8 @@ public class TemplatedRouteDefinitionDeserializer extends YamlDeserializerBase<T
                 break;
             }
             case "beans": {
-                List<TemplatedRouteBeanDefinition> items = asFlatList(node, TemplatedRouteBeanDefinition.class);
+                List<BeanFactoryDefinition<TemplatedRouteDefinition>> items
+                        = (List) asFlatList(node, BeanFactoryDefinition.class);
                 target.setBeans(items);
                 break;
             }

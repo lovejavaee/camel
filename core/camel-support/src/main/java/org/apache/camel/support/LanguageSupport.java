@@ -67,7 +67,7 @@ public abstract class LanguageSupport implements Language, IsSingleton, CamelCon
      */
     protected String loadResource(String expression) throws ExpressionIllegalSyntaxException {
         // we can only load static resources (if they are dynamic then simple will load them on-demand)
-        if (camelContext != null && isStaticResource(expression)) {
+        if (camelContext != null && expression != null && isStaticResource(expression)) {
             String uri = expression.substring(RESOURCE.length());
             InputStream is = null;
             try {
@@ -124,8 +124,8 @@ public abstract class LanguageSupport implements Language, IsSingleton, CamelCon
             value = defaultValue;
         }
 
-        if (value instanceof String) {
-            value = getCamelContext().resolvePropertyPlaceholders(value.toString());
+        if (camelContext != null && value instanceof String str) {
+            value = getCamelContext().resolvePropertyPlaceholders(str);
         }
 
         // if the type is not string based and the value is a bean reference, then we need to lookup
@@ -133,7 +133,7 @@ public abstract class LanguageSupport implements Language, IsSingleton, CamelCon
         if (value instanceof String && String.class != type) {
             String text = value.toString();
 
-            if (EndpointHelper.isReferenceParameter(text)) {
+            if (camelContext != null && EndpointHelper.isReferenceParameter(text)) {
                 Object obj;
                 // special for a list where we refer to beans which can be either a list or a single element
                 // so use Object.class as type
@@ -169,15 +169,21 @@ public abstract class LanguageSupport implements Language, IsSingleton, CamelCon
         }
 
         // special for boolean values with string values as we only want to accept "true" or "false"
-        if ((type == Boolean.class || type == boolean.class) && value instanceof String) {
-            String text = (String) value;
+        if ((type == Boolean.class || type == boolean.class) && value instanceof String text) {
             if (!text.equalsIgnoreCase("true") && !text.equalsIgnoreCase("false")) {
                 throw new IllegalArgumentException(
                         "Cannot convert the String value: " + value + " to type: " + type
                                                    + " as the value is not true or false");
             }
         }
-        return value == null ? null : getCamelContext().getTypeConverter().convertTo(type, value);
+        if (value == null) {
+            return null;
+        }
+        if (camelContext != null) {
+            return camelContext.getTypeConverter().convertTo(type, value);
+        } else {
+            return (T) value;
+        }
     }
 
 }

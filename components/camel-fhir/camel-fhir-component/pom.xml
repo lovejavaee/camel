@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-fhir-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-fhir</artifactId>
@@ -168,7 +168,7 @@
         </dependency>
 
         <!-- test infra -->
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-fhir</artifactId>
             <version>${project.version}</version>
@@ -284,6 +284,8 @@
                                     <proxyClass>org.apache.camel.component.fhir.api.FhirSearch</proxyClass>
                                     <fromJavasource />
                                     <nullableOptions>
+                                        <nullableOption>searchParameters</nullableOption>
+                                        <nullableOption>searchStyle</nullableOption>
                                         <nullableOption>extraParameters</nullableOption>
                                     </nullableOptions>
                                 </api>
@@ -345,4 +347,13 @@
             </plugins>
         </pluginManagement>
     </build>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io-version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>

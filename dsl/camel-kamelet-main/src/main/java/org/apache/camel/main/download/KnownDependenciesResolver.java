@@ -17,6 +17,8 @@
 package org.apache.camel.main.download;
 
 import java.io.InputStream;
+import java.net.URL;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -28,30 +30,37 @@ public final class KnownDependenciesResolver {
 
     private final Map<String, String> mappings = new HashMap<>();
     private final CamelContext camelContext;
+    private final String springBootVersion;
+    private final String quarkusVersion;
 
-    public KnownDependenciesResolver(CamelContext camelContext) {
+    public KnownDependenciesResolver(CamelContext camelContext, String springBootVersion, String quarkusVersion) {
         this.camelContext = camelContext;
+        this.springBootVersion = springBootVersion;
+        this.quarkusVersion = quarkusVersion;
     }
 
     public void loadKnownDependencies() {
-        doLoadKnownDependencies("/camel-main-known-dependencies.properties");
-        doLoadKnownDependencies("/camel-component-known-dependencies.properties");
+        doLoadKnownDependencies("camel-main-known-dependencies.properties");
+        doLoadKnownDependencies("camel-component-known-dependencies.properties");
     }
 
     private void doLoadKnownDependencies(String name) {
         try {
-            InputStream is = getClass().getResourceAsStream(name);
-            if (is != null) {
-                Properties prop = new Properties();
-                prop.load(is);
-                Map<String, String> map = new HashMap<>();
-                for (String key : prop.stringPropertyNames()) {
-                    String value = prop.getProperty(key);
-                    map.put(key, value);
+            Enumeration<URL> resources = getClass().getClassLoader().getResources(name);
+            while (resources.hasMoreElements()) {
+                URL resource = resources.nextElement();
+                try (InputStream is = resource.openStream()) {
+                    Properties prop = new Properties();
+                    prop.load(is);
+                    Map<String, String> map = new HashMap<>();
+                    for (String key : prop.stringPropertyNames()) {
+                        String value = prop.getProperty(key);
+                        map.put(key, value);
+                    }
+                    addMappings(map);
                 }
-                addMappings(map);
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // ignore
         }
     }
@@ -61,10 +70,28 @@ public final class KnownDependenciesResolver {
     }
 
     public MavenGav mavenGavForClass(String className) {
-        String gav = mappings.get(className);
+        MavenGav answer = null;
+        String gav = findGav(className);
         if (gav != null) {
-            return MavenGav.parseGav(gav, camelContext.getVersion());
+            answer = MavenGav.parseGav(gav, camelContext.getVersion());
         }
-        return null;
+        if (answer != null) {
+            String v = answer.getVersion();
+            if (springBootVersion != null && "${spring-boot-version}".equals(v)) {
+                answer.setVersion(springBootVersion);
+            } else if (quarkusVersion != null && "${quarkus-version}".equals(v)) {
+                answer.setVersion(quarkusVersion);
+            }
+        }
+        return answer;
+    }
+
+    private String findGav(String prefix) {
+        String gav = mappings.get(prefix);
+        while (gav == null && prefix.lastIndexOf(".") != -1) {
+            prefix = prefix.substring(0, prefix.lastIndexOf("."));
+            gav = mappings.get(prefix);
+        }
+        return gav;
     }
 }

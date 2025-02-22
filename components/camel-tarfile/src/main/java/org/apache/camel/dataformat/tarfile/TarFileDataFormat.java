@@ -110,7 +110,7 @@ public class TarFileDataFormat extends ServiceSupport implements DataFormat, Dat
             OutputStreamBuilder osb = OutputStreamBuilder.withExchange(exchange);
 
             try {
-                TarArchiveEntry entry = tis.getNextTarEntry();
+                TarArchiveEntry entry = tis.getNextEntry();
                 if (entry != null) {
                     exchange.getMessage().setHeader(FILE_NAME, entry.getName());
                     IOHelper.copy(tis, osb, IOHelper.DEFAULT_BUFFER_SIZE, false, maxDecompressedSize);
@@ -118,7 +118,7 @@ public class TarFileDataFormat extends ServiceSupport implements DataFormat, Dat
                     throw new IllegalStateException("Unable to untar the file, it may be corrupted.");
                 }
 
-                entry = tis.getNextTarEntry();
+                entry = tis.getNextEntry();
                 if (entry != null) {
                     throw new IllegalStateException("Tar file has more than 1 entry.");
                 }
@@ -133,7 +133,7 @@ public class TarFileDataFormat extends ServiceSupport implements DataFormat, Dat
 
     private void createTarEntries(TarArchiveOutputStream tos, String filepath, Long filelength) throws IOException {
         Iterator<Path> elements = Paths.get(filepath).iterator();
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(256);
 
         while (elements.hasNext()) {
             Path path = elements.next();

@@ -28,14 +28,18 @@ import com.github.freva.asciitable.OverflowBehaviour;
 import org.apache.camel.dsl.jbang.core.commands.CamelJBangMain;
 import org.apache.camel.dsl.jbang.core.common.PidNameAgeCompletionCandidates;
 import org.apache.camel.dsl.jbang.core.common.ProcessHelper;
+import org.apache.camel.dsl.jbang.core.common.VersionHelper;
 import org.apache.camel.util.TimeUtils;
 import org.apache.camel.util.json.JsonArray;
 import org.apache.camel.util.json.JsonObject;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
+import static org.apache.camel.dsl.jbang.core.common.CamelCommandHelper.extractState;
+
 @Command(name = "context",
-         description = "Get status of Camel integrations")
+         description = "Get status of Camel integrations",
+         sortOptions = false, showDefaultValues = true)
 public class CamelContextStatus extends ProcessWatchCommand {
 
     @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
@@ -74,9 +78,11 @@ public class CamelContextStatus extends ProcessWatchCommand {
                         row.age = TimeUtils.printSince(row.uptime);
                         JsonObject runtime = (JsonObject) root.get("runtime");
                         row.platform = extractPlatform(ph, runtime);
-                        row.platformVersion = runtime != null ? runtime.getString("platformVersion") : null;
+                        row.platformVersion = extractPlatformVersion(row.platform,
+                                runtime != null ? runtime.getString("platformVersion") : null);
                         row.state = context.getInteger("phase");
                         row.camelVersion = context.getString("version");
+                        row.profile = context.getString("profile");
                         Map<String, ?> stats = context.getMap("statistics");
                         if (stats != null) {
                             Object thp = stats.get("exchangesThroughput");
@@ -84,9 +90,20 @@ public class CamelContextStatus extends ProcessWatchCommand {
                                 row.throughput = thp.toString();
                             }
                             row.total = stats.get("exchangesTotal").toString();
-                            row.inflight = stats.get("exchangesInflight").toString();
+                            Object num = stats.get("remoteExchangesTotal");
+                            if (num != null) {
+                                row.totalRemote = num.toString();
+                            }
                             row.failed = stats.get("exchangesFailed").toString();
-                            row.reloaded = stats.get("reloaded").toString();
+                            num = stats.get("remoteExchangesFailed");
+                            if (num != null) {
+                                row.failedRemote = num.toString();
+                            }
+                            row.inflight = stats.get("exchangesInflight").toString();
+                            num = stats.get("remoteExchangesInflight");
+                            if (num != null) {
+                                row.inflightRemote = num.toString();
+                            }
                             Object last = stats.get("lastProcessingTime");
                             if (last != null) {
                                 row.last = last.toString();
@@ -95,17 +112,30 @@ public class CamelContextStatus extends ProcessWatchCommand {
                             if (last != null) {
                                 row.delta = last.toString();
                             }
-                            last = stats.get("sinceLastCreatedExchange");
+                            last = stats.get("lastCreatedExchangeTimestamp");
                             if (last != null) {
-                                row.sinceLastStarted = last.toString();
+                                long time = Long.parseLong(last.toString());
+                                row.sinceLastStarted = TimeUtils.printSince(time);
                             }
-                            last = stats.get("sinceLastCompletedExchange");
+                            last = stats.get("lastCompletedExchangeTimestamp");
                             if (last != null) {
-                                row.sinceLastCompleted = last.toString();
+                                long time = Long.parseLong(last.toString());
+                                row.sinceLastCompleted = TimeUtils.printSince(time);
                             }
-                            last = stats.get("sinceLastFailedExchange");
+                            last = stats.get("lastFailedExchangeTimestamp");
                             if (last != null) {
-                                row.sinceLastFailed = last.toString();
+                                long time = Long.parseLong(last.toString());
+                                row.sinceLastFailed = TimeUtils.printSince(time);
+                            }
+                            row.reloaded = (String) stats.get("reloaded"); // backwards compatible
+                            stats = (Map<String, ?>) stats.get("reload");
+                            if (stats != null) {
+                                row.reloaded = stats.get("reloaded").toString();
+                                row.reloadedFailed = stats.get("failed").toString();
+                                stats = (Map<String, ?>) stats.get("lastError");
+                                if (stats != null) {
+                                    row.reloadedError = stats.get("message").toString();
+                                }
                             }
                         }
                         JsonArray array = (JsonArray) root.get("routes");
@@ -133,26 +163,30 @@ public class CamelContextStatus extends ProcessWatchCommand {
         rows.sort(this::sortRow);
 
         if (!rows.isEmpty()) {
-            System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+            printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                     new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                     new Column().header("NAME").dataAlign(HorizontalAlign.LEFT).maxWidth(30, OverflowBehaviour.ELLIPSIS_RIGHT)
                             .with(r -> r.name),
                     new Column().header("CAMEL").dataAlign(HorizontalAlign.LEFT).with(r -> r.camelVersion),
                     new Column().header("PLATFORM").dataAlign(HorizontalAlign.LEFT).with(this::getPlatform),
+                    new Column().header("PROFILE").dataAlign(HorizontalAlign.LEFT).with(this::getProfile),
                     new Column().header("READY").dataAlign(HorizontalAlign.CENTER).with(r -> r.ready),
                     new Column().header("STATUS").headerAlign(HorizontalAlign.CENTER)
-                            .with(r -> extractState(r.state)),
-                    new Column().header("RELOAD").headerAlign(HorizontalAlign.CENTER)
-                            .with(r -> r.reloaded),
+                            .with(this::getStatus),
+                    new Column().header("RELOAD").with(this::getReloaded),
                     new Column().header("AGE").headerAlign(HorizontalAlign.CENTER).with(r -> r.age),
                     new Column().header("ROUTE").with(this::getRoutes),
                     new Column().header("MSG/S").with(this::getThroughput),
-                    new Column().header("TOTAL").with(r -> r.total),
-                    new Column().header("FAIL").with(r -> r.failed),
-                    new Column().header("INFLIGHT").with(r -> r.inflight),
+                    new Column().header("TOTAL").with(this::getTotal),
+                    new Column().header("REMOTE").with(this::getTotalRemote),
+                    new Column().header("FAIL").with(this::getFailed),
+                    new Column().header("INFLIGHT").with(this::getInflight),
                     new Column().header("LAST").with(r -> r.last),
-                    new Column().header("DELTA").with(this::getDelta),
-                    new Column().header("SINCE-LAST").with(this::getSinceLast))));
+                    new Column().header("SINCE-LAST").with(this::getSinceLast),
+                    new Column().header("") // empty header as we only show info when there is an error
+                            .headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT)
+                            .maxWidth(70, OverflowBehaviour.NEWLINE)
+                            .with(this::getDescription))));
         }
 
         return 0;
@@ -168,6 +202,15 @@ public class CamelContextStatus extends ProcessWatchCommand {
             }
         }
         return answer;
+    }
+
+    private String extractPlatformVersion(String platform, String platformVersion) {
+        if (platformVersion == null) {
+            if ("JBang".equals(platform)) {
+                platformVersion = VersionHelper.getJBangVersion();
+            }
+        }
+        return platformVersion;
     }
 
     protected int sortRow(Row o1, Row o2) {
@@ -189,12 +232,59 @@ public class CamelContextStatus extends ProcessWatchCommand {
         }
     }
 
+    private String getStatus(Row r) {
+        if (r.reloadedError != null) {
+            return "Error";
+        }
+        return extractState(r.state);
+    }
+
+    private String getDescription(Row r) {
+        if (r.reloadedError != null) {
+            return "Reload failed due to: " + r.reloadedError;
+        }
+        return null;
+    }
+
+    private String getTotal(Row r) {
+        return r.total;
+    }
+
+    private String getTotalRemote(Row r) {
+        if (r.totalRemote != null) {
+            return r.totalRemote;
+        }
+        return "";
+    }
+
+    private String getFailed(Row r) {
+        if (r.failedRemote != null) {
+            return r.failedRemote + "/" + r.failed;
+        }
+        return r.failed;
+    }
+
+    private String getInflight(Row r) {
+        if (r.inflightRemote != null) {
+            return r.inflightRemote + "/" + r.inflight;
+        }
+        return r.inflight;
+    }
+
     private String getPlatform(Row r) {
         if (r.platformVersion != null) {
             return r.platform + " v" + r.platformVersion;
         } else {
             return r.platform;
         }
+    }
+
+    protected String getProfile(Row r) {
+        String s = r.profile;
+        if (s == null || s.isEmpty()) {
+            s = "";
+        }
+        return s;
     }
 
     protected String getDelta(Row r) {
@@ -224,6 +314,10 @@ public class CamelContextStatus extends ProcessWatchCommand {
         return s;
     }
 
+    protected String getReloaded(Row row) {
+        return row.reloaded + "/" + row.reloadedFailed;
+    }
+
     protected String getRoutes(Row r) {
         return r.routeStarted + "/" + r.routeTotal;
     }
@@ -233,18 +327,24 @@ public class CamelContextStatus extends ProcessWatchCommand {
         String platform;
         String platformVersion;
         String camelVersion;
+        String profile;
         String name;
         String ready;
         int routeStarted;
         int routeTotal;
         int state;
         String reloaded;
+        String reloadedFailed;
+        String reloadedError;
         String age;
         long uptime;
         String throughput;
         String total;
+        String totalRemote;
         String failed;
+        String failedRemote;
         String inflight;
+        String inflightRemote;
         String last;
         String delta;
         String sinceLastStarted;

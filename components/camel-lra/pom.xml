@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-lra</artifactId>
@@ -35,8 +35,13 @@
         <!-- used by camel-catalog -->
         <firstVersion>2.21.0</firstVersion>
         <title>LRA</title>
-        <label>database, microservice</label>
+        <label>microservice</label>
         <supportLevel>preview</supportLevel>
+
+        <!-- LRA coordinator container is only available for x86 -->
+        <skipITs.ppc64le>true</skipITs.ppc64le>
+        <skipITs.s390x>true</skipITs.s390x>
+        <skipITs.aarch64>true</skipITs.aarch64>
     </properties>
 
     <dependencies>
@@ -71,13 +76,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-microprofile-lra</artifactId>
             <version>${project.version}</version>
@@ -85,5 +84,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>

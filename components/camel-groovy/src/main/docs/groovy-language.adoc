@@ -5,6 +5,7 @@
 :description: Evaluates a Groovy script.
 :since: 1.3
 :supportlevel: Stable
+:tabs-sync-option:
 //Manually maintained attributes
 :camel-spring-boot-name: groovy
 
@@ -27,49 +28,58 @@ groovy("someGroovyExpression")
 include::partial$language-options.adoc[]
 // language options: END
 
-== Examples
+== Usage
 
-In the example below we use a groovy script as predicate in the message filter,
-to determine if any line items is over $100:
+=== Groovy Context
 
-[source,java]
-------------------------------------------------------------------------------------------------
-// lets route if a line item is over $100
-from("queue:foo")
-    .filter(groovy("request.lineItems.any { i -> i.value > 100 }"))
-        .to("queue:bar")
-------------------------------------------------------------------------------------------------
+Camel will provide exchange information in the Groovy context (just
+a `Map`). The `Exchange` is transferred as:
 
-And in XML DSL:
+[width="100%",cols="50%,50%",options="header",]
+|=======================================================================
+|key |value
 
-[source,xml]
-----
-<route>
-    <from uri="queue:foo"/>
-    <filter>
-        <groovy>request.lineItems.any { i -> i.value > 100 }</groovy>
-        <to uri="queue:bar"/>
-    </filter>
-</route>
-----
+|`body` |The message body.
 
-== How to get the result from multiple statements script
+|`header` |The headers of the message.
+|`headers` |The headers of the message.
+
+|`variable` |The exchange variables
+|`variables` |The exchange variables
+
+|`exchangeProperty` |The exchange properties.
+|`exchangeProperties` |The exchange properties.
+
+|`exchange` |The `Exchange` itself.
+|`camelContext` |The Camel Context.
+|`exception` | If the exchange failed then this is the caused exception.
+
+|`request` |The message.
+|`response` | *Deprecated* The Out message (only for InOut message exchange pattern).
+
+|`attachments` | A `Map<String,jakarta.activation.DataHandler>` containing file attachments such as from HTTP file uploads, or emails containing files.
+
+|`log` | Can be used for logging purposes such as `log.info('Using body: {}', body)`.
+|=======================================================================
+
+
+=== How to get the result from multiple statements script
 
 As the Groovy script engine evaluate method just return a `Null` if it runs a
-multiple statements script. Camel now look up the value of script result
-by using the key of "result" from the value set. If you have multiple
-statements script, you need to make sure you set the value of result
+multiple statements script. Camel now looks up the value of script result
+by using the key of `result` from the value set. If you have multiple
+statements scripts, you need to make sure you set the value of result
 variable as the script return value.
 
-[source,text]
+[source,groovy]
 -------------------------------------------------------------
-bar = "baz";
-# some other statements ...
-# camel take the result value as the script evaluation result
+bar = "baz"
+// some other statements ...
+// camel take the result value as the script evaluation result
 result = body * 2 + 1
 -------------------------------------------------------------
 
-== Customizing Groovy Shell
+=== Customizing Groovy Shell
 
 For very special use-cases you may need to use a custom `GroovyShell` instance in your
 Groovy expressions. To provide the custom `GroovyShell`, add an implementation
@@ -94,21 +104,21 @@ public class CustomGroovyShellFactory implements GroovyShellFactory {
 Camel will then use your custom GroovyShell instance (containing your
 custom static imports), instead of the default one.
 
-== Loading script from external resource
+=== Loading script from external resource
 
 You can externalize the script and have Camel load it from a resource
-such as `"classpath:"`, `"file:"`, or `"http:"`. +
- This is done using the following syntax: `"resource:scheme:location"`,
-eg to refer to a file on the classpath you can do:
+such as `"classpath:"`, `"file:"`, or `"http:"`.
+This is done using the following syntax: `"resource:scheme:location"`,
+e.g., to refer to a file on the classpath you can do:
 
 [source,java]
 -------------------------------------------------------------------
 .setHeader("myHeader").groovy("resource:classpath:mygroovy.groovy")
 -------------------------------------------------------------------
 
-== Dependencies
+=== Dependencies
 
-To use scripting languages in your camel routes you need to add a
+To use scripting languages in your camel routes, you need to add a
 dependency on *camel-groovy*.
 
 If you use Maven you could just add the following to your `pom.xml`,
@@ -124,5 +134,36 @@ the download page for the latest versions).
 </dependency>
 ---------------------------------------
 
+== Examples
+
+In the example below, we use a groovy script as predicate in the message filter,
+to determine if any line items are over $100:
+
+[tabs]
+====
+
+Java::
++
+[source,java]
+------------------------------------------------------------------------------------------------
+from("queue:foo")
+    .filter(groovy("body.lineItems.any { i -> i.value > 100 }"))
+        .to("queue:bar")
+------------------------------------------------------------------------------------------------
+
+XML DSL::
++
+[source,xml]
+----
+<route>
+    <from uri="queue:foo"/>
+    <filter>
+        <groovy>body.lineItems.any { i -> i.value > 100 }</groovy>
+        <to uri="queue:bar"/>
+    </filter>
+</route>
+----
+
+====
 
 include::spring-boot:partial$starter.adoc[]

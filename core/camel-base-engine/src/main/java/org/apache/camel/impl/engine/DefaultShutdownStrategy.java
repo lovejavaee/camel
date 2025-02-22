@@ -199,15 +199,11 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
         routesOrdered.sort(comparator);
 
         if (logger.shouldLog()) {
-            if (suspendOnly) {
-                String msg = String.format("Starting to graceful suspend %s routes (timeout %s %s)", routesOrdered.size(),
-                        timeout, timeUnit.toString().toLowerCase(Locale.ENGLISH));
-                logger.log(msg);
-            } else {
-                String msg = String.format("Starting to graceful shutdown %s routes (timeout %s %s)", routesOrdered.size(),
-                        timeout, timeUnit.toString().toLowerCase(Locale.ENGLISH));
-                logger.log(msg);
-            }
+            final String action = suspendOnly ? "suspend" : "shutdown";
+
+            String msg = String.format("Starting to graceful %s %s routes (timeout %s %s)", action, routesOrdered.size(),
+                    timeout, timeUnit.toString().toLowerCase(Locale.ENGLISH));
+            logger.log(msg);
         }
 
         // use another thread to perform the shutdowns so we can support timeout
@@ -288,6 +284,11 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
 
     @Override
     public boolean hasTimeoutOccurred() {
+        return isTimeoutOccurred();
+    }
+
+    @Override
+    public boolean isTimeoutOccurred() {
         return timeoutOccurred.get();
     }
 
@@ -431,8 +432,8 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
         // allow us to do custom work before delegating to service helper
         try {
             ServiceHelper.stopService(consumer);
-        } catch (Throwable e) {
-            LOG.warn("Error occurred while shutting down route: " + routeId + ". This exception will be ignored.", e);
+        } catch (Exception e) {
+            LOG.warn("Error occurred while shutting down route: {}. This exception will be ignored.", routeId, e);
             // fire event
             EventHelper.notifyServiceStopFailure(consumer.getEndpoint().getCamelContext(), consumer, e);
         }
@@ -452,8 +453,8 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
         // allow us to do custom work before delegating to service helper
         try {
             ServiceHelper.suspendService(consumer);
-        } catch (Throwable e) {
-            LOG.warn("Error occurred while suspending route: " + routeId + ". This exception will be ignored.", e);
+        } catch (Exception e) {
+            LOG.warn("Error occurred while suspending route: {}. This exception will be ignored.", routeId, e);
             // fire event
             EventHelper.notifyServiceStopFailure(consumer.getEndpoint().getCamelContext(), consumer, e);
         }
@@ -475,11 +476,6 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
         // reset option
         forceShutdown = false;
         timeoutOccurred.set(false);
-    }
-
-    @Override
-    protected void doStop() throws Exception {
-        // noop
     }
 
     @Override
@@ -512,15 +508,15 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
         }
 
         for (Service child : list) {
-            if (child instanceof ShutdownPrepared) {
+            if (child instanceof ShutdownPrepared shutdownPrepared) {
                 try {
                     LOG.trace("Preparing (forced: {}) shutdown on: {}", forced, child);
-                    ((ShutdownPrepared) child).prepareShutdown(suspendOnly, forced);
+                    shutdownPrepared.prepareShutdown(suspendOnly, forced);
                 } catch (Exception e) {
                     if (suppressLogging) {
-                        LOG.trace("Error during prepare shutdown on " + child + ". This exception will be ignored.", e);
+                        LOG.trace("Error during prepare shutdown on {}. This exception will be ignored.", child, e);
                     } else {
-                        LOG.warn("Error during prepare shutdown on " + child + ". This exception will be ignored.", e);
+                        LOG.warn("Error during prepare shutdown on {}. This exception will be ignored.", child, e);
                     }
                 }
             }
@@ -575,6 +571,9 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
             this.logInflightExchangesOnTimeout = logInflightExchangesOnTimeout;
         }
 
+        // Disable BusyWait as we're only waiting on seconds increment, so any other
+        // strategy would not be much more efficient
+        @SuppressWarnings("BusyWait")
         @Override
         public void run() {
             // the strategy in this run method is to
@@ -612,8 +611,8 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
 
                     // some consumers do not support shutting down so let them decide
                     // if a consumer is suspendable then prefer to use that and then shutdown later
-                    if (consumer instanceof ShutdownAware) {
-                        shutdown = !((ShutdownAware) consumer).deferShutdown(shutdownRunningTask);
+                    if (consumer instanceof ShutdownAware shutdownAware) {
+                        shutdown = !shutdownAware.deferShutdown(shutdownRunningTask);
                     }
                     if (shutdown && consumer instanceof Suspendable) {
                         // we prefer to suspend over shutdown
@@ -702,6 +701,7 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
 
                         Thread.sleep(loopDelaySeconds * 1000);
                     } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         if (abortAfterTimeout) {
                             LOG.warn("Interrupted while waiting during graceful shutdown, will abort.");
                             return;
@@ -778,8 +778,8 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
         for (Service service : order.getServices()) {
             Set<Service> children = ServiceHelper.getChildServices(service);
             for (Service child : children) {
-                if (child instanceof ShutdownAware) {
-                    inflight += ((ShutdownAware) child).getPendingExchangesSize();
+                if (child instanceof ShutdownAware shutdownAware) {
+                    inflight += shutdownAware.getPendingExchangesSize();
                 }
             }
         }
@@ -822,7 +822,9 @@ public class DefaultShutdownStrategy extends ServiceSupport implements ShutdownS
             return;
         }
 
-        StringBuilder sb = new StringBuilder("There are " + size + " inflight exchanges:");
+        StringBuilder sb = new StringBuilder(512);
+
+        sb.append("There are ").append(size).append(" inflight exchanges:");
         for (InflightRepository.InflightExchange inflight : filtered) {
             sb.append("\n\tInflightExchange: [exchangeId=").append(inflight.getExchange().getExchangeId())
                     .append(", fromRouteId=").append(inflight.getExchange().getFromRouteId())

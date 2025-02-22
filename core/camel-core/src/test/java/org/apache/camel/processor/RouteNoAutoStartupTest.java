@@ -53,13 +53,13 @@ public class RouteNoAutoStartupTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("seda:foo");
 
-                from("seda:foo").noAutoStartup().id("myRoute").to("mock:result");
+                from("seda:foo").autoStartup(false).id("myRoute").to("mock:result");
             }
         };
     }

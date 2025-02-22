@@ -73,10 +73,10 @@ public abstract class RemoteFileConfiguration extends GenericFileConfiguration {
                                                                          + "option is set as timeout on the JSCH Session instance.",
               javaType = "java.time.Duration")
     private int soTimeout = 300000;
-    @UriParam(label = "advanced", description = "Should an exception be thrown if connection failed (exhausted)"
-                                                + "By default exception is not thrown and a <tt>WARN</tt> is logged. You can use this to enable exception "
-                                                + "being thrown and handle the thrown exception from the {@link "
-                                                + "org.apache.camel.spi.PollingConsumerPollStrategy} rollback method.")
+    @UriParam(label = "consumer,advanced", description = "Should an exception be thrown if connection failed (exhausted)"
+                                                         + "By default exception is not thrown and a <tt>WARN</tt> is logged. You can use this to enable exception "
+                                                         + "being thrown and handle the thrown exception from the {@link "
+                                                         + "org.apache.camel.spi.PollingConsumerPollStrategy} rollback method.")
     private boolean throwExceptionOnConnectFailed;
     @UriParam(label = "advanced", description = "Sets optional site command(s) to be executed after successful "
                                                 + "login. <p/> Multiple site commands can be separated using a new line character.")
@@ -105,7 +105,7 @@ public abstract class RemoteFileConfiguration extends GenericFileConfiguration {
     private boolean useList = true;
     @UriParam(label = "consumer,advanced", description = "Whether to ignore when (trying to list files in "
                                                          + "directories or when downloading a file), which does not exist or due to permission error. <p/> "
-                                                         + "By default when a directory or file does not exists or insufficient permission, then an exception "
+                                                         + "By default when a directory or file does not exist or insufficient permission, then an exception "
                                                          + "is thrown. Setting this option to <tt>true</tt> allows to ignore that instead.")
     private boolean ignoreFileNotFoundOrPermissionError;
     @UriParam(label = "producer,advanced", defaultValue = "true", description = "Whether to send a noop command "
@@ -114,10 +114,10 @@ public abstract class RemoteFileConfiguration extends GenericFileConfiguration {
                                                                                 + "upload the file. However if this causes problems, you can turn this option off.")
     private boolean sendNoop = true;
 
-    public RemoteFileConfiguration() {
+    protected RemoteFileConfiguration() {
     }
 
-    public RemoteFileConfiguration(URI uri) {
+    protected RemoteFileConfiguration(URI uri) {
         configure(uri);
     }
 
@@ -395,7 +395,7 @@ public abstract class RemoteFileConfiguration extends GenericFileConfiguration {
      * Whether to ignore when (trying to list files in directories or when downloading a file), which does not exist or
      * due to permission error.
      * <p/>
-     * By default when a directory or file does not exists or insufficient permission, then an exception is thrown.
+     * By default when a directory or file does not exist or insufficient permission, then an exception is thrown.
      * Setting this option to <tt>true</tt> allows to ignore that instead.
      */
     public void setIgnoreFileNotFoundOrPermissionError(boolean ignoreFileNotFoundOrPermissionError) {

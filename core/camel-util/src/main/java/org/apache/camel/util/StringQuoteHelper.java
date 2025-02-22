@@ -109,18 +109,21 @@ public final class StringQuoteHelper {
                 boolean doubleQuoted = ch == '"' && ch2 == '"';
                 if (!keepQuotes && (singleQuoted || doubleQuoted)) {
                     input = input.substring(1, input.length() - 1);
+                    // do not trim quoted text
+                } else if (trim) {
+                    input = input.trim();
                 }
             }
             // no separator in data, so return single string with input as is
-            return new String[] { trim ? input.trim() : input };
+            return new String[] { input };
         }
 
         List<String> answer = new ArrayList<>();
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(input.length());
 
         boolean singleQuoted = false;
         boolean doubleQuoted = false;
-        boolean skipLeadingWhitespace = true;
+        boolean separating = false;
 
         for (int i = 0; i < input.length(); i++) {
             char ch = input.charAt(i);
@@ -129,7 +132,7 @@ public final class StringQuoteHelper {
             boolean last = i == input.length() - 1;
 
             if (!doubleQuoted && ch == '\'') {
-                if (singleQuoted && prev == ch && sb.length() == 0) {
+                if (singleQuoted && prev == ch && sb.isEmpty()) {
                     // its an empty quote so add empty text
                     if (keepQuotes) {
                         answer.add("''");
@@ -139,7 +142,7 @@ public final class StringQuoteHelper {
                 }
                 // special logic needed if this quote is the end
                 if (last) {
-                    if (singleQuoted && sb.length() > 0) {
+                    if (singleQuoted && !sb.isEmpty()) {
                         String text = sb.toString();
                         // do not trim a quoted string
                         if (keepQuotes) {
@@ -157,7 +160,7 @@ public final class StringQuoteHelper {
                 }
                 continue;
             } else if (!singleQuoted && ch == '"') {
-                if (doubleQuoted && prev == ch && sb.length() == 0) {
+                if (doubleQuoted && prev == ch && sb.isEmpty()) {
                     // its an empty quote so add empty text
                     if (keepQuotes) {
                         answer.add("\""); // append ending quote
@@ -167,7 +170,7 @@ public final class StringQuoteHelper {
                 }
                 // special logic needed if this quote is the end
                 if (last) {
-                    if (doubleQuoted && sb.length() > 0) {
+                    if (doubleQuoted && !sb.isEmpty()) {
                         String text = sb.toString();
                         // do not trim a quoted string
                         if (keepQuotes) {
@@ -184,13 +187,10 @@ public final class StringQuoteHelper {
                     sb.append(ch);
                 }
                 continue;
-            } else if (!isQuoting && separator != ' ' && ch == ' ') {
-                if (skipLeadingWhitespace) {
-                    continue;
-                }
             } else if (!isQuoting && ch == separator) {
+                separating = true;
                 // add as answer if we are not in a quote
-                if (sb.length() > 0) {
+                if (!sb.isEmpty()) {
                     String text = sb.toString();
                     if (trim) {
                         text = text.trim();
@@ -202,12 +202,17 @@ public final class StringQuoteHelper {
                 continue;
             }
 
+            if (trim && !isQuoting && separating && separator != ' ' && ch == ' ') {
+                continue;
+            }
+            separating = false;
+
             // append char
             sb.append(ch);
         }
 
         // any leftover
-        if (sb.length() > 0) {
+        if (!sb.isEmpty()) {
             String text = sb.toString();
             if (trim) {
                 text = text.trim();

@@ -24,7 +24,7 @@ import org.apache.camel.spi.Registry;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * CAMEL-6455
@@ -32,8 +32,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class BeanMethodWithEmptyParameterAndNoMethodWithNoParameterIssueTest extends ContextTestSupport {
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry jndi = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry jndi = super.createCamelRegistry();
         jndi.bind("myBean", new MyBean());
         jndi.bind("myOtherBean", new MyOtherBean());
         return jndi;
@@ -43,13 +43,12 @@ public class BeanMethodWithEmptyParameterAndNoMethodWithNoParameterIssueTest ext
     public void testBean() throws Exception {
         getMockEndpoint("mock:result").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:start", "Camel");
-            fail("Should have thrown exception");
-        } catch (CamelExecutionException e) {
-            MethodNotFoundException cause = assertIsInstanceOf(MethodNotFoundException.class, e.getCause());
-            assertEquals("doSomething()", cause.getMethodName());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("direct:start", "Camel"),
+                "Should have thrown exception");
+
+        MethodNotFoundException cause = assertIsInstanceOf(MethodNotFoundException.class, e.getCause());
+        assertEquals("doSomething()", cause.getMethodName());
 
         assertMockEndpointsSatisfied();
     }
@@ -58,22 +57,21 @@ public class BeanMethodWithEmptyParameterAndNoMethodWithNoParameterIssueTest ext
     public void testOtherBean() throws Exception {
         getMockEndpoint("mock:result").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:other", "Camel");
-            fail("Should have thrown exception");
-        } catch (CamelExecutionException e) {
-            MethodNotFoundException cause = assertIsInstanceOf(MethodNotFoundException.class, e.getCause());
-            assertEquals("doSomething()", cause.getMethodName());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("direct:other", "Camel"),
+                "Should have thrown exception");
+
+        MethodNotFoundException cause = assertIsInstanceOf(MethodNotFoundException.class, e.getCause());
+        assertEquals("doSomething()", cause.getMethodName());
 
         assertMockEndpointsSatisfied();
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("bean:myBean?method=doSomething()").to("mock:result");
 
                 from("direct:other").to("bean:myOtherBean?method=doSomething()").to("mock:result");

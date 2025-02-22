@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-mina</artifactId>
@@ -32,6 +32,7 @@
     <description>Camel MINA support</description>
 
     <properties>
+        <camel.surefire.forkTimeout>1800</camel.surefire.forkTimeout>
     </properties>
 
     <dependencies>
@@ -74,38 +75,39 @@
             <version>${mockito-version}</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
-                    <excludes>
-                        <!-- This test just show the shutdown error -->
-                        <exclude>**/MinaProducerShutdownTest.*</exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
+    <profiles>
+        <profile>
+            <id>full</id>
+            <activation>
+                <property>
+                    <name>!quickly</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <!-- This test just show the shutdown error -->
+                                <exclude>**/MinaProducerShutdownTest.*</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
 
-            <plugin>
-                <!-- allows the special unittest to be ran via 'mvn compile exec:java' -->
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>org.apache.camel.component.mina.MinaProducerShutdownManualIT</mainClass>
-                    <includePluginDependencies>false</includePluginDependencies>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
+                    <plugin>
+                        <!-- allows the special unittest to be ran via 'mvn compile exec:java' -->
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <configuration>
+                            <mainClass>org.apache.camel.component.mina.MinaProducerShutdownManualIT</mainClass>
+                            <includePluginDependencies>false</includePluginDependencies>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

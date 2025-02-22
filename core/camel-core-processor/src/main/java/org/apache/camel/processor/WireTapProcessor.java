@@ -64,7 +64,7 @@ public class WireTapProcessor extends AsyncProcessorSupport
     private final ExchangePattern exchangePattern;
     private final boolean copy;
     private final ExecutorService executorService;
-    private volatile boolean shutdownExecutorService;
+    private final boolean shutdownExecutorService;
     private final LongAdder taskCount = new LongAdder();
     private ProcessorExchangeFactory processorExchangeFactory;
     private PooledExchangeTaskFactory taskFactory;
@@ -203,7 +203,7 @@ public class WireTapProcessor extends AsyncProcessorSupport
             // create task which has state used during routing
             PooledExchangeTask task = taskFactory.acquire(target, null);
             executorService.submit(task);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // in case the thread pool rejects or cannot submit the task then we need to catch
             // so camel error handler can react
             exchange.setException(e);
@@ -226,9 +226,8 @@ public class WireTapProcessor extends AsyncProcessorSupport
 
         // if the body is a stream cache we must use a copy of the stream in the wire tapped exchange
         Message msg = answer.getMessage();
-        if (msg.getBody() instanceof StreamCache) {
-            // in parallel processing case, the stream must be copied, therefore get the stream
-            StreamCache cache = (StreamCache) msg.getBody();
+        if (msg.getBody() instanceof StreamCache cache) {
+            // in parallel processing case, the stream must be copied, therefore, get the stream
             StreamCache copied = cache.copy(answer);
             if (copied != null) {
                 msg.setBody(copied);
@@ -247,20 +246,29 @@ public class WireTapProcessor extends AsyncProcessorSupport
         return answer;
     }
 
-    private Exchange configureCopyExchange(Exchange exchange) {
+    private Exchange configureCopyExchange(Exchange exchange) throws IOException {
         // must use a copy as we dont want it to cause side effects of the original exchange
-        Exchange copy = processorExchangeFactory.createCorrelatedCopy(exchange, false);
+        Exchange target = processorExchangeFactory.createCorrelatedCopy(exchange, false);
+        // should not be correlated, but we needed to copy without handover
+        target.removeProperty(ExchangePropertyKey.CORRELATION_ID);
         // set MEP to InOnly as this wire tap is a fire and forget
-        copy.setPattern(ExchangePattern.InOnly);
+        target.setPattern(ExchangePattern.InOnly);
         // move OUT to IN if needed
-        if (copy.hasOut()) {
-            copy.setIn(copy.getOut());
-            copy.setOut(null);
+        if (target.hasOut()) {
+            target.setIn(target.getOut());
+            target.setOut(null);
         }
         // remove STREAM_CACHE_UNIT_OF_WORK property because this wire tap will
         // close its own created stream cache(s)
-        copy.removeProperty(ExchangePropertyKey.STREAM_CACHE_UNIT_OF_WORK);
-        return copy;
+        target.removeProperty(ExchangePropertyKey.STREAM_CACHE_UNIT_OF_WORK);
+        // if the body is stream caching based we need to make a deep copy
+        if (target.getMessage().getBody() instanceof StreamCache sc) {
+            StreamCache newBody = sc.copy(target);
+            if (newBody != null) {
+                target.getMessage().setBody(newBody);
+            }
+        }
+        return target;
     }
 
     private Exchange configureNewExchange(Exchange exchange) {

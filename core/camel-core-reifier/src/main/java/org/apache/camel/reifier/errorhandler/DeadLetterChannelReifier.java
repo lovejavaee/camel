@@ -45,19 +45,19 @@ public class DeadLetterChannelReifier extends ErrorHandlerReifier<DeadLetterChan
 
     @Override
     public Processor createErrorHandler(Processor processor) throws Exception {
-        ObjectHelper.notNull(definition.getDeadLetterUri(), "deadLetterUri", this);
+        String uri = parseString(definition.getDeadLetterUri());
+        ObjectHelper.notNull(uri, "deadLetterUri", this);
 
         // optimize to use shared default instance if using out of the box settings
         RedeliveryPolicy redeliveryPolicy = resolveRedeliveryPolicy(definition, camelContext);
         CamelLogger logger = resolveLogger(definition);
 
-        Processor deadLetterProcessor = createDeadLetterChannelProcessor(definition.getDeadLetterUri());
+        Processor deadLetterProcessor = createDeadLetterChannelProcessor(uri);
 
         DeadLetterChannel answer = new DeadLetterChannel(
                 camelContext, processor, logger,
                 getProcessor(definition.getOnRedeliveryProcessor(), definition.getOnRedeliveryRef()),
-                redeliveryPolicy, deadLetterProcessor,
-                definition.getDeadLetterUri(),
+                redeliveryPolicy, deadLetterProcessor, uri,
                 parseBoolean(definition.getDeadLetterHandleNewException(), true),
                 parseBoolean(definition.getUseOriginalMessage(), false),
                 parseBoolean(definition.getUseOriginalBody(), false),
@@ -107,8 +107,13 @@ public class DeadLetterChannelReifier extends ErrorHandlerReifier<DeadLetterChan
     }
 
     private RedeliveryPolicy resolveRedeliveryPolicy(DeadLetterChannelDefinition definition, CamelContext camelContext) {
+        if (definition.hasRedeliveryPolicy() && definition.getRedeliveryPolicyRef() != null) {
+            throw new IllegalArgumentException(
+                    "Cannot have both redeliveryPolicy and redeliveryPolicyRef set at the same time.");
+        }
+
         RedeliveryPolicy answer = null;
-        RedeliveryPolicyDefinition def = definition.getRedeliveryPolicy();
+        RedeliveryPolicyDefinition def = definition.hasRedeliveryPolicy() ? definition.getRedeliveryPolicy() : null;
         if (def == null && definition.getRedeliveryPolicyRef() != null) {
             // ref may point to a definition
             def = lookupByNameAndType(definition.getRedeliveryPolicyRef(), RedeliveryPolicyDefinition.class);
@@ -125,29 +130,34 @@ public class DeadLetterChannelReifier extends ErrorHandlerReifier<DeadLetterChan
         return answer;
     }
 
-    protected synchronized ScheduledExecutorService getExecutorService(
+    protected ScheduledExecutorService getExecutorService(
             ScheduledExecutorService executorService, String executorServiceRef) {
-        if (executorService == null || executorService.isShutdown()) {
-            // camel context will shutdown the executor when it shutdown so no
-            // need to shut it down when stopping
-            if (executorServiceRef != null) {
-                executorService = lookupByNameAndType(executorServiceRef, ScheduledExecutorService.class);
-                if (executorService == null) {
-                    ExecutorServiceManager manager = camelContext.getExecutorServiceManager();
-                    ThreadPoolProfile profile = manager.getThreadPoolProfile(executorServiceRef);
-                    executorService = manager.newScheduledThreadPool(this, executorServiceRef, profile);
+        lock.lock();
+        try {
+            if (executorService == null || executorService.isShutdown()) {
+                // camel context will shutdown the executor when it shutdown so no
+                // need to shut it down when stopping
+                if (executorServiceRef != null) {
+                    executorService = lookupByNameAndType(executorServiceRef, ScheduledExecutorService.class);
+                    if (executorService == null) {
+                        ExecutorServiceManager manager = camelContext.getExecutorServiceManager();
+                        ThreadPoolProfile profile = manager.getThreadPoolProfile(executorServiceRef);
+                        executorService = manager.newScheduledThreadPool(this, executorServiceRef, profile);
+                    }
+                    if (executorService == null) {
+                        throw new IllegalArgumentException("ExecutorService " + executorServiceRef + " not found in registry.");
+                    }
+                } else {
+                    // no explicit configured thread pool, so leave it up to the
+                    // error handler to decide if it need a default thread pool from
+                    // CamelContext#getErrorHandlerExecutorService
+                    executorService = null;
                 }
-                if (executorService == null) {
-                    throw new IllegalArgumentException("ExecutorService " + executorServiceRef + " not found in registry.");
-                }
-            } else {
-                // no explicit configured thread pool, so leave it up to the
-                // error handler to decide if it need a default thread pool from
-                // CamelContext#getErrorHandlerExecutorService
-                executorService = null;
             }
+            return executorService;
+        } finally {
+            lock.unlock();
         }
-        return executorService;
     }
 
 }

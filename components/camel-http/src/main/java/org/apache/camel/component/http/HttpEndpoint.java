@@ -17,14 +17,17 @@
 package org.apache.camel.component.http;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Map;
 
 import javax.net.ssl.HostnameVerifier;
 
+import org.apache.camel.CamelContextAware;
 import org.apache.camel.Category;
 import org.apache.camel.Consumer;
+import org.apache.camel.Exchange;
+import org.apache.camel.LineNumberAware;
 import org.apache.camel.PollingConsumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
@@ -37,8 +40,10 @@ import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.jsse.SSLContextParameters;
+import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.IOHelper;
 import org.apache.camel.util.ObjectHelper;
+import org.apache.camel.util.StopWatch;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
@@ -46,7 +51,14 @@ import org.apache.hc.client5.http.cookie.CookieStore;
 import org.apache.hc.client5.http.impl.DefaultRedirectStrategy;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.io.HttpClientConnectionManager;
+import org.apache.hc.core5.http.EntityDetails;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpException;
 import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.HttpRequest;
+import org.apache.hc.core5.http.HttpRequestInterceptor;
+import org.apache.hc.core5.http.HttpResponse;
+import org.apache.hc.core5.http.HttpResponseInterceptor;
 import org.apache.hc.core5.http.protocol.HttpContext;
 import org.apache.hc.core5.pool.ConnPoolControl;
 import org.apache.hc.core5.pool.PoolStats;
@@ -59,11 +71,16 @@ import org.slf4j.LoggerFactory;
  */
 @UriEndpoint(firstVersion = "2.3.0", scheme = "http,https", title = "HTTP,HTTPS", syntax = "http://httpUri",
              producerOnly = true, category = { Category.HTTP }, lenientProperties = true, headersClass = HttpConstants.class)
-@Metadata(excludeProperties = "httpBinding,matchOnUriPrefix,chunked,transferException")
+@Metadata(excludeProperties = "httpBinding,matchOnUriPrefix,chunked,transferException", annotations = {
+        "protocol=http"
+})
 @ManagedResource(description = "Managed HttpEndpoint")
-public class HttpEndpoint extends HttpCommonEndpoint {
+public class HttpEndpoint extends HttpCommonEndpoint implements LineNumberAware {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpEndpoint.class);
+
+    private int lineNumber;
+    private String location;
 
     @UriParam(label = "security", description = "To configure security using SSLContextParameters."
                                                 + " Important: Only one instance of org.apache.camel.util.jsse.SSLContextParameters is supported per HttpComponent."
@@ -89,7 +106,7 @@ public class HttpEndpoint extends HttpCommonEndpoint {
     @UriParam(label = "advanced", description = "Sets a custom HttpClient to be used by the producer")
     private HttpClient httpClient;
     @UriParam(label = "advanced", defaultValue = "false",
-              description = "To use System Properties as fallback for configuration")
+              description = "To use System Properties as fallback for configuration for configuring HTTP Client")
     private boolean useSystemProperties;
 
     // timeout
@@ -145,29 +162,32 @@ public class HttpEndpoint extends HttpCommonEndpoint {
     @UriParam(label = "producer,advanced", description = "To use custom host header for producer. When not set in query will "
                                                          + "be ignored. When set will override host header derived from url.")
     private String customHostHeader;
-    @UriParam(label = "producer,advanced",
+    @UriParam(label = "producer",
               description = "Whether to skip mapping all the Camel headers as HTTP request headers."
                             + " If there are no data from Camel headers needed to be included in the HTTP request then this can avoid"
                             + " parsing overhead with many object allocations for the JVM garbage collector.")
     private boolean skipRequestHeaders;
-
-    @UriParam(label = "producer", defaultValue = "false",
-              description = "Whether to the HTTP request should follow redirects."
-                            + " By default the HTTP request does not follow redirects ")
-    private boolean followRedirects;
-
-    @UriParam(label = "producer,advanced",
+    @UriParam(label = "producer",
               description = "Whether to skip mapping all the HTTP response headers to Camel headers."
                             + " If there are no data needed from HTTP headers then this can avoid parsing overhead"
                             + " with many object allocations for the JVM garbage collector.")
     private boolean skipResponseHeaders;
+    @UriParam(label = "producer,advanced", defaultValue = "false",
+              description = "Whether to the HTTP request should follow redirects."
+                            + " By default the HTTP request does not follow redirects ")
+    private boolean followRedirects;
     @UriParam(label = "producer,advanced", description = "To set a custom HTTP User-Agent request header")
     private String userAgent;
+    @UriParam(label = "producer,advanced", description = "To use a custom activity listener")
+    private HttpActivityListener httpActivityListener;
+    @UriParam(label = "producer",
+              description = "To enable logging HTTP request and response. You can use a custom LoggingHttpActivityListener as httpActivityListener to control logging options.")
+    private boolean logHttpActivity;
 
     public HttpEndpoint() {
     }
 
-    public HttpEndpoint(String endPointURI, HttpComponent component, URI httpURI) throws URISyntaxException {
+    public HttpEndpoint(String endPointURI, HttpComponent component, URI httpURI) {
         this(endPointURI, component, httpURI, null);
     }
 
@@ -208,18 +228,28 @@ public class HttpEndpoint extends HttpCommonEndpoint {
         return answer;
     }
 
-    public synchronized HttpClient getHttpClient() {
-        if (httpClient == null) {
-            httpClient = createHttpClient();
+    public HttpClient getHttpClient() {
+        lock.lock();
+        try {
+            if (httpClient == null) {
+                httpClient = createHttpClient();
+            }
+            return httpClient;
+        } finally {
+            lock.unlock();
         }
-        return httpClient;
     }
 
     /**
      * Sets a custom HttpClient to be used by the producer
      */
-    public synchronized void setHttpClient(HttpClient httpClient) {
-        this.httpClient = httpClient;
+    public void setHttpClient(HttpClient httpClient) {
+        lock.lock();
+        try {
+            this.httpClient = httpClient;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -262,16 +292,11 @@ public class HttpEndpoint extends HttpCommonEndpoint {
 
         if (isAuthenticationPreemptive()) {
             // setup the preemptive authentication here
-            clientBuilder.addExecInterceptorFirst("preemptive-auth", new PreemptiveAuthExecChainHandler());
+            clientBuilder.addExecInterceptorFirst("preemptive-auth", new PreemptiveAuthExecChainHandler(this));
         }
         String userAgent = getUserAgent();
         if (userAgent != null) {
             clientBuilder.setUserAgent(userAgent);
-        }
-
-        HttpClientConfigurer configurer = getHttpClientConfigurer();
-        if (configurer != null) {
-            configurer.configureHttpClient(clientBuilder);
         }
 
         if (isBridgeEndpoint()) {
@@ -283,13 +308,56 @@ public class HttpEndpoint extends HttpCommonEndpoint {
             clientBuilder.setRedirectStrategy(DefaultRedirectStrategy.INSTANCE);
         }
 
+        HttpClientConfigurer configurer = getHttpClientConfigurer();
+        if (configurer != null) {
+            configurer.configureHttpClient(clientBuilder);
+        }
+
+        if (httpActivityListener != null) {
+            clientBuilder.addRequestInterceptorLast(new HttpRequestInterceptor() {
+                @Override
+                public void process(HttpRequest request, EntityDetails entity, HttpContext context)
+                        throws HttpException, IOException {
+                    Exchange exchange = (Exchange) context.getAttribute("org.apache.camel.Exchange");
+                    HttpHost host = (HttpHost) context.getAttribute("org.apache.hc.core5.http.HttpHost");
+                    context.setAttribute("org.apache.camel.util.StopWatch", new StopWatch());
+                    httpActivityListener.onRequestSubmitted(this, exchange, host, request, (HttpEntity) entity);
+                }
+            });
+            clientBuilder.addResponseInterceptorFirst(new HttpResponseInterceptor() {
+                @Override
+                public void process(HttpResponse response, EntityDetails entity, HttpContext context)
+                        throws HttpException, IOException {
+                    long elapsed = -1;
+                    StopWatch watch = (StopWatch) context.removeAttribute("org.apache.camel.util.StopWatch");
+                    if (watch != null) {
+                        elapsed = watch.taken();
+                    }
+                    Exchange exchange = (Exchange) context.removeAttribute("org.apache.camel.Exchange");
+                    HttpHost host = (HttpHost) context.removeAttribute("org.apache.hc.core5.http.HttpHost");
+                    httpActivityListener.onResponseReceived(this, exchange, host, response, (HttpEntity) entity, elapsed);
+                }
+            });
+        }
+
         LOG.debug("Setup the HttpClientBuilder {}", clientBuilder);
+
         return clientBuilder.build();
     }
 
     @Override
     public HttpComponent getComponent() {
         return (HttpComponent) super.getComponent();
+    }
+
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+        if (logHttpActivity && httpActivityListener == null) {
+            httpActivityListener = new LoggingHttpActivityListener();
+        }
+        CamelContextAware.trySetCamelContext(httpActivityListener, getCamelContext());
+        ServiceHelper.startService(httpActivityListener);
     }
 
     @Override
@@ -301,10 +369,32 @@ public class HttpEndpoint extends HttpCommonEndpoint {
         if (httpClient instanceof Closeable closeable) {
             IOHelper.close(closeable);
         }
+        ServiceHelper.stopService(httpActivityListener);
+        super.doStop();
     }
 
     // Properties
     //-------------------------------------------------------------------------
+
+    @Override
+    public int getLineNumber() {
+        return lineNumber;
+    }
+
+    @Override
+    public void setLineNumber(int lineNumber) {
+        this.lineNumber = lineNumber;
+    }
+
+    @Override
+    public String getLocation() {
+        return location;
+    }
+
+    @Override
+    public void setLocation(String location) {
+        this.location = location;
+    }
 
     public HttpClientBuilder getClientBuilder() {
         return clientBuilder;
@@ -638,11 +728,27 @@ public class HttpEndpoint extends HttpCommonEndpoint {
         this.userAgent = userAgent;
     }
 
+    public HttpActivityListener getHttpActivityListener() {
+        return httpActivityListener;
+    }
+
+    public void setHttpActivityListener(HttpActivityListener httpActivityListener) {
+        this.httpActivityListener = httpActivityListener;
+    }
+
+    public boolean isLogHttpActivity() {
+        return logHttpActivity;
+    }
+
+    public void setLogHttpActivity(boolean logHttpActivity) {
+        this.logHttpActivity = logHttpActivity;
+    }
+
     @ManagedAttribute(description = "Maximum number of allowed persistent connections")
     public int getClientConnectionsPoolStatsMax() {
         ConnPoolControl<?> pool = null;
-        if (clientConnectionManager instanceof ConnPoolControl) {
-            pool = (ConnPoolControl<?>) clientConnectionManager;
+        if (clientConnectionManager instanceof ConnPoolControl<?> connPoolControl) {
+            pool = connPoolControl;
         }
         if (pool != null) {
             PoolStats stats = pool.getTotalStats();
@@ -656,8 +762,8 @@ public class HttpEndpoint extends HttpCommonEndpoint {
     @ManagedAttribute(description = "Number of available idle persistent connections")
     public int getClientConnectionsPoolStatsAvailable() {
         ConnPoolControl<?> pool = null;
-        if (clientConnectionManager instanceof ConnPoolControl) {
-            pool = (ConnPoolControl<?>) clientConnectionManager;
+        if (clientConnectionManager instanceof ConnPoolControl<?> connPoolControl) {
+            pool = connPoolControl;
         }
         if (pool != null) {
             PoolStats stats = pool.getTotalStats();
@@ -671,8 +777,8 @@ public class HttpEndpoint extends HttpCommonEndpoint {
     @ManagedAttribute(description = "Number of persistent connections tracked by the connection manager currently being used to execute requests")
     public int getClientConnectionsPoolStatsLeased() {
         ConnPoolControl<?> pool = null;
-        if (clientConnectionManager instanceof ConnPoolControl) {
-            pool = (ConnPoolControl<?>) clientConnectionManager;
+        if (clientConnectionManager instanceof ConnPoolControl<?> connPoolControl) {
+            pool = connPoolControl;
         }
         if (pool != null) {
             PoolStats stats = pool.getTotalStats();
@@ -687,8 +793,8 @@ public class HttpEndpoint extends HttpCommonEndpoint {
                                     + " This can happen only if there are more worker threads contending for fewer connections.")
     public int getClientConnectionsPoolStatsPending() {
         ConnPoolControl<?> pool = null;
-        if (clientConnectionManager instanceof ConnPoolControl) {
-            pool = (ConnPoolControl<?>) clientConnectionManager;
+        if (clientConnectionManager instanceof ConnPoolControl<?> connPoolControl) {
+            pool = connPoolControl;
         }
         if (pool != null) {
             PoolStats stats = pool.getTotalStats();

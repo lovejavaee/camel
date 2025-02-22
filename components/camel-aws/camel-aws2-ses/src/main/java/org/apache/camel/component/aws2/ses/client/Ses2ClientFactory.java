@@ -18,6 +18,8 @@ package org.apache.camel.component.aws2.ses.client;
 
 import org.apache.camel.component.aws2.ses.Ses2Configuration;
 import org.apache.camel.component.aws2.ses.client.impl.Ses2ClientOptimizedImpl;
+import org.apache.camel.component.aws2.ses.client.impl.Ses2ClientProfileOptimizedImpl;
+import org.apache.camel.component.aws2.ses.client.impl.Ses2ClientSessionTokenImpl;
 import org.apache.camel.component.aws2.ses.client.impl.Ses2ClientStandardImpl;
 
 /**
@@ -35,7 +37,14 @@ public final class Ses2ClientFactory {
      * @return               SesClient
      */
     public static Ses2InternalClient getSesClient(Ses2Configuration configuration) {
-        return Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())
-                ? new Ses2ClientOptimizedImpl(configuration) : new Ses2ClientStandardImpl(configuration);
+        if (Boolean.TRUE.equals(configuration.isUseDefaultCredentialsProvider())) {
+            return new Ses2ClientOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseProfileCredentialsProvider())) {
+            return new Ses2ClientProfileOptimizedImpl(configuration);
+        } else if (Boolean.TRUE.equals(configuration.isUseSessionCredentials())) {
+            return new Ses2ClientSessionTokenImpl(configuration);
+        } else {
+            return new Ses2ClientStandardImpl(configuration);
+        }
     }
 }

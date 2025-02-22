@@ -38,16 +38,13 @@ import org.apache.camel.StreamCache;
 import org.apache.camel.component.cxf.common.CxfPayload;
 import org.apache.camel.test.junit5.ExchangeTestSupport;
 import org.apache.cxf.staxutils.StaxUtils;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CxfPayloadConverterTest extends ExchangeTestSupport {
     private Document document;
     private CxfPayload<String[]> payload;
@@ -56,9 +53,7 @@ public class CxfPayloadConverterTest extends ExchangeTestSupport {
     private FileInputStream inputStream;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void setupResources() throws Exception {
         File file = new File("src/test/resources/org/apache/camel/component/cxf/converter/test.xml");
         DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
         documentBuilderFactory.setNamespaceAware(true);

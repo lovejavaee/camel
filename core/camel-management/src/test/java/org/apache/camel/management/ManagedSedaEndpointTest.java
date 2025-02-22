@@ -55,7 +55,7 @@ public class ManagedSedaEndpointTest extends ManagementTestSupport {
         assertEquals(0, size.intValue());
 
         Boolean singleton = (Boolean) mbeanServer.getAttribute(name, "Singleton");
-        assertEquals(true, singleton.booleanValue());
+        assertTrue(singleton.booleanValue());
 
         // stop route
         context.getRouteController().stopRoute("foo");
@@ -66,8 +66,8 @@ public class ManagedSedaEndpointTest extends ManagementTestSupport {
         size = (Integer) mbeanServer.getAttribute(name, "CurrentQueueSize");
         assertEquals(1, size.intValue());
 
-        Long size2 = (Long) mbeanServer.invoke(name, "queueSize", null, null);
-        assertEquals(1, size2.longValue());
+        Integer size2 = (Integer) mbeanServer.invoke(name, "queueSize", null, null);
+        assertEquals(1, size2.intValue());
 
         String out
                 = (String) mbeanServer.invoke(name, "browseExchange", new Object[] { 0 }, new String[] { "java.lang.Integer" });
@@ -86,10 +86,10 @@ public class ManagedSedaEndpointTest extends ManagementTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("seda:start").routeId("foo").to("log:foo").to("mock:result");
             }
         };

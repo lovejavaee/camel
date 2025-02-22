@@ -20,7 +20,7 @@ import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.tracing.MockSpanAdapter;
 import org.apache.camel.tracing.SpanDecorator;
-import org.apache.camel.tracing.Tag;
+import org.apache.camel.tracing.TagConstants;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AbstractSpanDecoratorTest {
 
-    private static final String TEST_URI = "test:/uri";
+    private static final String TEST_URI = "test:/uri?query=hello";
 
     @Test
     public void testGetOperationName() {
@@ -58,6 +58,7 @@ public class AbstractSpanDecoratorTest {
         Endpoint endpoint = Mockito.mock(Endpoint.class);
 
         Mockito.when(endpoint.getEndpointUri()).thenReturn(TEST_URI);
+        Mockito.when(endpoint.toString()).thenReturn(TEST_URI);
 
         SpanDecorator decorator = new AbstractSpanDecorator() {
             @Override
@@ -73,9 +74,16 @@ public class AbstractSpanDecoratorTest {
 
         MockSpanAdapter span = new MockSpanAdapter();
 
-        decorator.pre(span, null, endpoint);
+        Exchange exchange = Mockito.mock(Exchange.class);
+        Mockito.when(exchange.getFromRouteId()).thenReturn("myRouteId");
 
-        assertEquals("camel-test", span.tags().get(Tag.COMPONENT.name()));
+        decorator.pre(span, exchange, endpoint);
+
+        assertEquals("camel-test", span.tags().get(TagConstants.COMPONENT));
+        assertEquals("test", span.tags().get(TagConstants.URL_SCHEME));
+        assertEquals("uri", span.tags().get(TagConstants.URL_PATH));
+        assertEquals("query=hello", span.tags().get(TagConstants.URL_QUERY));
+        assertEquals("myRouteId", span.tags().get(TagConstants.ROUTE_ID));
     }
 
     @Test
@@ -103,7 +111,7 @@ public class AbstractSpanDecoratorTest {
 
         decorator.post(span, exchange, null);
 
-        assertEquals(true, span.tags().get(Tag.ERROR.name()));
+        assertEquals(true, span.tags().get(TagConstants.ERROR));
         assertEquals(1, span.logEntries().size());
         assertEquals("error", span.logEntries().get(0).fields().get("event"));
         assertEquals("Exception", span.logEntries().get(0).fields().get("error.kind"));

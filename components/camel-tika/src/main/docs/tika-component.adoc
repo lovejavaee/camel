@@ -5,6 +5,7 @@
 :description: Parse documents and extract metadata and text using Apache Tika.
 :since: 2.19
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 //Manually maintained attributes
 :camel-spring-boot-name: tika
@@ -13,12 +14,12 @@
 
 *{component-header}*
 
-The *Tika*: components provides the ability to detect and parse documents with 
+The Tika component provides the ability to detect and parse documents with
 Apache Tika. This component uses
-https://tika.apache.org/[Apache Tika] as underlying library to work
+https://tika.apache.org/[Apache Tika] as the underlying library to work
 with documents.
 
-In order to use the Tika component, Maven users will need to add the
+To use the Tika component, Maven users will need to add the
 following dependency to their `pom.xml`:
 
 *pom.xml*
@@ -48,8 +49,9 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
+== Usage
 
-== To Detect a file's MIME Type
+=== To Detect a file's MIME Type
 
 The file should be placed in the Body.
 
@@ -59,7 +61,7 @@ from("direct:start")
         .to("tika:detect");
 ----
 
-== To Parse a File
+=== To Parse a File
 
 The file should be placed in the Body.
 

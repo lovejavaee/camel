@@ -19,14 +19,17 @@ package org.apache.camel.maven.packaging;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import javax.inject.Inject;
 
 import org.apache.camel.tooling.util.PackageHelper;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.project.MavenProjectHelper;
+import org.codehaus.plexus.build.BuildContext;
 
 /**
  * Analyses the Camel EIPs in a project and generates extra descriptor information for easier auto-discovery in Camel.
@@ -41,10 +44,15 @@ public class PackageModelMojo extends AbstractGeneratorMojo {
     protected File buildDir;
 
     /**
-     * The output directory for generated models file
+     * The output directory for the generated model files
      */
     @Parameter(defaultValue = "${project.basedir}/src/generated/resources")
     protected File outDir;
+
+    @Inject
+    public PackageModelMojo(MavenProjectHelper projectHelper, BuildContext buildContext) {
+        super(projectHelper, buildContext);
+    }
 
     /**
      * Execute goal.
@@ -67,18 +75,20 @@ public class PackageModelMojo extends AbstractGeneratorMojo {
         // find all json files in camel-core
         List<String> models;
         try (Stream<Path> jsonFiles
-                = PackageHelper.findJsonFiles(buildDir.toPath().resolve("classes/org/apache/camel/model"))) {
+                = PackageHelper.findJsonFiles(buildDir.toPath().resolve("classes/META-INF/org/apache/camel/model"))) {
             models = jsonFiles
+                    // special for app should not be in the summary
+                    .filter(p -> !p.getParent().getFileName().toString().endsWith("app"))
                     .map(p -> p.getFileName().toString())
                     // strip out .json from the name
                     .map(s -> s.substring(0, s.length() - PackageHelper.JSON_SUFIX.length()))
                     // sort
-                    .sorted().collect(Collectors.toList());
+                    .sorted().toList();
         }
 
         if (!models.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("# " + GENERATED_MSG + NL);
+            StringBuilder sb = new StringBuilder(256);
+            sb.append("# ").append(GENERATED_MSG).append(NL);
             for (String name : models) {
                 sb.append(name).append(NL);
             }

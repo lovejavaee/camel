@@ -37,11 +37,9 @@ import static org.apache.camel.test.junit5.TestSupport.deleteDirectory;
 
 public class ZipFileSplitOneFileTest extends CamelTestSupport {
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
+    public void deleteTestDirs() {
         deleteDirectory("target/zip-unmarshal");
-        super.setUp();
     }
 
     @Test

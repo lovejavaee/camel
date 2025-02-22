@@ -17,27 +17,19 @@
 
 package org.apache.camel.test.infra.common.services;
 
-public interface TestService extends AutoCloseable {
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 
-    /**
-     * Register service properties (such as using System.setProperties) so that they can be resolved at distance (ie.:
-     * when using Spring's PropertySourcesPlaceholderConfigurer or simply when trying to collect test infra information
-     * outside of the test class itself).
-     */
-    void registerProperties();
-
-    /**
-     * Perform any initialization necessary
-     */
-    void initialize();
-
-    /**
-     * Shuts down the service after the test has completed
-     */
-    void shutdown();
+public interface TestService extends AutoCloseable, BeforeAllCallback, AfterAllCallback, InfrastructureService {
 
     @Override
-    default void close() {
-        shutdown();
+    default void beforeAll(ExtensionContext extensionContext) throws Exception {
+        TestServiceUtil.tryInitialize(this, extensionContext);
+    }
+
+    @Override
+    default void afterAll(ExtensionContext extensionContext) throws Exception {
+        TestServiceUtil.tryShutdown(this, extensionContext);
     }
 }

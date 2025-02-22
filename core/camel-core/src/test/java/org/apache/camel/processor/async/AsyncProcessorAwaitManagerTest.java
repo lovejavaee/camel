@@ -55,16 +55,16 @@ public class AsyncProcessorAwaitManagerTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.addComponent("async", new MyAsyncComponent());
 
                 from("direct:start").routeId("myRoute").to("mock:before").to("async:bye:camel").id("myAsync").to("mock:after")
                         .process(new Processor() {
                             @Override
-                            public void process(Exchange exchange) throws Exception {
+                            public void process(Exchange exchange) {
                                 int size = PluginHelper.getAsyncProcessorAwaitManager(context).size();
                                 log.info("async inflight: {}", size);
                                 assertEquals(1, size);
@@ -77,7 +77,6 @@ public class AsyncProcessorAwaitManagerTest extends ContextTestSupport {
                                 log.info("Thread {} has waited for {} msec.", thread.getBlockedThread().getName(), wait);
 
                                 assertEquals("myRoute", thread.getRouteId());
-                                // assertEquals("myAsync", thread.getNodeId());
                                 assertThat(thread.getNodeId()).matches("process[0-9]+");
                             }
                         }).to("mock:result");

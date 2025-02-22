@@ -31,6 +31,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.camel.Exchange;
+import org.apache.camel.Expression;
 import org.apache.camel.InvalidPayloadException;
 import org.apache.camel.support.ExchangeHelper;
 import org.apache.camel.support.ExpressionAdapter;
@@ -62,12 +63,18 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
 
     protected final String tagToken;
     protected final String inheritNamespaceToken;
+    protected final Expression source;
 
     public TokenXMLExpressionIterator(String tagToken, String inheritNamespaceToken) {
+        this(null, tagToken, inheritNamespaceToken);
+    }
+
+    public TokenXMLExpressionIterator(Expression source, String tagToken, String inheritNamespaceToken) {
         StringHelper.notEmpty(tagToken, "tagToken");
         this.tagToken = tagToken;
         // namespace token is optional
         this.inheritNamespaceToken = inheritNamespaceToken;
+        this.source = source;
     }
 
     protected Iterator<?> createIterator(Exchange exchange, InputStream in, String charset) {
@@ -135,7 +142,14 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
     protected Object doEvaluate(Exchange exchange, boolean closeStream) {
         InputStream in = null;
         try {
-            in = exchange.getIn().getMandatoryBody(InputStream.class);
+            if (source != null) {
+                in = source.evaluate(exchange, InputStream.class);
+            } else {
+                in = exchange.getIn().getBody(InputStream.class);
+            }
+            if (in == null) {
+                throw new InvalidPayloadException(exchange, InputStream.class);
+            }
             // we may read from a file, and want to support custom charset defined on the exchange
             String charset = ExchangeHelper.getCharsetName(exchange);
             return createIterator(exchange, in, charset);
@@ -227,7 +241,7 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
                     head = head.substring(0, head.length() - 1);
                     empty = true;
                 }
-                StringBuilder sb = new StringBuilder();
+                StringBuilder sb = new StringBuilder(256);
                 // append root namespaces to local start token
                 // grab the text
                 String tail = StringHelper.after(next, ">");
@@ -236,7 +250,7 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
                         .toString();
             } else if (wrapToken) {
                 // wrap the token
-                StringBuilder sb = new StringBuilder();
+                StringBuilder sb = new StringBuilder(256);
                 next = sb.append(wrapHead).append(next).append(wrapTail).toString();
             }
 
@@ -244,7 +258,7 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
         }
 
         private String getMissingInherritNamespaces(final String text) {
-            final StringBuilder sb = new StringBuilder();
+            final StringBuilder sb = new StringBuilder(256);
             if (text != null) {
                 boolean first = true;
                 final String[] containedNamespaces = getNamespacesFromNamespaceTokenSplitter(text);
@@ -282,19 +296,7 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
             }
 
             // find namespaces (there can be attributes mixed, so we should only grab the namespaces)
-            Map<String, String> namespaces = new LinkedHashMap<>();
-            Matcher matcher = NAMESPACE_PATTERN.matcher(text);
-            while (matcher.find()) {
-                String prefix = matcher.group(1);
-                String url = matcher.group(2);
-                if (ObjectHelper.isEmpty(prefix)) {
-                    prefix = "_DEFAULT_";
-                } else {
-                    // skip leading :
-                    prefix = prefix.substring(1);
-                }
-                namespaces.put(prefix, url);
-            }
+            final Map<String, String> namespaces = toStringStringMap(text);
 
             // did we find any namespaces
             if (namespaces.isEmpty()) {
@@ -302,7 +304,7 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
             }
 
             // build namespace String
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder(256);
             for (Map.Entry<String, String> entry : namespaces.entrySet()) {
                 String key = entry.getKey();
                 // note the value is already quoted
@@ -355,6 +357,23 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
 
     }
 
+    private static Map<String, String> toStringStringMap(String text) {
+        Map<String, String> namespaces = new LinkedHashMap<>();
+        Matcher matcher = NAMESPACE_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String prefix = matcher.group(1);
+            String url = matcher.group(2);
+            if (ObjectHelper.isEmpty(prefix)) {
+                prefix = "_DEFAULT_";
+            } else {
+                // skip leading :
+                prefix = prefix.substring(1);
+            }
+            namespaces.put(prefix, url);
+        }
+        return namespaces;
+    }
+
     private static String buildXMLTail(String xmlhead) {
         // assume the input text is a portion of a well-formed xml
         List<String> tags = new ArrayList<>();
@@ -382,7 +401,7 @@ public class TokenXMLExpressionIterator extends ExpressionAdapter {
                 p = ep;
             }
         }
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(128);
         for (int i = tags.size() - 1; i >= 0; i--) {
             sb.append("</").append(tags.get(i)).append(">");
         }

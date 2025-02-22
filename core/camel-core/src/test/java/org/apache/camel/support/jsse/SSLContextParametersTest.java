@@ -30,9 +30,11 @@ import javax.net.ssl.SSLSocket;
 
 import org.apache.camel.CamelContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Isolated("This test is regularly flaky")
 public class SSLContextParametersTest extends AbstractJsseParametersTest {
 
     @Test
@@ -49,12 +51,11 @@ public class SSLContextParametersTest extends AbstractJsseParametersTest {
                 List.of(Pattern.compile("SSL.*")));
         assertEquals(2, result.size());
         assertStartsWith(result, "TLS");
-        try {
-            assertStartsWith((String[]) null, "TLS");
-            fail("We should got an exception here!");
-        } catch (AssertionError ex) {
-            assertTrue(ex.getMessage().contains("The values should not be null"), "Get a wrong message");
-        }
+
+        AssertionError error
+                = assertThrows(AssertionError.class, () -> assertStartsWith((String[]) null, "TLS"),
+                        "We should got an exception here!");
+        assertTrue(error.getMessage().contains("The values should not be null"), "Get a wrong message");
     }
 
     @Test
@@ -68,7 +69,7 @@ public class SSLContextParametersTest extends AbstractJsseParametersTest {
         ksp.setType("{{keyStoreParameters.type}}");
         ksp.setProvider("{{keyStoreParameters.provider}}");
         ksp.setResource("{{keyStoreParameters.resource}}");
-        ksp.setPassword("{{keyStoreParamerers.password}}");
+        ksp.setPassword("{{keyStoreParameters.password}}");
 
         KeyManagersParameters kmp = new KeyManagersParameters();
         kmp.setCamelContext(camelContext);

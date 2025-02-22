@@ -60,10 +60,12 @@ import org.apache.camel.util.IOHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.camel.support.http.HttpUtil.determineResponseCode;
+
 /**
  * Binding between {@link HttpMessage} and {@link HttpServletResponse}.
  * <p/>
- * Uses by default the {@link org.apache.camel.http.common.HttpHeaderFilterStrategy}
+ * Uses by default the {@link org.apache.camel.http.base.HttpHeaderFilterStrategy}
  */
 public class DefaultHttpBinding implements HttpBinding {
 
@@ -84,11 +86,12 @@ public class DefaultHttpBinding implements HttpBinding {
     private boolean eagerCheckContentAvailable;
     private boolean transferException;
     private boolean muteException;
+    private boolean logException;
     private boolean allowJavaSerializedObject;
     private boolean mapHttpMessageBody = true;
     private boolean mapHttpMessageHeaders = true;
     private boolean mapHttpMessageFormUrlEncodedBody = true;
-    private HeaderFilterStrategy headerFilterStrategy = new HttpHeaderFilterStrategy();
+    private HeaderFilterStrategy headerFilterStrategy = new org.apache.camel.http.base.HttpHeaderFilterStrategy();
     private String fileNameExtWhitelist;
 
     public DefaultHttpBinding() {
@@ -104,6 +107,7 @@ public class DefaultHttpBinding implements HttpBinding {
         this.headerFilterStrategy = endpoint.getHeaderFilterStrategy();
         this.transferException = endpoint.isTransferException();
         this.muteException = endpoint.isMuteException();
+        this.logException = endpoint.isLogException();
         if (endpoint.getComponent() != null) {
             this.allowJavaSerializedObject = endpoint.getComponent().isAllowJavaSerializedObject();
         }
@@ -197,11 +201,14 @@ public class DefaultHttpBinding implements HttpBinding {
     protected void readBody(HttpServletRequest request, Message message) {
         LOG.trace("readBody {}", request);
 
+        // Process attachments first as some servlet containers expect the body to not have been read at this point
+        populateAttachments(request, message);
+
         // lets parse the body
         Object body = message.getBody();
         // reset the stream cache if the body is the instance of StreamCache
-        if (body instanceof StreamCache) {
-            ((StreamCache) body).reset();
+        if (body instanceof StreamCache streamCache) {
+            streamCache.reset();
         }
 
         // if content type is serialized java object, then de-serialize it to a Java object
@@ -224,8 +231,6 @@ public class DefaultHttpBinding implements HttpBinding {
                 message.setBody(null);
             }
         }
-
-        populateAttachments(request, message);
     }
 
     protected void populateRequestParameters(HttpServletRequest request, Message message) {
@@ -236,7 +241,9 @@ public class DefaultHttpBinding implements HttpBinding {
             String name = (String) names.nextElement();
             // there may be multiple values for the same name
             String[] values = request.getParameterValues(name);
-            LOG.trace("HTTP parameter {} = {}", name, values);
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("HTTP parameter {} = {}", name, HttpHelper.sanitizeLog(values));
+            }
 
             if (values != null) {
                 for (String value : values) {
@@ -269,8 +276,8 @@ public class DefaultHttpBinding implements HttpBinding {
                 // lets parse the body
                 Object body = message.getBody();
                 // reset the stream cache if the body is the instance of StreamCache
-                if (body instanceof StreamCache) {
-                    ((StreamCache) body).reset();
+                if (body instanceof StreamCache streamCache) {
+                    streamCache.reset();
                 }
 
                 // Push POST form params into the headers to retain compatibility with DefaultHttpBinding
@@ -292,8 +299,8 @@ public class DefaultHttpBinding implements HttpBinding {
                 }
 
                 // reset the stream cache if the body is the instance of StreamCache
-                if (body instanceof StreamCache) {
-                    ((StreamCache) body).reset();
+                if (body instanceof StreamCache streamCache) {
+                    streamCache.reset();
                 }
             }
         }
@@ -318,7 +325,7 @@ public class DefaultHttpBinding implements HttpBinding {
             String name = (String) names.nextElement();
             Object object = request.getAttribute(name);
             LOG.trace("HTTP attachment {} = {}", name, object);
-            if (object instanceof File) {
+            if (object instanceof File fileObject) {
                 String fileName = request.getParameter(name);
                 // fix file name if using malicious parameter name
                 if (fileName != null) {
@@ -338,7 +345,7 @@ public class DefaultHttpBinding implements HttpBinding {
                 }
                 if (accepted) {
                     AttachmentMessage am = message.getExchange().getMessage(AttachmentMessage.class);
-                    am.addAttachment(fileName, new DataHandler(new CamelFileDataSource((File) object, fileName)));
+                    am.addAttachment(fileName, new DataHandler(new CamelFileDataSource(fileObject, fileName)));
                 } else {
                     LOG.debug(
                             "Cannot add file as attachment: {} because the file is not accepted according to fileNameExtWhitelist: {}",
@@ -387,6 +394,9 @@ public class DefaultHttpBinding implements HttpBinding {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             response.setContentLength(0);
             response.setContentType("text/plain");
+            if (isLogException()) {
+                LOG.error("Server internal error response returned due to '{}'", exception.getMessage(), exception);
+            }
         } else {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 
@@ -445,40 +455,15 @@ public class DefaultHttpBinding implements HttpBinding {
         }
     }
 
-    /*
-     * set the HTTP status code
-     * NOTE: this is similar to the Netty-Http and Undertow approach
-     * TODO: we may want to refactor this class so that
-     * the status code is determined in one place
-     */
-    private int determineResponseCode(Exchange camelExchange, Object body) {
-        boolean failed = camelExchange.isFailed();
-        int defaultCode = failed ? 500 : 200;
-
-        Message message = camelExchange.getMessage();
-        Integer currentCode = message.getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
-        int codeToUse = currentCode == null ? defaultCode : currentCode;
-
-        if (codeToUse != 500) {
-            if (body == null || body instanceof String && ((String) body).trim().isEmpty()) {
-                // no content
-                codeToUse = currentCode == null ? 204 : currentCode;
-            }
-        }
-
-        return codeToUse;
-    }
-
     protected String convertHeaderValueToString(Exchange exchange, Object headerValue) {
-        if ((headerValue instanceof Date || headerValue instanceof Locale)
-                && convertDateAndLocaleLocally(exchange)) {
-            if (headerValue instanceof Date) {
-                return toHttpDate((Date) headerValue);
-            } else {
-                return toHttpLanguage((Locale) headerValue);
-            }
+        if (headerValue instanceof Date date && convertDateAndLocaleLocally(exchange)) {
+            return toHttpDate(date);
         } else {
-            return exchange.getContext().getTypeConverter().convertTo(String.class, headerValue);
+            if (headerValue instanceof Locale locale && convertDateAndLocaleLocally(exchange)) {
+                return toHttpLanguage(locale);
+            } else {
+                return exchange.getContext().getTypeConverter().convertTo(String.class, headerValue);
+            }
         }
     }
 
@@ -547,11 +532,10 @@ public class DefaultHttpBinding implements HttpBinding {
                     // we need to setup the length if message is not chucked
                     response.setContentLength(len);
                     OutputStream current = stream.getCurrentStream();
-                    if (current instanceof ByteArrayOutputStream) {
+                    if (current instanceof ByteArrayOutputStream bos) {
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("Streaming (direct) response in non-chunked mode with content-length {}", len);
                         }
-                        ByteArrayOutputStream bos = (ByteArrayOutputStream) current;
                         bos.writeTo(os);
                     } else {
                         if (LOG.isDebugEnabled()) {
@@ -596,8 +580,8 @@ public class DefaultHttpBinding implements HttpBinding {
         if (message.getHeader(Exchange.HTTP_CHUNKED) == null) {
             // check the endpoint option
             Endpoint endpoint = exchange.getFromEndpoint();
-            if (endpoint instanceof HttpCommonEndpoint) {
-                answer = ((HttpCommonEndpoint) endpoint).isChunked();
+            if (endpoint instanceof HttpCommonEndpoint httpCommonEndpoint) {
+                answer = httpCommonEndpoint.isChunked();
             }
         } else {
             answer = message.getHeader(Exchange.HTTP_CHUNKED, boolean.class);
@@ -610,8 +594,7 @@ public class DefaultHttpBinding implements HttpBinding {
         GZIPOutputStream gos = new GZIPOutputStream(os);
 
         Object body = exchange.getIn().getBody();
-        if (body instanceof InputStream) {
-            InputStream is = (InputStream) body;
+        if (body instanceof InputStream is) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Streaming GZIP response in chunked mode with buffer size {}", response.getBufferSize());
             }
@@ -696,6 +679,16 @@ public class DefaultHttpBinding implements HttpBinding {
     @Override
     public void setMuteException(boolean muteException) {
         this.muteException = muteException;
+    }
+
+    @Override
+    public boolean isLogException() {
+        return logException;
+    }
+
+    @Override
+    public void setLogException(boolean logException) {
+        this.logException = logException;
     }
 
     @Override

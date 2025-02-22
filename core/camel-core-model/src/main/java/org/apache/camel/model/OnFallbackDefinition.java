@@ -16,6 +16,7 @@
  */
 package org.apache.camel.model;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,33 +25,48 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlElementRef;
 import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlTransient;
 
 import org.apache.camel.spi.Metadata;
 
 /**
  * Route to be executed when Circuit Breaker EIP executes fallback
  */
-@Metadata(label = "eip,routing")
+@Metadata(label = "eip,routing,error")
 @XmlRootElement(name = "onFallback")
 @XmlAccessorType(XmlAccessType.FIELD)
-public class OnFallbackDefinition extends OutputDefinition<OnFallbackDefinition> {
+public class OnFallbackDefinition extends OptionalIdentifiedDefinition<OnFallbackDefinition>
+        implements CopyableDefinition<OnFallbackDefinition>, Block, OutputNode {
 
+    @XmlTransient
+    private ProcessorDefinition<?> parent;
     @XmlAttribute
     @Metadata(label = "advanced", defaultValue = "false", javaType = "java.lang.Boolean")
     private String fallbackViaNetwork;
+    @XmlElementRef
+    private List<ProcessorDefinition<?>> outputs = new ArrayList<>();
 
     public OnFallbackDefinition() {
     }
 
+    protected OnFallbackDefinition(OnFallbackDefinition source) {
+        super(source);
+        this.parent = source.parent;
+        this.fallbackViaNetwork = source.fallbackViaNetwork;
+        this.outputs = ProcessorDefinitionHelper.deepCopyDefinitions(source.outputs);
+    }
+
     @Override
+    public OnFallbackDefinition copyDefinition() {
+        return new OnFallbackDefinition(this);
+    }
+
     public List<ProcessorDefinition<?>> getOutputs() {
         return outputs;
     }
 
-    @XmlElementRef
-    @Override
     public void setOutputs(List<ProcessorDefinition<?>> outputs) {
-        super.setOutputs(outputs);
+        this.outputs = outputs;
     }
 
     @Override
@@ -96,6 +112,20 @@ public class OnFallbackDefinition extends OutputDefinition<OnFallbackDefinition>
      */
     public void setFallbackViaNetwork(String fallbackViaNetwork) {
         this.fallbackViaNetwork = fallbackViaNetwork;
+    }
+
+    @Override
+    public ProcessorDefinition<?> getParent() {
+        return parent;
+    }
+
+    public void setParent(ProcessorDefinition<?> parent) {
+        this.parent = parent;
+    }
+
+    @Override
+    public void addOutput(ProcessorDefinition<?> output) {
+        outputs.add(output);
     }
 
 }

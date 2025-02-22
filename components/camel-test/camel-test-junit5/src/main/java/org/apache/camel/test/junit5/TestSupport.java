@@ -23,6 +23,10 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.function.IntConsumer;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
@@ -30,19 +34,26 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Expression;
 import org.apache.camel.InvalidPayloadException;
 import org.apache.camel.Message;
+import org.apache.camel.NoSuchEndpointException;
 import org.apache.camel.Predicate;
+import org.apache.camel.ProducerTemplate;
 import org.apache.camel.Route;
 import org.apache.camel.builder.Builder;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.builder.ValueBuilder;
+import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.camel.spi.Debugger;
 import org.apache.camel.spi.FactoryFinder;
+import org.apache.camel.spi.Language;
 import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.support.PredicateAssertHelper;
+import org.apache.camel.test.junit5.util.CamelContextTestHelper;
+import org.apache.camel.util.StringHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.camel.test.junit5.util.ExtensionHelper.normalizeUri;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -189,16 +200,21 @@ public final class TestSupport {
      * Asserts that the given expression when evaluated returns the given answer.
      */
     public static Object assertExpression(Expression expression, Exchange exchange, Object expectedAnswer) {
+        final Object actualAnswer = getActualAnswer(expression, exchange, expectedAnswer);
+
+        LOG.debug("Evaluated expression: {} on exchange: {} result: {}", expression, exchange, actualAnswer);
+
+        assertEquals(expectedAnswer, actualAnswer, "Expression: " + expression + " on Exchange: " + exchange);
+        return actualAnswer;
+    }
+
+    private static Object getActualAnswer(Expression expression, Exchange exchange, Object expectedAnswer) {
         Object actualAnswer;
         if (expectedAnswer != null) {
             actualAnswer = expression.evaluate(exchange, expectedAnswer.getClass());
         } else {
             actualAnswer = expression.evaluate(exchange, Object.class);
         }
-
-        LOG.debug("Evaluated expression: {} on exchange: {} result: {}", expression, exchange, actualAnswer);
-
-        assertEquals(expectedAnswer, actualAnswer, "Expression: " + expression + " on Exchange: " + exchange);
         return actualAnswer;
     }
 
@@ -234,6 +250,19 @@ public final class TestSupport {
 
         assertEquals(expectedValue, actualValue, "Predicate: " + predicate + " on Exchange: " + exchange);
         return actualValue;
+    }
+
+    /**
+     * Asserts that the given language name and expression evaluates to the given value on a specific exchange
+     */
+    public static void assertExpression(
+            CamelContext context, Exchange exchange, String languageName, String expressionText, Object expectedValue) {
+        Language language = assertResolveLanguage(context, languageName);
+
+        Expression expression = language.createExpression(expressionText);
+        assertNotNull(expression, "No Expression could be created for text: " + expressionText + " language: " + language);
+
+        assertExpression(expression, exchange, expectedValue);
     }
 
     /**
@@ -372,6 +401,30 @@ public final class TestSupport {
         assertFalse(file.exists(), "File " + filename + " should not exist");
     }
 
+    /**
+     * Asserts that the language name can be resolved
+     */
+    @Deprecated(since = "4.7.0")
+    public static Language assertResolveLanguage(CamelContext context, String languageName) {
+        Language language = context.resolveLanguage(languageName);
+        assertNotNull(language, "No language found for name: " + languageName);
+        return language;
+    }
+
+    /**
+     * Asserts that the given language name and predicate expression evaluates to the expected value on the message
+     * exchange
+     */
+    public static void assertPredicate(
+            CamelContext context, String languageName, String expressionText, Exchange exchange, boolean expected) {
+        Language language = assertResolveLanguage(context, languageName);
+
+        Predicate predicate = language.createPredicate(expressionText);
+        assertNotNull(predicate, "No Predicate could be created for text: " + expressionText + " language: " + language);
+
+        assertPredicate(predicate, exchange, expected);
+    }
+
     // -----------------------------------------------------------------------
     // Other helpers, resolution, file, getRouteList
     // -----------------------------------------------------------------------
@@ -462,7 +515,7 @@ public final class TestSupport {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    // Ignore
+                    Thread.currentThread().interrupt();
                 }
             }
         }
@@ -481,12 +534,15 @@ public final class TestSupport {
 
         if (file.isDirectory()) {
             File[] files = file.listFiles();
-            for (File child : files) {
-                recursivelyDeleteDirectory(child);
+            if (files != null) {
+                for (File child : files) {
+                    recursivelyDeleteDirectory(child);
+                }
             }
         }
-        boolean success = file.delete();
-        if (!success) {
+        try {
+            Files.delete(file.toPath());
+        } catch (IOException e) {
             LOG.warn("Deletion of file: {} failed", file.getAbsolutePath());
         }
     }
@@ -549,26 +605,6 @@ public final class TestSupport {
     }
 
     /**
-     * Tells whether the current Java version is 1.8.
-     *
-     * @return <tt>true</tt> if its Java 1.8, <tt>false</tt> if its not (for example Java 1.7 or older)
-     */
-    public static boolean isJava18() {
-        return getJavaMajorVersion() == 8;
-
-    }
-
-    /**
-     * Tells whether the current Java version is 1.9.
-     *
-     * @return <tt>true</tt> if its Java 1.9, <tt>false</tt> if its not (for example Java 1.8 or older)
-     */
-    public static boolean isJava19() {
-        return getJavaMajorVersion() == 9;
-
-    }
-
-    /**
      * Returns the current major Java version e.g 8.
      * <p/>
      * Uses <tt>java.specification.version</tt> from the system properties to determine the major version.
@@ -577,11 +613,7 @@ public final class TestSupport {
      */
     public static int getJavaMajorVersion() {
         String javaSpecVersion = System.getProperty("java.specification.version");
-        if (javaSpecVersion.contains(".")) { // before jdk 9
-            return Integer.parseInt(javaSpecVersion.split("\\.")[1]);
-        } else {
-            return Integer.parseInt(javaSpecVersion);
-        }
+        return Integer.parseInt(javaSpecVersion);
     }
 
     /**
@@ -604,4 +636,152 @@ public final class TestSupport {
     public static String fileUri(Path testDirectory, String query) {
         return "file:" + testDirectory + (query.startsWith("?") ? "" : "/") + query;
     }
+
+    public static void executeSlowly(int count, long interval, TimeUnit timeUnit, IntConsumer task) throws Exception {
+        for (int i = 0; i < count; i++) {
+            task.accept(i);
+            Thread.sleep(timeUnit.toMillis(interval));
+        }
+    }
+
+    public static <T extends Endpoint> T getMandatoryEndpoint(CamelContext context, String uri, Class<T> type) {
+        T endpoint = context.getEndpoint(uri, type);
+        assertNotNull(endpoint, "No endpoint found for uri: " + uri);
+        return endpoint;
+    }
+
+    public static Endpoint getMandatoryEndpoint(CamelContext context, String uri) {
+        Endpoint endpoint = context.getEndpoint(uri);
+        assertNotNull(endpoint, "No endpoint found for uri: " + uri);
+        return endpoint;
+    }
+
+    public static void sendBody(
+            ProducerTemplate template, String endpointUri, final Object body, final Map<String, Object> headers) {
+        template.send(endpointUri, exchange -> {
+            Message in = exchange.getIn();
+            in.setBody(body);
+            for (Map.Entry<String, Object> entry : headers.entrySet()) {
+                in.setHeader(entry.getKey(), entry.getValue());
+            }
+        });
+    }
+
+    /**
+     * Sends a message to the given endpoint URI with the body value
+     *
+     * @param endpointUri the URI of the endpoint to send to
+     * @param body        the body for the message
+     */
+    public static void sendBody(ProducerTemplate template, String endpointUri, final Object body) {
+        template.send(endpointUri, exchange -> {
+            Message in = exchange.getIn();
+            in.setBody(body);
+        });
+    }
+
+    /**
+     * Sends a message to the given endpoint URI with the body value
+     *
+     * @param template    the producer template to use to send the messages
+     * @param endpointUri the URI of the endpoint to send to
+     * @param bodies      the bodies for the message
+     */
+    public static void sendBodies(ProducerTemplate template, String endpointUri, Object... bodies) {
+        for (Object body : bodies) {
+            sendBody(template, endpointUri, body);
+        }
+    }
+
+    /**
+     * Resolves the {@link MockEndpoint} using a URI of the form <code>mock:someName</code>, optionally creating it if
+     * it does not exist. This implementation will lookup existing mock endpoints and match on the mock queue name, eg
+     * mock:foo and mock:foo?retainFirst=5 would match as the queue name is foo.
+     *
+     * @param  uri                     the URI which typically starts with "mock:" and has some name
+     * @param  create                  whether to allow the endpoint to be created if it doesn't exist
+     * @return                         the mock endpoint or an {@link NoSuchEndpointException} is thrown if it could not
+     *                                 be resolved
+     * @throws NoSuchEndpointException is the mock endpoint does not exist
+     */
+    public static MockEndpoint getMockEndpoint(CamelContext context, String uri, boolean create)
+            throws NoSuchEndpointException {
+        // look for existing mock endpoints that have the same queue name, and
+        // to
+        // do that we need to normalize uri and strip out query parameters and
+        // whatnot
+        final String normalizedUri = normalizeUri(uri);
+        // strip query
+        final String target = StringHelper.before(normalizedUri, "?", normalizedUri);
+
+        // lookup endpoints in registry and try to find it
+        return CamelContextTestHelper.lookupEndpoint(context, uri, create, target);
+    }
+
+    public static Properties loadExternalPropertiesQuietly(Class<?> clazz, String path) {
+        try {
+            return loadExternalProperties(clazz, path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static Properties loadExternalPropertiesQuietly(ClassLoader loader, String path) {
+        try {
+            return loadExternalProperties(loader, path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static Properties loadExternalPropertiesQuietly(Properties properties, Class<?> clazz, String path) {
+        try {
+            return loadExternalProperties(properties, clazz, path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static Properties loadExternalPropertiesQuietly(Properties properties, ClassLoader loader, String path) {
+        try {
+            return loadExternalProperties(properties, loader, path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static Properties loadExternalProperties(Class<?> clazz, String path) throws IOException {
+        final Properties properties = new Properties();
+        return loadExternalProperties(properties, clazz, path);
+    }
+
+    public static Properties loadExternalProperties(ClassLoader loader, String path) throws IOException {
+        final Properties properties = new Properties();
+        return loadExternalProperties(properties, loader, path);
+    }
+
+    public static Properties loadExternalProperties(Properties properties, Class<?> clazz, String path) throws IOException {
+        try (var stream = clazz.getResourceAsStream(path)) {
+            properties.load(stream);
+
+            return properties;
+        } catch (Exception e) {
+            throw new IOException(
+                    String.format("%s could not be loaded: %s", path, e.getMessage()),
+                    e);
+        }
+    }
+
+    public static Properties loadExternalProperties(Properties properties, ClassLoader loader, String path) throws IOException {
+        try (var stream = loader.getResourceAsStream(path)) {
+            properties.load(stream);
+
+            return properties;
+        } catch (Exception e) {
+            throw new IOException(
+                    String.format("%s could not be loaded: %s", path, e.getMessage()),
+                    e);
+        }
+    }
+
 }

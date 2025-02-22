@@ -34,7 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-public class KafkaConsumerAutoInstResumeRouteStrategyIT extends BaseEmbeddedKafkaTestSupport {
+public class KafkaConsumerAutoInstResumeRouteStrategyIT extends BaseKafkaTestSupport {
     private static final String TOPIC = "resumable-route-auto";
 
     public static KafkaResumeStrategyConfigurationBuilder getDefaultKafkaResumeStrategyConfigurationBuilder() {
@@ -53,6 +53,7 @@ public class KafkaConsumerAutoInstResumeRouteStrategyIT extends BaseEmbeddedKafk
     @BeforeEach
     public void before() {
         Properties props = KafkaTestUtil.getDefaultProperties(service);
+        KafkaTestUtil.createTopic(service, TOPIC, 1);
         KafkaProducer<Object, Object> producer = new KafkaProducer<>(props);
 
         for (int i = 0; i < 10; i++) {

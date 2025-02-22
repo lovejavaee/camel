@@ -25,8 +25,8 @@ import org.apache.camel.builder.NotifyBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class SedaNoConsumerTest extends ContextTestSupport {
 
@@ -35,10 +35,11 @@ public class SedaNoConsumerTest extends ContextTestSupport {
         return false;
     }
 
+    @Test
     public void testInOnly() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("seda:foo?timeout=1000");
             }
         });
@@ -52,49 +53,43 @@ public class SedaNoConsumerTest extends ContextTestSupport {
         assertTrue(notify.matchesWaitTime());
     }
 
+    @Test
     public void testInOut() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("seda:foo?timeout=1000");
             }
         });
 
         context.start();
 
-        try {
-            template.requestBody("direct:start", "Hello World");
-            fail("Should throw an exception");
-        } catch (CamelExecutionException e) {
-            assertIsInstanceOf(ExchangeTimedOutException.class, e.getCause());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.requestBody("direct:start", "Hello World"), "Should throw an exception");
+        assertIsInstanceOf(ExchangeTimedOutException.class, e.getCause());
     }
 
     @Test
     public void testFailIfNoConsumer() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").to("seda:foo?failIfNoConsumers=true");
             }
         });
 
         context.start();
 
-        try {
-            template.sendBody("direct:start", "Hello World");
-            fail("Should throw an exception");
-        } catch (CamelExecutionException e) {
-            assertIsInstanceOf(SedaConsumerNotAvailableException.class, e.getCause());
-        }
-
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("direct:start", "Hello World"), "Should throw an exception");
+        assertIsInstanceOf(SedaConsumerNotAvailableException.class, e.getCause());
     }
 
     @Test
     public void testFailIfNoConsuemerAndMultipleConsumerSetting() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("seda:foo?failIfNoConsumers=true&multipleConsumers=true").to("mock:foo");
                 from("seda:foo?failIfNoConsumers=true&multipleConsumers=true").to("mock:bar");
             }
@@ -115,7 +110,7 @@ public class SedaNoConsumerTest extends ContextTestSupport {
     public void testFailIfNoConsumesrAfterConsumersLeave() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("seda:foo?failIfNoConsumers=true").routeId("stopThisRoute").to("mock:foo");
             }
         });
@@ -130,19 +125,17 @@ public class SedaNoConsumerTest extends ContextTestSupport {
 
         context.getRouteController().stopRoute("stopThisRoute");
         TimeUnit.MILLISECONDS.sleep(100);
-        try {
-            template.sendBody("seda:foo?failIfNoConsumers=true", "Hello World");
-            fail("Should throw an exception");
-        } catch (CamelExecutionException e) {
-            assertIsInstanceOf(SedaConsumerNotAvailableException.class, e.getCause());
-        }
+
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBody("seda:foo?failIfNoConsumers=true", "Hello World"), "Should throw an exception");
+        assertIsInstanceOf(SedaConsumerNotAvailableException.class, e.getCause());
     }
 
     @Test
     public void testFailIfNoConsumersWithValidConsumer() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:in").to("seda:foo?failIfNoConsumers=true");
 
                 from("seda:foo").to("mock:foo");

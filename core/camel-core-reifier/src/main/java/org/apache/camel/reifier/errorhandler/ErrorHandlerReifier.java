@@ -18,6 +18,8 @@ package org.apache.camel.reifier.errorhandler;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 
 import org.apache.camel.CamelContext;
@@ -52,7 +54,9 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
     private static final Map<Class<?>, BiFunction<Route, ErrorHandlerFactory, ErrorHandlerReifier<? extends ErrorHandlerFactory>>> ERROR_HANDLERS
             = new HashMap<>(0);
 
-    protected T definition;
+    protected final T definition;
+
+    protected final Lock lock = new ReentrantLock();
 
     /**
      * Utility classes should not have a public constructor.
@@ -88,10 +92,10 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
     }
 
     private static ErrorHandlerReifier<? extends ErrorHandlerFactory> coreReifier(Route route, ErrorHandlerFactory definition) {
-        if (definition instanceof DeadLetterChannelDefinition) {
-            return new DeadLetterChannelReifier(route, (DeadLetterChannelDefinition) definition);
-        } else if (definition instanceof DefaultErrorHandlerDefinition) {
-            return new DefaultErrorHandlerReifier(route, (DefaultErrorHandlerDefinition) definition);
+        if (definition instanceof DeadLetterChannelDefinition deadLetterChannelDefinition) {
+            return new DeadLetterChannelReifier(route, deadLetterChannelDefinition);
+        } else if (definition instanceof DefaultErrorHandlerDefinition defaultErrorHandlerDefinition) {
+            return new DefaultErrorHandlerReifier(route, defaultErrorHandlerDefinition);
         } else if (definition instanceof NoErrorHandlerDefinition) {
             return new NoErrorHandlerReifier(route, definition);
         } else if (definition instanceof RefErrorHandlerDefinition) {
@@ -117,21 +121,23 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
         Processor onRedelivery = getProcessor(def.getOnRedelivery(), def.getOnRedeliveryRef());
         Processor onExceptionOccurred = getProcessor(def.getOnExceptionOccurred(), def.getOnExceptionOccurredRef());
         return new ExceptionPolicy(
-                def.getId(), CamelContextHelper.getRouteId(def),
+                parseString(def.getId()), CamelContextHelper.getRouteId(def),
                 parseBoolean(def.getUseOriginalMessage(), false),
                 parseBoolean(def.getUseOriginalBody(), false),
                 ObjectHelper.isNotEmpty(def.getOutputs()), handled,
                 continued, retryWhile, onRedelivery,
-                onExceptionOccurred, def.getRedeliveryPolicyRef(),
+                onExceptionOccurred, parseString(def.getRedeliveryPolicyRef()),
                 createRedeliveryPolicyOptions(def.getRedeliveryPolicyType()), def.getExceptions());
     }
 
-    public static RedeliveryPolicy createRedeliveryPolicy(RedeliveryPolicyDefinition definition, CamelContext context) {
+    @Deprecated
+    public RedeliveryPolicy createRedeliveryPolicy(RedeliveryPolicyDefinition definition, CamelContext context) {
         Map<RedeliveryOption, String> options = createRedeliveryPolicyOptions(definition);
         return createRedeliveryPolicy(options, context, null);
     }
 
-    private static RedeliveryPolicy createRedeliveryPolicy(
+    @Deprecated
+    private RedeliveryPolicy createRedeliveryPolicy(
             Map<RedeliveryOption, String> definition, CamelContext context, RedeliveryPolicy parentPolicy) {
         RedeliveryPolicy answer;
         if (parentPolicy != null) {
@@ -240,7 +246,7 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
         return answer;
     }
 
-    private static Map<RedeliveryOption, String> createRedeliveryPolicyOptions(RedeliveryPolicyDefinition definition) {
+    private Map<RedeliveryOption, String> createRedeliveryPolicyOptions(RedeliveryPolicyDefinition definition) {
         if (definition == null) {
             return null;
         }
@@ -272,16 +278,16 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
         return policy;
     }
 
-    private static void setOption(Map<RedeliveryOption, String> policy, RedeliveryOption option, Object value) {
+    private void setOption(Map<RedeliveryOption, String> policy, RedeliveryOption option, String value) {
         setOption(policy, option, value, null);
     }
 
-    private static void setOption(
-            Map<RedeliveryOption, String> policy, RedeliveryOption option, Object value, Object defaultValue) {
+    private void setOption(
+            Map<RedeliveryOption, String> policy, RedeliveryOption option, String value, String defaultValue) {
         if (value != null) {
-            policy.put(option, value.toString());
+            policy.put(option, parseString(value));
         } else if (defaultValue != null) {
-            policy.put(option, defaultValue.toString());
+            policy.put(option, defaultValue);
         }
     }
 
@@ -332,16 +338,14 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
     public abstract Processor createErrorHandler(Processor processor) throws Exception;
 
     public void configure(ErrorHandler handler) {
-        if (handler instanceof ErrorHandlerSupport) {
-            ErrorHandlerSupport handlerSupport = (ErrorHandlerSupport) handler;
-
+        if (handler instanceof ErrorHandlerSupport handlerSupport) {
             for (NamedNode exception : route.getErrorHandlers(definition)) {
                 addExceptionPolicy(handlerSupport, (OnExceptionDefinition) exception);
             }
         }
-        if (handler instanceof RedeliveryErrorHandler) {
-            boolean original = ((RedeliveryErrorHandler) handler).isUseOriginalMessagePolicy()
-                    || ((RedeliveryErrorHandler) handler).isUseOriginalBodyPolicy();
+        if (handler instanceof RedeliveryErrorHandler redeliveryErrorHandler) {
+            boolean original = redeliveryErrorHandler.isUseOriginalMessagePolicy()
+                    || redeliveryErrorHandler.isUseOriginalBodyPolicy();
             if (original) {
                 // ensure allow original is turned on
                 route.setAllowUseOriginalMessage(true);
@@ -457,6 +461,8 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
     }
 
     protected Predicate getPredicate(Predicate pred, String ref) {
+        ref = parseString(ref);
+
         if (pred == null && ref != null) {
             // its a bean expression
             Language bean = camelContext.resolveLanguage("bean");
@@ -465,7 +471,9 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
         return pred;
     }
 
-    protected <T> T getBean(Class<T> clazz, T bean, String ref) {
+    protected <U> U getBean(Class<U> clazz, U bean, String ref) {
+        ref = parseString(ref);
+
         if (bean == null && ref != null) {
             bean = lookupByNameAndType(ref, clazz);
         }
@@ -473,6 +481,8 @@ public abstract class ErrorHandlerReifier<T extends ErrorHandlerFactory> extends
     }
 
     protected Processor getProcessor(Processor processor, String ref) {
+        ref = parseString(ref);
+
         if (processor == null) {
             processor = getBean(Processor.class, null, ref);
         }

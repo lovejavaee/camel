@@ -60,10 +60,7 @@ public final class RouteCoverageDumper {
 
                 File file = new File(dir);
                 // ensure dir exists
-                boolean result = file.mkdirs();
-                if (!result) {
-                    LOG.error("mkdirs() failed for {}", file);
-                }
+                file.mkdirs();
                 file = new File(dir, name);
 
                 LOG.info("Dumping route coverage to file: {}", file);
@@ -82,7 +79,7 @@ public final class RouteCoverageDumper {
      * Gathers test details as xml
      */
     private static String gatherTestDetailsAsXml(String testClassName, String testName) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(512);
         sb.append("<test>\n");
         sb.append("  <class>").append(testClassName).append("</class>\n");
         sb.append("  <method>").append(testName).append("</method>\n");

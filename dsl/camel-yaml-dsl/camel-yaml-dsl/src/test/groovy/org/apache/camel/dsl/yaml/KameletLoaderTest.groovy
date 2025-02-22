@@ -30,7 +30,7 @@ class KameletLoaderTest extends YamlTestSupport {
     def "kamelet with flow"() {
         when:
             loadKamelets('''
-                apiVersion: camel.apache.org/v1alpha1
+                apiVersion: camel.apache.org/v1
                 kind: Kamelet
                 metadata:
                   name: aws-s3-sink                  
@@ -63,6 +63,17 @@ class KameletLoaderTest extends YamlTestSupport {
                         x-descriptors:
                         - 'urn:alm:descriptor:com.tectonic.ui:checkbox'
                   template:
+                    beans:
+                      - name: kameletBean
+                        type: org.apache.camel.dsl.yaml.KameletBean
+                        properties:
+                          kbProp: kbValue
+                      - name: kameletBean2
+                        type: org.apache.camel.dsl.yaml.KameletBean
+                        properties:
+                          kbProp2: kbValue2
+                          kbObjProp:
+                            kbObjPropProp: kbObjPropPropVal
                     from:
                       uri: "kamelet:source"
                       steps:
@@ -91,13 +102,26 @@ class KameletLoaderTest extends YamlTestSupport {
                     it.name == 'overrideEndpoint' && it.defaultValue == 'false'
                 }
 
+                with(it.templateBeans[0]) {
+                    it.name == 'kameletBean'
+                    it.type == 'org.apache.camel.dsl.yaml.KameletBean'
+                    it.properties.size() == 1
+                    it.properties['kbProp'] == 'kbValue'
+                }
+                with(it.templateBeans[1]) {
+                    it.name == 'kameletBean2'
+                    it.type == 'org.apache.camel.dsl.yaml.KameletBean'
+                    it.properties.size() == 2
+                    it.properties['kbProp2'] == 'kbValue2'
+                }
+
                 with(route) {
                     input.endpointUri == 'kamelet:source'
-                    input.lineNumber == 35
+                    input.lineNumber == 46
                     outputs.size() == 1
                     with (outputs[0], ToDefinition) {
                         endpointUri ==~ /aws2-s3:.*/
-                        lineNumber == 38
+                        lineNumber == 49
                     }
                 }
             }
@@ -106,7 +130,7 @@ class KameletLoaderTest extends YamlTestSupport {
     def "kamelet with template"() {
         when:
             loadKamelets('''
-                apiVersion: camel.apache.org/v1alpha1
+                apiVersion: camel.apache.org/v1
                 kind: Kamelet
                 metadata:
                   name: aws-s3-sink                  
@@ -180,7 +204,7 @@ class KameletLoaderTest extends YamlTestSupport {
     def "kamelet with template and optional parameters"() {
         setup:
             loadKamelets """
-                apiVersion: camel.apache.org/v1alpha1
+                apiVersion: camel.apache.org/v1
                 kind: Kamelet
                 metadata:
                   name: myTemplate
@@ -263,7 +287,7 @@ class KameletLoaderTest extends YamlTestSupport {
     def "kamelet with filter and flow"() {
         setup:
             loadKamelets '''
-                apiVersion: camel.apache.org/v1alpha1
+                apiVersion: camel.apache.org/v1
                 kind: Kamelet
                 metadata:
                   name: filter-action
@@ -308,4 +332,114 @@ class KameletLoaderTest extends YamlTestSupport {
         then:
             MockEndpoint.assertIsSatisfied(context)
     }
+
+    def "kamelet with bean constructors"() {
+        when:
+        loadKamelets('''
+                apiVersion: camel.apache.org/v1
+                kind: Kamelet
+                metadata:
+                  name: aws-s3-sink                  
+                spec:
+                  definition:
+                    title: "AWS S3 Sink"
+                    description: "AWS S3 Sink"
+                    required:
+                      - bucketNameOrArn
+                      - accessKey
+                      - secretKey
+                      - region
+                    type: object
+                    properties:
+                      bucketNameOrArn:
+                        title: Bucket Name
+                        description: The S3 Bucket name or ARN.
+                        type: string
+                      accessKey:
+                        title: Access Key
+                        description: The access key obtained from AWS.
+                        type: string
+                        format: password
+                        x-descriptors:
+                        - urn:alm:descriptor:com.tectonic.ui:password
+                      overrideEndpoint:
+                        title: Override Endpoint
+                        type: boolean
+                        default: false
+                        x-descriptors:
+                        - 'urn:alm:descriptor:com.tectonic.ui:checkbox'
+                  template:
+                    beans:
+                      - name: kameletBean
+                        type: org.apache.camel.dsl.yaml.KameletBean
+                        constructors:
+                          '0': 123
+                          '1': 'Hello World'
+                      - name: kameletBean2
+                        type: org.apache.camel.dsl.yaml.KameletBean
+                        constructors:
+                          '0': 123
+                          '1': 'Hello World'
+                          '2': '#bean:kameletBean'
+                        properties:
+                          kbProp2: kbValue2
+                    from:
+                      uri: "kamelet:source"
+                      steps:
+                      - to:
+                          uri: "aws2-s3:{{bucketNameOrArn}}"
+                          parameters:
+                            secretKey: "{{secretKey}}"
+                            accessKey: "{{accessKey}}"
+                            region: "{{region}}"
+                            uriEndpointOverride: "{{uriEndpointOverride}}"
+                            overrideEndpoint: "{{overrideEndpoint}}"
+                            autoCreateBucket: "{{autoCreateBucket}}"
+            ''')
+        then:
+        context.routeTemplateDefinitions.size() == 1
+
+        with (context.routeTemplateDefinitions[0]) {
+            id == 'aws-s3-sink'
+
+            templateParameters.size() == 3
+
+            templateParameters.any {
+                it.name == 'bucketNameOrArn' && it.defaultValue == null
+            }
+            templateParameters.any {
+                it.name == 'overrideEndpoint' && it.defaultValue == 'false'
+            }
+
+            with(it.templateBeans[0]) {
+                it.name == 'kameletBean'
+                it.type == 'org.apache.camel.dsl.yaml.KameletBean'
+                it.properties == null
+                it.constructors.size() == 2
+                it.constructors['0'] == '123'
+                it.constructors['1']== 'Hello World'
+            }
+            with(it.templateBeans[1]) {
+                it.name == 'kameletBean2'
+                it.type == 'org.apache.camel.dsl.yaml.KameletBean'
+                it.properties.size() == 1
+                it.properties['kbProp2'] == 'kbValue2'
+                it.constructors.size() == 3
+                it.constructors['0'] == '123'
+                it.constructors['1'] == 'Hello World'
+                it.constructors['2'] == '#bean:kameletBean'
+            }
+
+            with(route) {
+                input.endpointUri == 'kamelet:source'
+                input.lineNumber == 49
+                outputs.size() == 1
+                with (outputs[0], ToDefinition) {
+                    endpointUri ==~ /aws2-s3:.*/
+                    lineNumber == 52
+                }
+            }
+        }
+    }
+
 }

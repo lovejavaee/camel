@@ -29,6 +29,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,12 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests the MarkerFileExclusiveReadLockStrategy in a multi-threaded scenario.
  */
+@Isolated
 public class MarkerFileExclusiveReadLockStrategyTest extends ContextTestSupport {
 
     private static final Logger LOG = LoggerFactory.getLogger(MarkerFileExclusiveReadLockStrategyTest.class);
     private static final int NUMBER_OF_THREADS = 5;
-    private AtomicInteger numberOfFilesProcessed = new AtomicInteger();
-    private CountDownLatch latch = new CountDownLatch(2);
+    private final AtomicInteger numberOfFilesProcessed = new AtomicInteger();
+    private final CountDownLatch latch = new CountDownLatch(2);
 
     @Test
     public void testMultithreadedLocking() throws Exception {
@@ -98,13 +100,13 @@ public class MarkerFileExclusiveReadLockStrategyTest extends ContextTestSupport 
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from(fileUri("in?readLock=markerFile&initialDelay=0&delay=10")).onCompletion()
                         .process(new Processor() {
-                            public void process(Exchange exchange) throws Exception {
+                            public void process(Exchange exchange) {
                                 numberOfFilesProcessed.addAndGet(1);
                                 latch.countDown();
                             }

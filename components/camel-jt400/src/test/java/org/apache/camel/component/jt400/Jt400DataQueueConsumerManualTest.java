@@ -16,12 +16,13 @@
  */
 package org.apache.camel.component.jt400;
 
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.Properties;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.test.junit5.TestSupport;
+import org.apache.camel.util.StopWatch;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -68,12 +69,9 @@ public class Jt400DataQueueConsumerManualTest {
     @BeforeEach
     public void setUp() throws Exception {
         // Load endpoint URI
-        InputStream is = getClass().getResourceAsStream("jt400test.properties");
-        Properties props = new Properties();
-        String endpointURI;
 
-        props.load(is);
-        endpointURI = props.getProperty("org.apache.camel.component.jt400.emptydtaq.uri");
+        Properties props = TestSupport.loadExternalProperties(getClass(), "jt400test.properties");
+        String endpointURI = props.getProperty("org.apache.camel.component.jt400.emptydtaq.uri");
 
         // Instantiate consumer
         CamelContext camel = new DefaultCamelContext();
@@ -105,9 +103,9 @@ public class Jt400DataQueueConsumerManualTest {
             }
         }).start();
 
-        final long startTime = System.currentTimeMillis();
+        StopWatch watch = new StopWatch();
         while (!receiveFlag) {
-            if ((System.currentTimeMillis() - startTime) > BLOCKING_THRESHOLD) {
+            if ((watch.taken()) > BLOCKING_THRESHOLD) {
                 /* Passed test. */
                 return;
             }

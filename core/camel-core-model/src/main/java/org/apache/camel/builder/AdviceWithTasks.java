@@ -25,17 +25,20 @@ import org.apache.camel.Endpoint;
 import org.apache.camel.model.AdviceWithDefinition;
 import org.apache.camel.model.ChoiceDefinition;
 import org.apache.camel.model.EndpointRequiredDefinition;
+import org.apache.camel.model.EnrichDefinition;
 import org.apache.camel.model.FromDefinition;
 import org.apache.camel.model.InterceptDefinition;
 import org.apache.camel.model.InterceptSendToEndpointDefinition;
 import org.apache.camel.model.OnCompletionDefinition;
 import org.apache.camel.model.OnExceptionDefinition;
 import org.apache.camel.model.PipelineDefinition;
+import org.apache.camel.model.PollEnrichDefinition;
 import org.apache.camel.model.ProcessorDefinition;
 import org.apache.camel.model.ProcessorDefinitionHelper;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.model.ToDynamicDefinition;
 import org.apache.camel.model.TransactedDefinition;
+import org.apache.camel.model.WhenDefinition;
 import org.apache.camel.support.PatternHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,12 +130,24 @@ public final class AdviceWithTasks {
 
         @Override
         public boolean match(ProcessorDefinition<?> processor) {
-            if (processor instanceof EndpointRequiredDefinition) {
-                String uri = ((EndpointRequiredDefinition) processor).getEndpointUri();
+            if (processor instanceof EndpointRequiredDefinition endpointRequiredDefinition) {
+                String uri = endpointRequiredDefinition.getEndpointUri();
                 return PatternHelper.matchPattern(uri, toUri);
-            } else if (processor instanceof ToDynamicDefinition) {
-                String uri = ((ToDynamicDefinition) processor).getUri();
+            } else if (processor instanceof ToDynamicDefinition toDynamicDefinition) {
+                String uri = toDynamicDefinition.getUri();
                 return PatternHelper.matchPattern(uri, toUri);
+            } else if (processor instanceof EnrichDefinition enrichDefinition) {
+                var exp = enrichDefinition.getExpression();
+                if (exp != null) {
+                    String uri = exp.getExpression();
+                    return PatternHelper.matchPattern(uri, toUri);
+                }
+            } else if (processor instanceof PollEnrichDefinition pollEnrichDefinition) {
+                var exp = pollEnrichDefinition.getExpression();
+                if (exp != null) {
+                    String uri = exp.getExpression();
+                    return PatternHelper.matchPattern(uri, toUri);
+                }
             }
             return false;
         }
@@ -461,13 +476,21 @@ public final class AdviceWithTasks {
         }
         // for CBR then use the outputs from the node itself
         // so we work on the right branch in the CBR (when/otherwise)
-        if (parent instanceof ChoiceDefinition) {
-            return node.getOutputs();
+        if (parent instanceof ChoiceDefinition choice) {
+            // look in which branch the node is from
+            for (WhenDefinition when : choice.getWhenClauses()) {
+                if (when.getOutputs().contains(node)) {
+                    return when.getOutputs();
+                }
+            }
+            if (choice.getOtherwise() != null) {
+                return choice.getOtherwise().getOutputs();
+            }
         }
         List<ProcessorDefinition<?>> outputs = parent.getOutputs();
         boolean allAbstract = true;
         for (ProcessorDefinition<?> def : outputs) {
-            allAbstract &= def.isAbstract();
+            allAbstract = def.isAbstract();
             if (!allAbstract) {
                 break;
             }
@@ -559,7 +582,7 @@ public final class AdviceWithTasks {
     private static Iterator<ProcessorDefinition<?>> createSelectorIterator(
             final List<ProcessorDefinition<?>> list, final boolean selectFirst, final boolean selectLast,
             final int selectFrom, final int selectTo) {
-        return new Iterator<ProcessorDefinition<?>>() {
+        return new Iterator<>() {
             private int current;
             private boolean done;
 
@@ -613,8 +636,7 @@ public final class AdviceWithTasks {
     }
 
     private static ProcessorDefinition<?> flatternOutput(ProcessorDefinition<?> output) {
-        if (output instanceof AdviceWithDefinition) {
-            AdviceWithDefinition advice = (AdviceWithDefinition) output;
+        if (output instanceof AdviceWithDefinition advice) {
             if (advice.getOutputs().size() == 1) {
                 return advice.getOutputs().get(0);
             } else {

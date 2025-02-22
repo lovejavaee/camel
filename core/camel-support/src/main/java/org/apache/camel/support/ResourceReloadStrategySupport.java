@@ -32,6 +32,7 @@ public abstract class ResourceReloadStrategySupport extends ServiceSupport imple
     private CamelContext camelContext;
     private int succeeded;
     private int failed;
+    private Exception lastError;
 
     @Override
     public CamelContext getCamelContext() {
@@ -77,6 +78,23 @@ public abstract class ResourceReloadStrategySupport extends ServiceSupport imple
         failed = 0;
     }
 
+    public void setLastError(Exception throwable) {
+        this.lastError = throwable;
+    }
+
+    @Override
+    public Exception getLastError() {
+        return lastError;
+    }
+
+    @ManagedOperation(description = "Last error message")
+    public String lastErrorMessage() {
+        if (lastError != null) {
+            return lastError.getMessage();
+        }
+        return null;
+    }
+
     protected void incSucceededCounter() {
         succeeded++;
     }
@@ -84,15 +102,4 @@ public abstract class ResourceReloadStrategySupport extends ServiceSupport imple
     protected void incFailedCounter() {
         failed++;
     }
-
-    @Override
-    protected void doStart() throws Exception {
-        // noop
-    }
-
-    @Override
-    protected void doStop() throws Exception {
-        // noop
-    }
-
 }

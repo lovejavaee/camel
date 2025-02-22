@@ -61,15 +61,16 @@ public final class KafkaConstants {
 
     public static final String KAFKA_DEFAULT_SERIALIZER = "org.apache.kafka.common.serialization.StringSerializer";
     public static final String KAFKA_DEFAULT_DESERIALIZER = "org.apache.kafka.common.serialization.StringDeserializer";
-    public static final String KAFKA_DEFAULT_PARTITIONER = "org.apache.kafka.clients.producer.internals.DefaultPartitioner";
     public static final String PARTITIONER_RANGE_ASSIGNOR = "org.apache.kafka.clients.consumer.RangeAssignor";
     @Metadata(label = "producer",
               description = "The metadata (only configured if `recordMetadata` endpoint parameter is `true`)",
               javaType = "List<RecordMetadata>")
-    public static final String KAFKA_RECORDMETA = "org.apache.kafka.clients.producer.RecordMetadata";
+    public static final String KAFKA_RECORD_META = "kafka.RECORD_META";
     @Metadata(label = "consumer", description = "Can be used for forcing manual offset commit when using Kafka consumer.",
               javaType = "org.apache.camel.component.kafka.consumer.KafkaManualCommit")
     public static final String MANUAL_COMMIT = "CamelKafkaManualCommit";
+
+    public static final String KAFKA_SUBSCRIBE_ADAPTER = "subscribeAdapter";
 
     private KafkaConstants() {
         // Utility class

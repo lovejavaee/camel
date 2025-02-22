@@ -23,7 +23,7 @@ import org.apache.camel.vault.AzureVaultConfiguration;
 /**
  * Configuration for access to Azure Key Vault Secret.
  */
-@Configurer(bootstrap = true)
+@Configurer(extended = true)
 public class AzureVaultConfigurationProperties extends AzureVaultConfiguration implements BootstrapCloseable {
 
     private MainConfigurationProperties parent;
@@ -78,6 +78,14 @@ public class AzureVaultConfigurationProperties extends AzureVaultConfiguration i
      */
     public AzureVaultConfigurationProperties withTenantId(String tenantId) {
         setTenantId(tenantId);
+        return this;
+    }
+
+    /**
+     * Whether the Azure Identity Authentication should be used or not.
+     */
+    public AzureVaultConfigurationProperties withAzureIdentityEnabled(boolean azureIdentityEnabled) {
+        setAzureIdentityEnabled(azureIdentityEnabled);
         return this;
     }
 

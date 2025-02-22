@@ -125,6 +125,17 @@ public class FlexibleAggregationStrategiesTest extends ContextTestSupport {
     }
 
     @Test
+    public void testFlexibleAggregationStrategyStoreInVariableSingleValue() throws Exception {
+        getMockEndpoint("mock:result7").expectedMessageCount(1);
+        getMockEndpoint("mock:result7").message(0).variable("AggregationResult").isInstanceOf(String.class);
+        getMockEndpoint("mock:result7").message(0).variable("AggregationResult").isEqualTo("AGGREGATE1");
+
+        template.sendBody("direct:start7", "AGGREGATE1");
+
+        assertMockEndpointsSatisfied();
+    }
+
+    @Test
     @SuppressWarnings("rawtypes")
     public void testFlexibleAggregationStrategyGenericArrayListWithoutNulls() throws Exception {
         getMockEndpoint("mock:result4").expectedMessageCount(1);
@@ -146,15 +157,9 @@ public class FlexibleAggregationStrategiesTest extends ContextTestSupport {
     public void testFlexibleAggregationStrategyFailWithInvalidCast() throws Exception {
         getMockEndpoint("mock:result5").expectedMessageCount(0);
 
-        try {
-            template.sendBody("direct:start5", "AGGREGATE1");
-        } catch (Exception exception) {
-            assertMockEndpointsSatisfied();
-            return;
-        }
-
-        fail("Type Conversion exception expected, as we are not ignoring invalid casts");
-
+        Exception ex = assertThrows(Exception.class, () -> template.sendBody("direct:start5", "AGGREGATE1"),
+                "Type Conversion exception expected, as we are not ignoring invalid casts");
+        assertMockEndpointsSatisfied();
     }
 
     @Test
@@ -216,7 +221,7 @@ public class FlexibleAggregationStrategiesTest extends ContextTestSupport {
     }
 
     @Test
-    public void testLinkedList() throws Exception {
+    public void testLinkedList() {
         NotifyBuilder notify = new NotifyBuilder(context).whenDone(1).and().whenExactlyFailed(0).create();
 
         template.sendBody("direct:linkedlist", Arrays.asList("FIRST", "SECOND"));
@@ -225,7 +230,7 @@ public class FlexibleAggregationStrategiesTest extends ContextTestSupport {
     }
 
     @Test
-    public void testHashSet() throws Exception {
+    public void testHashSet() {
         HashSet<String> r = new HashSet<>();
         r.add("FIRST");
         r.add("SECOND");
@@ -239,10 +244,10 @@ public class FlexibleAggregationStrategiesTest extends ContextTestSupport {
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
 
                 from("direct:start1")
                         .aggregate(AggregationStrategies.flexible(String.class).accumulateInCollection(ArrayList.class)
@@ -272,6 +277,11 @@ public class FlexibleAggregationStrategiesTest extends ContextTestSupport {
                         .aggregate(AggregationStrategies.flexible(Integer.class).ignoreInvalidCasts().storeNulls()
                                 .accumulateInCollection(ArrayList.class))
                         .constant(true).completionSize(3).to("mock:result6");
+
+                from("direct:start7")
+                        .aggregate(AggregationStrategies.flexible(String.class).storeInVariable("AggregationResult"))
+                        .constant(true).completionSize(1)
+                        .to("mock:result7");
 
                 AggregationStrategy timeoutCompletionStrategy
                         = AggregationStrategies.flexible(String.class).condition(simple("${body} contains 'AGGREGATE'"))

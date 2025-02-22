@@ -20,8 +20,8 @@ import org.apache.camel.ContextTestSupport;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  *
@@ -45,7 +45,7 @@ public class ValidatorIllegalImportTest extends ContextTestSupport {
     public void testOk() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:test").to("validator:org/apache/camel/component/validator/BroadcastMonitorFixed.xsd")
                         .to("mock:result");
             }
@@ -61,18 +61,17 @@ public class ValidatorIllegalImportTest extends ContextTestSupport {
     public void testIllegalImport() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:test").to("validator:org/apache/camel/component/validator/BroadcastMonitor.xsd").to("mock:result");
             }
         });
-        try {
-            context.start();
-            fail("Should have thrown exception");
-        } catch (Exception e) {
-            IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause().getCause());
-            assertTrue(iae.getMessage().startsWith(
-                    "Resource: org/apache/camel/component/validator/BroadcastMonitor.xsd refers an invalid resource without SystemId."));
-        }
+
+        Exception e = assertThrows(Exception.class, () -> context.start(),
+                "Should have thrown exception");
+
+        IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause().getCause());
+        assertTrue(iae.getMessage().startsWith(
+                "Resource: org/apache/camel/component/validator/BroadcastMonitor.xsd refers an invalid resource without SystemId."));
     }
 
     @Override

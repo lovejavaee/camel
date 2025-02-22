@@ -50,18 +50,22 @@ We provide 24/7 support for troubleshooting issues and outages, consulting on ar
 https://www.openlogic.com/solutions/support-activemq-apache-camel-kafka#apache-camel[Learn more about OpenLogic's Camel support].
 
 
-== https://www.redhat.com/en/technologies/jboss-middleware/fuse[Red Hat]
+== https://www.redhat.com[Red Hat]
 
-https://www.redhat.com/en/technologies/jboss-middleware/fuse[Red Hat] offers
-http://www.redhat.com/en/technologies/jboss-middleware/fuse[Fuse],
-an enterprise integration platform based on Apache Camel and other
+https://www.redhat.com[Red Hat] offers a https://developers.redhat.com/products/redhat-build-of-camel/overview[supported build of Camel] as part of 
+https://www.redhat.com/en/products/integration[Red Hat Integration] and https://www.redhat.com/en/products/application-foundations[Red Hat Application Foundations].
+It contains an enterprise integration platform based on Apache Camel and other
 open source integration projects, with developer and production support.
 In addition to enterprise support, Red Hat provides
-https://www.redhat.com/en/services/training/courses-by-curriculum#Red-Hat-JBoss-Fuse-BRMS-and-more[training],
+https://www.redhat.com/en/training/skills-path-finder/red-hat-certified-specialist-camel-development[training],
 https://www.redhat.com/en/services/consulting[consulting], and
-https://developers.redhat.com/products/fuse/overview/[a developer community].
+https://developers.redhat.com/products/redhat-build-of-camel/overview[a developer community].
 
-
+== https://www.randoli.io[Randoli]
+We provide consulting and implementation of Microservices as well as modernization support for legacy applications using Springboot + Camel or Quarkus + Camel.
+https://randoli.io/services/
+https://randoli.io/case-studies/case-study-postal-tech-company-modernization
+https://www.redhat.com/rhdc/managed-files/cl-randoli-partner-case-study-f31836pr-202211-en_0.pdf
 
 == https://riverlog.com/systemintegration/esb-model-and-camel-based-systems-integration[RiverLog]
 
@@ -85,6 +89,11 @@ developing with Camel, as well as architectural/design reviews,
 troubleshooting and SOA infrastructure implementations.
 
 
+== https://skintegrationsolutions.com[SK Integration Solutions Private Limited]
+
+https://skintegrationsolutions.com[SK Integration Solutions Private Limited] is a company based in India that offers the best practices for using Apache Camel in all phases of the SDLC.
+
+
 == http://www.talend.com[Talend, Inc]
 
 http://www.talend.com[Talend, Inc] provides enterprise level services,
@@ -92,6 +101,14 @@ training and support for Apache Camel and their
 http://www.talend.com/products/esb-standard-edition.php[Talend ESB]
 product which is a repackaging of Apache Camel including a full,
 pre-configured OSGi runtime container.
+
+
+== https://talismanplatform.com[Talisman Platform]
+
+The https://talismanplatform.com[Talisman Platform] is a production-ready data integration platform designed for business-critical integrations. 
+Designed to facilitate integration driven by the robust capabilities of Apache Camel, 
+building on top of https://github.com/apache/camel-karavan[Apache Camel Karavan], the Talisman Platform offers exclusive additional features to enhance your integration experience. 
+These include Authentication and Authorization mechanisms, advanced Monitoring and Observability tools, and a comprehensive API Gateway.
 
 
 == http://touk.pl[TouK]

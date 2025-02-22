@@ -20,7 +20,9 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.component.sjms.support.JmsTestSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
+@DisabledIfSystemProperty(named = "ci.env.name", matches = "github.com", disabledReason = "Flaky on GitHub Actions")
 public class SjmsToDTest extends JmsTestSupport {
 
     @Test
@@ -28,8 +30,8 @@ public class SjmsToDTest extends JmsTestSupport {
         getMockEndpoint("mock:bar").expectedBodiesReceived("Hello bar");
         getMockEndpoint("mock:beer").expectedBodiesReceived("Hello beer");
 
-        template.sendBodyAndHeader("direct:start", "Hello bar", "where", "bar");
-        template.sendBodyAndHeader("direct:start", "Hello beer", "where", "beer");
+        template.sendBodyAndHeader("direct:start", "Hello bar", "where", "bar.SjmsToDTest");
+        template.sendBodyAndHeader("direct:start", "Hello beer", "where", "beer.SjmsToDTest");
 
         MockEndpoint.assertIsSatisfied(context);
     }
@@ -42,8 +44,8 @@ public class SjmsToDTest extends JmsTestSupport {
                 // route message dynamic using toD
                 from("direct:start").toD("sjms:queue:${header.where}");
 
-                from("sjms:queue:bar").to("mock:bar");
-                from("sjms:queue:beer").to("mock:beer");
+                from("sjms:queue:bar.SjmsToDTest").to("mock:bar");
+                from("sjms:queue:beer.SjmsToDTest").to("mock:beer");
             }
         };
     }

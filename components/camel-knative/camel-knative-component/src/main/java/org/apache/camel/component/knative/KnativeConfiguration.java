@@ -20,8 +20,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.camel.RuntimeCamelException;
-import org.apache.camel.component.cloudevents.CloudEvents;
+import org.apache.camel.cloudevents.CloudEvents;
 import org.apache.camel.component.knative.spi.KnativeEnvironment;
+import org.apache.camel.component.knative.spi.KnativeSinkBinding;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 
@@ -30,8 +31,10 @@ public class KnativeConfiguration implements Cloneable {
     @UriParam
     private KnativeEnvironment environment;
     @UriParam
+    private KnativeSinkBinding sinkBinding;
+    @UriParam
     private String typeId;
-    @UriParam(defaultValue = "1.0", enums = "1.0,1.0.1")
+    @UriParam(defaultValue = "1.0", enums = "1.0,1.0.1,1.0.2")
     private String cloudEventsSpecVersion = CloudEvents.v1_0.version();
     @UriParam(defaultValue = "org.apache.camel.event")
     private String cloudEventsType = "org.apache.camel.event";
@@ -67,6 +70,17 @@ public class KnativeConfiguration implements Cloneable {
      */
     public void setEnvironment(KnativeEnvironment environment) {
         this.environment = environment;
+    }
+
+    public KnativeSinkBinding getSinkBinding() {
+        return sinkBinding;
+    }
+
+    /**
+     * The SinkBinding configuration.
+     */
+    public void setSinkBinding(KnativeSinkBinding sinkBinding) {
+        this.sinkBinding = sinkBinding;
     }
 
     public String getTypeId() {

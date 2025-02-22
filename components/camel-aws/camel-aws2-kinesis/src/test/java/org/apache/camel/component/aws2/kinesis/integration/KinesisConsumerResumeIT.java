@@ -17,17 +17,19 @@
 
 package org.apache.camel.component.aws2.kinesis.integration;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.EndpointInject;
 import org.apache.camel.Message;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.aws2.kinesis.Kinesis2Constants;
-import org.apache.camel.component.aws2.kinesis.consumer.KinesisResumeAdapter;
+import org.apache.camel.component.aws2.kinesis.consumer.KinesisResumeAction;
+import org.apache.camel.component.aws2.kinesis.consumer.KinesisResumeStrategyConfiguration;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.processor.resume.TransientResumeStrategy;
+import org.apache.camel.resume.cache.ResumeCache;
 import org.apache.camel.test.infra.aws.common.AWSCommon;
 import org.apache.camel.test.infra.aws.common.services.AWSService;
 import org.apache.camel.test.infra.aws2.clients.AWSSDKClientUtils;
@@ -53,10 +55,10 @@ import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import static org.apache.camel.test.infra.aws2.clients.KinesisUtils.createStream;
 import static org.apache.camel.test.infra.aws2.clients.KinesisUtils.deleteStream;
 import static org.apache.camel.test.infra.aws2.clients.KinesisUtils.putRecords;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 /*
  * This test simulates resuming consumption from AWS Kinesis - consuming right at the middle of the batch of messages
@@ -76,27 +78,27 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
         }
     }
 
-    private static final class TestKinesisResumeAdapter implements KinesisResumeAdapter {
+    private static final class TestResumeAction extends KinesisResumeAction {
         private List<PutRecordsResponse> previousRecords;
         private final int expectedCount;
-        private GetShardIteratorRequest.Builder builder;
 
-        private TestKinesisResumeAdapter(int expectedCount) {
+        private TestResumeAction(int expectedCount) {
             this.expectedCount = expectedCount;
         }
 
-        @Override
-        public void setRequestBuilder(GetShardIteratorRequest.Builder builder) {
-            this.builder = ObjectHelper.notNull(builder, "builder");
+        public void setPreviousRecords(List<PutRecordsResponse> previousRecords) {
+            this.previousRecords = previousRecords;
+        }
+
+        public int getExpectedCount() {
+            return expectedCount;
         }
 
         @Override
-        public void setStreamName(String streamName) {
-            ObjectHelper.notNull(streamName, "streamName");
-        }
+        public boolean evalEntry(Object shardId, Object sequenceNumber) {
+            final GetShardIteratorRequest.Builder builder = super.getBuilder();
+            ObjectHelper.notNull(builder, "builder");
 
-        @Override
-        public void resume() {
             LOG.debug("Waiting for data");
             Awaitility.await().atMost(1, TimeUnit.MINUTES).until(() -> !previousRecords.isEmpty());
 
@@ -106,15 +108,12 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
 
             builder.startingSequenceNumber(putRecordsResultEntry.sequenceNumber());
             builder.shardIteratorType(ShardIteratorType.AT_SEQUENCE_NUMBER);
-        }
-
-        public void setPreviousRecords(List<PutRecordsResponse> previousRecords) {
-            this.previousRecords = previousRecords;
+            return false;
         }
     }
 
     @RegisterExtension
-    public static AWSService awsService = AWSServiceFactory.createKinesisService();
+    public static AWSService awsService = AWSServiceFactory.createSingletonKinesisService();
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisProducerIT.class);
 
@@ -125,9 +124,9 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
     private String streamName = AWSCommon.KINESIS_STREAM_BASE_NAME + "-cons-" + TestUtils.randomWithRange(0, 100);
     private final int messageCount = 20;
     private final int expectedCount = messageCount / 2;
-    private List<KinesisData> receivedMessages = new ArrayList<>();
+    private List<KinesisData> receivedMessages = new CopyOnWriteArrayList<>();
     private List<PutRecordsResponse> previousRecords;
-    private TestKinesisResumeAdapter adapter = new TestKinesisResumeAdapter(expectedCount);
+    private TestResumeAction action = new TestResumeAction(expectedCount);
 
     @Override
     protected RouteBuilder createRouteBuilder() {
@@ -138,14 +137,19 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
         return new RouteBuilder() {
             @Override
             public void configure() {
-                bindToRegistry("testResumeStrategy", new TransientResumeStrategy(adapter));
+                final ResumeCache<Object> simpleCache = TransientResumeStrategy.createSimpleCache();
+                final KinesisResumeStrategyConfiguration.KinesisResumeStrategyConfigurationBuilder resumeConfigurationBuilder
+                        = KinesisResumeStrategyConfiguration.builder()
+                                .withResumeCache(simpleCache);
+
+                bindToRegistry(Kinesis2Constants.RESUME_ACTION, action);
 
                 String kinesisEndpointUri = "aws2-kinesis://%s?amazonKinesisClient=#amazonKinesisClient";
 
                 fromF(kinesisEndpointUri, streamName)
+                        .resumable().configuration(resumeConfigurationBuilder)
                         .process(exchange -> {
                             KinesisData data = new KinesisData();
-
                             final Message message = exchange.getMessage();
 
                             if (message != null) {
@@ -155,7 +159,6 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
 
                             receivedMessages.add(data);
                         })
-                        .resumable("testResumeStrategy")
                         .to("mock:result");
             }
         };
@@ -174,7 +177,7 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
             }
         }
 
-        adapter.setPreviousRecords(previousRecords);
+        action.setPreviousRecords(previousRecords);
     }
 
     @AfterEach
@@ -183,12 +186,12 @@ public class KinesisConsumerResumeIT extends CamelTestSupport {
     }
 
     @DisplayName("Tests that the component can resume messages from AWS Kinesis")
-    @Timeout(value = 2, unit = TimeUnit.MINUTES)
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
     @Test
     void testProduceMessages() {
         result.expectedMessageCount(expectedCount);
 
-        await().atMost(1, TimeUnit.MINUTES)
+        await().atMost(2, TimeUnit.MINUTES)
                 .untilAsserted(() -> result.assertIsSatisfied());
 
         assertEquals(expectedCount, receivedMessages.size());

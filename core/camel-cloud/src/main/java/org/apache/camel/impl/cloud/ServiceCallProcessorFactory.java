@@ -49,7 +49,7 @@ import org.apache.camel.util.function.ThrowingHelper;
 import static org.apache.camel.support.CamelContextHelper.findSingleByType;
 import static org.apache.camel.support.CamelContextHelper.lookup;
 
-@Deprecated
+@Deprecated(since = "3.19.0")
 public class ServiceCallProcessorFactory extends TypedProcessorFactory<ServiceCallDefinition> {
 
     private volatile ServiceCallDefinition definition;
@@ -77,14 +77,14 @@ public class ServiceCallProcessorFactory extends TypedProcessorFactory<ServiceCa
         CamelContextAware.trySetCamelContext(serviceChooser, camelContext);
         CamelContextAware.trySetCamelContext(loadBalancer, camelContext);
 
-        if (loadBalancer instanceof ServiceDiscoveryAware) {
-            ((ServiceDiscoveryAware) loadBalancer).setServiceDiscovery(serviceDiscovery);
+        if (loadBalancer instanceof ServiceDiscoveryAware serviceDiscoveryAware) {
+            serviceDiscoveryAware.setServiceDiscovery(serviceDiscovery);
         }
-        if (loadBalancer instanceof ServiceFilterAware) {
-            ((ServiceFilterAware) loadBalancer).setServiceFilter(serviceFilter);
+        if (loadBalancer instanceof ServiceFilterAware serviceFilterAware) {
+            serviceFilterAware.setServiceFilter(serviceFilter);
         }
-        if (loadBalancer instanceof ServiceChooserAware) {
-            ((ServiceChooserAware) loadBalancer).setServiceChooser(serviceChooser);
+        if (loadBalancer instanceof ServiceChooserAware serviceChooserAware) {
+            serviceChooserAware.setServiceChooser(serviceChooser);
         }
 
         // The component is used to configure the default scheme to use (eg
@@ -131,8 +131,8 @@ public class ServiceCallProcessorFactory extends TypedProcessorFactory<ServiceCa
         ExchangePattern pattern = CamelContextHelper.parse(camelContext, ExchangePattern.class, definition.getPattern());
 
         Expression expression = retrieveExpression(camelContext, endpointScheme);
-        if (expression instanceof ExpressionFactory) {
-            expression = ((ExpressionFactory) expression).createExpression(camelContext);
+        if (expression instanceof ExpressionFactory expressionFactory) {
+            expression = expressionFactory.createExpression(camelContext);
         }
         return new DefaultServiceCallProcessor(
                 camelContext, camelContext.resolvePropertyPlaceholders(definition.getName()), endpointScheme, endpointUri,
@@ -286,8 +286,7 @@ public class ServiceCallProcessorFactory extends TypedProcessorFactory<ServiceCa
     // ******************************************
 
     private ServiceChooser retrieveServiceChooser(
-            CamelContext camelContext, Function<CamelContext, ServiceCallConfigurationDefinition> function)
-            throws Exception {
+            CamelContext camelContext, Function<CamelContext, ServiceCallConfigurationDefinition> function) {
         ServiceChooser answer = null;
 
         ServiceCallConfigurationDefinition config = function.apply(camelContext);
@@ -417,8 +416,7 @@ public class ServiceCallProcessorFactory extends TypedProcessorFactory<ServiceCa
                     = CamelContextHelper.lookup(camelContext, lookupName, ServiceExpressionFactory.class);
             if (factory != null) {
                 // If a factory is found in the registry do not re-configure it
-                // as
-                // it should be pre-configured.
+                // as it should be pre-configured.
                 return factory.newInstance(camelContext);
             } else {
 
@@ -428,7 +426,7 @@ public class ServiceCallProcessorFactory extends TypedProcessorFactory<ServiceCa
                     // Then use Service factory.
                     type = camelContext.getCamelContextExtension()
                             .getFactoryFinder(ServiceCallDefinitionConstants.RESOURCE_PATH).findClass(lookupName).orElse(null);
-                } catch (Exception e) {
+                } catch (Exception ignore) {
                 }
 
                 if (ObjectHelper.isNotEmpty(type)) {

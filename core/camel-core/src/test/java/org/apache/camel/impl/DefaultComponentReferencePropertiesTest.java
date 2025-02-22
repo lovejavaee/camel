@@ -16,7 +16,6 @@
  */
 package org.apache.camel.impl;
 
-import java.util.List;
 import java.util.Map;
 
 import org.apache.camel.CamelContext;
@@ -36,7 +35,10 @@ import org.apache.camel.support.DefaultEndpoint;
 import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit test for reference properties
@@ -60,17 +62,13 @@ public class DefaultComponentReferencePropertiesTest extends ContextTestSupport 
         }
 
         @Override
-        public Producer createProducer() throws Exception {
+        public Producer createProducer() {
             return null;
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return null;
-        }
-
-        public void setExpression(List<?> expressions) {
-            // do nothing
         }
 
         public void setExpression(Expression expression) {
@@ -106,8 +104,8 @@ public class DefaultComponentReferencePropertiesTest extends ContextTestSupport 
     }
 
     @Override
-    protected Registry createRegistry() throws Exception {
-        Registry registry = super.createRegistry();
+    protected Registry createCamelRegistry() throws Exception {
+        Registry registry = super.createCamelRegistry();
         registry.bind("myExpression", ExpressionBuilder.bodyExpression());
         return registry;
     }
@@ -116,7 +114,7 @@ public class DefaultComponentReferencePropertiesTest extends ContextTestSupport 
     public void testEmptyPath() throws Exception {
         DefaultComponent component = new DefaultComponent(context) {
             @Override
-            protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+            protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
                 assertEquals("foo://?name=Christian", uri);
                 assertEquals("", remaining);
                 assertEquals(1, parameters.size());
@@ -191,25 +189,21 @@ public class DefaultComponentReferencePropertiesTest extends ContextTestSupport 
     }
 
     @Test
-    public void testTypoInParameter() throws Exception {
+    public void testTypoInParameter() {
         MyComponent component = new MyComponent(context);
-        try {
-            component.createEndpoint("foo://?xxxexpression=#hello");
-            fail("Should have throw a ResolveEndpointFailedException");
-        } catch (ResolveEndpointFailedException e) {
-            // ok
-        }
+
+        assertThrows(ResolveEndpointFailedException.class,
+                () -> component.createEndpoint("foo://?xxxexpression=#hello"),
+                "Should have throw a ResolveEndpointFailedException");
     }
 
     @Test
-    public void testTypoInParameterValue() throws Exception {
+    public void testTypoInParameterValue() {
         MyComponent component = new MyComponent(context);
-        try {
-            component.createEndpoint("foo://?special=#dummy");
-            fail("Should have throw a Exception");
-        } catch (Exception e) {
-            // ok
-        }
+
+        assertThrows(Exception.class,
+                () -> component.createEndpoint("foo://?special=#dummy"),
+                "Should have throw a Exception");
     }
 
 }

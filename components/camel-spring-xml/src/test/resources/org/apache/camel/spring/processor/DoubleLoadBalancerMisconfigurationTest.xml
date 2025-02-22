@@ -25,13 +25,14 @@
     ">
 
     <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
         <route>
             <from uri="direct:start"/>
             <loadBalance>
-                <random/>
+                <randomLoadBalancer/>
                 <!-- invalid configuration with nested load balancer -->
                 <loadBalance>
-                    <roundRobin/>
+                    <roundRobinLoadBalancer/>
                     <to uri="mock:a"/>
                     <to uri="mock:b"/>
                 </loadBalance>

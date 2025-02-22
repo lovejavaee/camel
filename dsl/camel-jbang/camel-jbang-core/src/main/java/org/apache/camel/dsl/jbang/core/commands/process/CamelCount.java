@@ -34,7 +34,8 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
 @Command(name = "count",
-         description = "Get total and failed exchanges for running integrations")
+         description = "Get total and failed exchanges",
+         sortOptions = false, showDefaultValues = true)
 public class CamelCount extends ProcessWatchCommand {
 
     @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
@@ -92,7 +93,7 @@ public class CamelCount extends ProcessWatchCommand {
 
         if (!total && !fail) {
             if (!rows.isEmpty()) {
-                System.out.println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
+                printer().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, Arrays.asList(
                         new Column().header("PID").headerAlign(HorizontalAlign.CENTER).with(r -> r.pid),
                         new Column().header("NAME").dataAlign(HorizontalAlign.LEFT)
                                 .maxWidth(30, OverflowBehaviour.ELLIPSIS_RIGHT)
@@ -124,7 +125,7 @@ public class CamelCount extends ProcessWatchCommand {
                     index++;
                 }
             }
-            System.out.println(builder);
+            printer().println(String.valueOf(builder));
         }
 
         return 0;

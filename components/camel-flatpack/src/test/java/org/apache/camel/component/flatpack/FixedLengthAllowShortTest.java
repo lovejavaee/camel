@@ -47,7 +47,7 @@ public class FixedLengthAllowShortTest {
     @EndpointInject("mock:results-xml")
     protected MockEndpoint resultsxml;
 
-    protected String[] expectedFirstName = { "JOHN-SHORT", "JIMMY-SHORT", "JANE-SHORT", "FRED-SHORT" };
+    protected final String[] expectedFirstName = { "JOHN-SHORT", "JIMMY-SHORT", "JANE-SHORT", "FRED-SHORT" };
 
     @Test
     public void testCamel() throws Exception {
@@ -62,7 +62,7 @@ public class FixedLengthAllowShortTest {
             Map<?, ?> body = in.getBody(Map.class);
             assertNotNull(body, "Should have found body as a Map but was: " + ObjectHelper.className(in.getBody()));
             assertEquals(expectedFirstName[counter], body.get("FIRSTNAME"), "FIRSTNAME");
-            LOG.info("Result: " + counter + " = " + body);
+            LOG.info("Result: {} = {}", counter, body);
             counter++;
         }
     }

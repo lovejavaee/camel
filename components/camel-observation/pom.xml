@@ -17,14 +17,13 @@
     limitations under the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
 
@@ -37,6 +36,13 @@
         <firstVersion>3.21.0</firstVersion>
         <label>monitoring,microservice</label>
         <title>Micrometer Observability</title>
+
+        <camel.surefire.reuseForks>true</camel.surefire.reuseForks>
+        <camel.surefire.forkCount>1</camel.surefire.forkCount>
+        <camel.surefire.forkTimeout>1200</camel.surefire.forkTimeout>
+        <camel.surefire.parallel>true</camel.surefire.parallel>
+        <camel.surefire.parallel.factor>0.5</camel.surefire.parallel.factor>
+        <camel.surefire.fork.additional-vmargs>-Xmx1G</camel.surefire.fork.additional-vmargs>
     </properties>
 
     <dependencies>
@@ -52,12 +58,10 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
-            <version>${micrometer-version}</version>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing</artifactId>
-            <version>${micrometer-tracing-version}</version>
         </dependency>
 
         <dependency>
@@ -77,7 +81,45 @@
             <version>${opentelemetry-version}</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
+    <profiles>
+        <profile>
+            <id>full</id>
+            <activation>
+                <property>
+                    <name>!quickly</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>default-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <excludedGroups>not-parallel</excludedGroups>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>serials-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <forkCount>4</forkCount>
+                                    <groups>not-parallel</groups>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

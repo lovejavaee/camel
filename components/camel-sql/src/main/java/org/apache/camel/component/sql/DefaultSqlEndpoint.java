@@ -21,15 +21,20 @@ import java.sql.ResultSet;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
 import org.apache.camel.Component;
+import org.apache.camel.spi.BeanIntrospection;
+import org.apache.camel.spi.EndpointServiceLocation;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.DefaultPollingEndpoint;
+import org.apache.camel.support.PluginHelper;
+import org.apache.camel.util.UnwrapHelper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.RowMapperResultSetExtractor;
@@ -37,8 +42,12 @@ import org.springframework.jdbc.core.RowMapperResultSetExtractor;
 /**
  * Base class for SQL endpoints.
  */
-public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
+public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint implements EndpointServiceLocation {
     private JdbcTemplate jdbcTemplate;
+
+    private boolean serviceLocationEnabled;
+    private String serviceUrl;
+    private Map<String, String> serviceMetadata;
 
     @Metadata(autowired = true)
     @UriParam(description = "Sets the DataSource to use to communicate with the database at endpoint level.")
@@ -136,6 +145,18 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
         super(endpointUri, component);
     }
 
+    public boolean isServiceLocationEnabled() {
+        return serviceLocationEnabled;
+    }
+
+    /**
+     * Whether to detect the network address location of the JMS broker on startup. This information is gathered via
+     * reflection on the ConnectionFactory, and is vendor specific. This option can be used to turn this off.
+     */
+    public void setServiceLocationEnabled(boolean serviceLocationEnabled) {
+        this.serviceLocationEnabled = serviceLocationEnabled;
+    }
+
     public JdbcTemplate getJdbcTemplate() {
         return jdbcTemplate;
     }
@@ -149,7 +170,7 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * Enables or disables transaction. If enabled then if processing an exchange failed then the consumer + break out
+     * Enables or disables transaction. If enabled, then if processing an exchange failed, then the consumer + break out
      * processing any further exchanges to cause a rollback eager
      */
     public void setTransacted(boolean transacted) {
@@ -183,7 +204,7 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * Allows to plugin to use a custom org.apache.camel.component.sql.SqlProcessingStrategy to execute queries when the
+     * Allows plugging in a custom org.apache.camel.component.sql.SqlProcessingStrategy to execute queries when the
      * consumer has processed the rows/batch.
      */
     public void setProcessingStrategy(SqlProcessingStrategy processingStrategy) {
@@ -195,8 +216,8 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * Allows to plugin to use a custom org.apache.camel.component.sql.SqlPrepareStatementStrategy to control
-     * preparation of the query and prepared statement.
+     * Allows plugging in a custom org.apache.camel.component.sql.SqlPrepareStatementStrategy to control preparation of
+     * the query and prepared statement.
      */
     public void setPrepareStatementStrategy(SqlPrepareStatementStrategy prepareStatementStrategy) {
         this.prepareStatementStrategy = prepareStatementStrategy;
@@ -207,8 +228,8 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * After processing each row then this query can be executed, if the Exchange was processed successfully, for
-     * example to mark the row as processed. The query can have parameter.
+     * After processing each row, then this query can be executed, if the Exchange was processed successfully, for
+     * example, to mark the row as processed. The query can have parameter.
      */
     public void setOnConsume(String onConsume) {
         this.onConsume = onConsume;
@@ -219,8 +240,8 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * After processing each row then this query can be executed, if the Exchange failed, for example to mark the row as
-     * failed. The query can have parameter.
+     * After processing each row, then this query can be executed, if the Exchange failed, for example, to mark the row
+     * as failed. The query can have parameter.
      */
     public void setOnConsumeFailed(String onConsumeFailed) {
         this.onConsumeFailed = onConsumeFailed;
@@ -254,10 +275,10 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * If enabled then the populateStatement method from org.apache.camel.component.sql.SqlPrepareStatementStrategy is
-     * always invoked, also if there is no expected parameters to be prepared. When this is false then the
-     * populateStatement is only invoked if there is 1 or more expected parameters to be set; for example this avoids
-     * reading the message body/headers for SQL queries with no parameters.
+     * If enabled, then the populateStatement method from org.apache.camel.component.sql.SqlPrepareStatementStrategy is
+     * always invoked, also if there are no expected parameters to be prepared. When this is false, then the
+     * populateStatement is only invoked if there are one or more expected parameters to be set; for example, this
+     * avoids reading the message body/headers for SQL queries with no parameters.
      */
     public void setAlwaysPopulateStatement(boolean alwaysPopulateStatement) {
         this.alwaysPopulateStatement = alwaysPopulateStatement;
@@ -268,7 +289,7 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * The separator to use when parameter values is taken from message body (if the body is a String type), to be
+     * The separator to use when parameter values are taken from message body (if the body is a String type), to be
      * inserted at # placeholders. Notice if you use named parameters, then a Map type is used instead.
      * <p/>
      * The default value is comma.
@@ -282,12 +303,12 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * Make the output of consumer or producer to SelectList as List of Map, or SelectOne as single Java object in the
-     * following way: a) If the query has only single column, then that JDBC Column object is returned. (such as SELECT
-     * COUNT( * ) FROM PROJECT will return a Long object. b) If the query has more than one column, then it will return
-     * a Map of that result. c) If the outputClass is set, then it will convert the query result into an Java bean
+     * Make the output of consumer or producer to SelectList as List of Map, or SelectOne as a single Java object in the
+     * following way: a) If the query has only a single column, then that JDBC Column object is returned. (such as
+     * SELECT COUNT( * ) FROM PROJECT will return a Long object. b) If the query has more than one column, then it will
+     * return a Map of that result. c) If the outputClass is set, then it will convert the query result into a Java bean
      * object by calling all the setters that match the column names. It will assume your class has a default
-     * constructor to create instance with. d) If the query resulted in more than one rows, it throws an non-unique
+     * constructor to create instance with. d) If the query resulted in more than one rows, it throws a non-unique
      * result exception.
      */
     public void setOutputType(SqlOutputType outputType) {
@@ -311,8 +332,8 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
 
     /**
      * If set greater than zero, then Camel will use this count value of parameters to replace instead of querying via
-     * JDBC metadata API. This is useful if the JDBC vendor could not return correct parameters count, then user may
-     * override instead.
+     * JDBC metadata API. This is useful if the JDBC vendor could not return the correct parameters count, then the user
+     * may override instead.
      */
     public void setParametersCount(int parametersCount) {
         this.parametersCount = parametersCount;
@@ -335,7 +356,7 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * Store the query result in a header instead of the message body. By default, outputHeader == null and the query
+     * Store the query result in a header instead of the message body. By default, outputHeader is null, and the query
      * result is stored in the message body, any existing content in the message body is discarded. If outputHeader is
      * set, the value is used as the name of the header to store the query result and the original message body is
      * preserved.
@@ -351,7 +372,7 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     /**
      * Whether to use the message body as the SQL and then headers for parameters.
      * <p/>
-     * If this option is enabled then the SQL in the uri is not used.
+     * If this option is enabled, then the SQL in the uri is not used.
      */
     public void setUseMessageBodyForSql(boolean useMessageBodyForSql) {
         this.useMessageBodyForSql = useMessageBodyForSql;
@@ -419,7 +440,7 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     }
 
     /**
-     * Specifies a character that will be replaced to ? in SQL query. Notice, that it is simple String.replaceAll()
+     * Specifies a character that will be replaced to ? in SQL query. Notice that it is a simple String.replaceAll()
      * operation and no SQL parsing is involved (quoted strings will also change).
      */
     public void setPlaceholder(String placeholder) {
@@ -465,8 +486,8 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
     public List<?> queryForList(ResultSet rs, boolean allowMapToClass) throws SQLException {
         if (allowMapToClass && outputClass != null) {
             Class<?> outputClazz = getCamelContext().getClassResolver().resolveClass(outputClass);
-            RowMapper rowMapper = rowMapperFactory.newBeanRowMapper(outputClazz);
-            RowMapperResultSetExtractor<?> mapper = new RowMapperResultSetExtractor(rowMapper);
+            RowMapper<?> rowMapper = rowMapperFactory.newBeanRowMapper(outputClazz);
+            RowMapperResultSetExtractor<?> mapper = new RowMapperResultSetExtractor<>(rowMapper);
             return mapper.extractData(rs);
         } else {
             RowMapper rowMapper = rowMapperFactory.newColumnRowMapper();
@@ -475,7 +496,6 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public Object queryForObject(ResultSet rs) throws SQLException {
         Object result = null;
         if (outputClass == null) {
@@ -496,9 +516,9 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
                 }
             }
         } else {
-            Class<?> outputClzz = getCamelContext().getClassResolver().resolveClass(outputClass);
-            RowMapper rowMapper = rowMapperFactory.newBeanRowMapper(outputClzz);
-            RowMapperResultSetExtractor<?> mapper = new RowMapperResultSetExtractor(rowMapper);
+            Class<?> outputClazz = getCamelContext().getClassResolver().resolveClass(outputClass);
+            RowMapper<?> rowMapper = rowMapperFactory.newBeanRowMapper(outputClazz);
+            RowMapperResultSetExtractor<?> mapper = new RowMapperResultSetExtractor<>(rowMapper);
             List<?> data = mapper.extractData(rs);
             if (data.size() > 1) {
                 throw new SQLDataException(
@@ -512,14 +532,13 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     public ResultSetIterator queryForStreamList(Connection connection, Statement statement, ResultSet rs) throws SQLException {
         if (outputClass == null) {
-            RowMapper rowMapper = rowMapperFactory.newColumnRowMapper();
+            RowMapper<?> rowMapper = rowMapperFactory.newColumnRowMapper();
             return new ResultSetIterator(connection, statement, rs, rowMapper);
         } else {
-            Class<?> outputClzz = getCamelContext().getClassResolver().resolveClass(outputClass);
-            RowMapper rowMapper = rowMapperFactory.newBeanRowMapper(outputClzz);
+            Class<?> outputClazz = getCamelContext().getClassResolver().resolveClass(outputClass);
+            RowMapper<?> rowMapper = rowMapperFactory.newBeanRowMapper(outputClazz);
             return new ResultSetIterator(connection, statement, rs, rowMapper);
         }
     }
@@ -532,4 +551,46 @@ public abstract class DefaultSqlEndpoint extends DefaultPollingEndpoint {
             rowMapperFactory = new DefaultRowMapperFactory();
         }
     }
+
+    @Override
+    protected void doStart() throws Exception {
+        if (isServiceLocationEnabled()) {
+            // we need to use reflection to find the URL to the database, so do this once on startup
+            BeanIntrospection bi = PluginHelper.getBeanIntrospection(getCamelContext());
+            DataSource ds = getDataSource();
+            // unwrap if ds is from a synthetic ClientProxy bean
+            if (ds != null && ds.getClass().getName().endsWith("ClientProxy")) {
+                DataSource actual = UnwrapHelper.unwrapClientProxy(ds);
+                if (actual != null) {
+                    ds = actual;
+                }
+            }
+            serviceUrl = SqlServiceLocationHelper.getJDBCURLFromDataSource(bi, ds);
+
+            serviceMetadata = new HashMap<>();
+            String user = SqlServiceLocationHelper.getUsernameFromConnectionFactory(bi, ds);
+            if (user != null) {
+                serviceMetadata.put("username", user);
+            }
+        }
+    }
+
+    @Override
+    public String getServiceUrl() {
+        return serviceUrl;
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "jdbc";
+    }
+
+    @Override
+    public Map<String, String> getServiceMetadata() {
+        if (serviceMetadata != null && !serviceMetadata.isEmpty()) {
+            return serviceMetadata;
+        }
+        return null;
+    }
+
 }

@@ -22,7 +22,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BeanLanguageMethodMissingParenthesisTest extends ContextTestSupport {
 
@@ -35,7 +35,7 @@ public class BeanLanguageMethodMissingParenthesisTest extends ContextTestSupport
     public void testFooCorrect() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .filter(method(BeanLanguageMethodMissingParenthesisTest.class,
                                 "couldThisBeFoo(${body}, ${header.foo})"))
@@ -62,7 +62,7 @@ public class BeanLanguageMethodMissingParenthesisTest extends ContextTestSupport
     public void testFooMissingParenthesis() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .filter(method(BeanLanguageMethodMissingParenthesisTest.class, "couldThisBeFoo(${body}, ${header.foo}"))
                         .to("mock:foo").end().to("mock:result");
@@ -70,20 +70,19 @@ public class BeanLanguageMethodMissingParenthesisTest extends ContextTestSupport
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Hello World", "foo", "yes");
-            fail("Should throw exception");
-        } catch (CamelExecutionException e) {
-            IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause().getCause());
-            assertEquals("Method should end with parenthesis, was couldThisBeFoo(${body}, ${header.foo}", iae.getMessage());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Hello World", "foo", "yes"),
+                "Should throw exception");
+
+        IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause().getCause());
+        assertEquals("Method should end with parenthesis, was couldThisBeFoo(${body}, ${header.foo}", iae.getMessage());
     }
 
     @Test
     public void testFooInvalidName() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start")
                         .filter(method(BeanLanguageMethodMissingParenthesisTest.class,
                                 "--couldThisBeFoo(${body}, ${header.foo})"))
@@ -93,15 +92,14 @@ public class BeanLanguageMethodMissingParenthesisTest extends ContextTestSupport
         });
         context.start();
 
-        try {
-            template.sendBodyAndHeader("direct:start", "Hello World", "foo", "yes");
-            fail("Should throw exception");
-        } catch (CamelExecutionException e) {
-            IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause().getCause());
-            assertEquals(
-                    "Method name must start with a valid java identifier at position: 0 in method: --couldThisBeFoo(${body}, ${header.foo})",
-                    iae.getMessage());
-        }
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.sendBodyAndHeader("direct:start", "Hello World", "foo", "yes"),
+                "Should throw exception");
+
+        IllegalArgumentException iae = assertIsInstanceOf(IllegalArgumentException.class, e.getCause().getCause());
+        assertEquals(
+                "Method name must start with a valid java identifier at position: 0 in method: --couldThisBeFoo(${body}, ${header.foo})",
+                iae.getMessage());
     }
 
     public boolean couldThisBeFoo(String body, String header) {

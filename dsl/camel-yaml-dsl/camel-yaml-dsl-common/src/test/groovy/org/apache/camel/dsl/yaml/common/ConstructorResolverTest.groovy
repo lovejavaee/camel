@@ -29,12 +29,10 @@ import spock.lang.Specification
 class ConstructorResolverTest extends Specification {
 
     static int getJavaMajorVersion() {
-        String javaSpecVersion = System.getProperty("java.specification.version");
-        if (javaSpecVersion.contains(".")) { // before jdk 9
-            return Integer.parseInt(javaSpecVersion.split("\\.")[1]);
-        } else {
-            return Integer.parseInt(javaSpecVersion);
-        }
+        String javaSpecVersion = System.getProperty("java.specification.version")
+
+        return Integer.parseInt(javaSpecVersion)
+
     }
 
     def "test"() {
@@ -42,7 +40,7 @@ class ConstructorResolverTest extends Specification {
             def settings = LoadSettings.builder().build()
         when:
             def ctr = new YamlDeserializationContext(settings)
-            ctr.setCamelContext(new DefaultCamelContext());
+            ctr.setCamelContext(new DefaultCamelContext())
             ctr.addResolver(new LocalResolver())
 
             def load = new Load(settings, ctr)
@@ -54,10 +52,6 @@ class ConstructorResolverTest extends Specification {
                       message: nested
             '''.stripLeading())
         then:
-           if (getJavaMajorVersion() == 8) {
-               return;
-           }
-
             with(result, List) {
                 size() == 1
 
@@ -77,19 +71,19 @@ class ConstructorResolverTest extends Specification {
             switch (id) {
                 case 'my-node':
                 case 'org.apache.camel.dsl.yaml.common.ConstructorResolverTest$MyNode':
-                    return new MyNodeConstructor();
+                    return new MyNodeConstructor()
                 case 'nested':
                 case 'org.apache.camel.dsl.yaml.common.ConstructorResolverTest$MyNested':
-                    return new MyNestedConstructor();
+                    return new MyNestedConstructor()
             }
-            return null;
+            return null
         }
     }
 
     @ToString
     static class MyNode {
         String message
-        MyNested nested;
+        MyNested nested
     }
 
     @ToString
@@ -123,7 +117,7 @@ class ConstructorResolverTest extends Specification {
                     target.nested = asType(value, MyNested.class)
                     break
                 default:
-                    return false;
+                    return false
             }
 
             return true
@@ -153,7 +147,7 @@ class ConstructorResolverTest extends Specification {
                     target.message = ((ScalarNode)value).value
                     break
                 default:
-                    return false;
+                    return false
             }
 
             return true

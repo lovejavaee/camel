@@ -41,7 +41,7 @@ public class ProducerCacheNonSingletonTest extends ContextTestSupport {
     }
 
     @Test
-    public void testNonSingleton() throws Exception {
+    public void testNonSingleton() {
         context.addComponent("dummy", new MyDummyComponent());
 
         DefaultProducerCache cache = new DefaultProducerCache(this, context, 100);
@@ -63,10 +63,10 @@ public class ProducerCacheNonSingletonTest extends ContextTestSupport {
         assertTrue(producer.getStatus().isStopped(), "Should be stopped");
     }
 
-    public class MyDummyComponent extends DefaultComponent {
+    public static class MyDummyComponent extends DefaultComponent {
 
         @Override
-        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
             return new MyDummyEndpoint();
         }
     }
@@ -74,12 +74,12 @@ public class ProducerCacheNonSingletonTest extends ContextTestSupport {
     public static class MyDummyEndpoint extends DefaultEndpoint {
 
         @Override
-        public Producer createProducer() throws Exception {
+        public Producer createProducer() {
             return new MyDummyProducer(this);
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return null;
         }
 

@@ -25,8 +25,6 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.handler.BasicValidationHandler;
 import org.apache.hc.core5.http.impl.bootstrap.HttpServer;
 import org.apache.hc.core5.http.impl.bootstrap.ServerBootstrap;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,22 +34,18 @@ public class HttpSendDynamicAwareUriWithoutSlashTest extends BaseHttpTest {
 
     private HttpServer localServer;
 
-    @BeforeEach
     @Override
-    public void setUp() throws Exception {
-        localServer = ServerBootstrap.bootstrap().setHttpProcessor(getBasicHttpProcessor())
+    public void setupResources() throws Exception {
+        localServer = ServerBootstrap.bootstrap()
+                .setCanonicalHostName("localhost").setHttpProcessor(getBasicHttpProcessor())
                 .setConnectionReuseStrategy(getConnectionReuseStrategy()).setResponseFactory(getHttpResponseFactory())
                 .setSslContext(getSSLContext())
                 .register("/users/*", new BasicValidationHandler("GET", null, null, "a user")).create();
         localServer.start();
-
-        super.setUp();
     }
 
-    @AfterEach
     @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
+    public void cleanupResources() {
 
         if (localServer != null) {
             localServer.stop();
@@ -59,10 +53,10 @@ public class HttpSendDynamicAwareUriWithoutSlashTest extends BaseHttpTest {
     }
 
     @Override
-    protected RoutesBuilder createRouteBuilder() throws Exception {
+    protected RoutesBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:usersDrink")
                         .toD("http://localhost:" + localServer.getLocalPort()
                              + "/users/${exchangeProperty.user}");
@@ -75,7 +69,7 @@ public class HttpSendDynamicAwareUriWithoutSlashTest extends BaseHttpTest {
     }
 
     @Test
-    public void testDynamicAware() throws Exception {
+    public void testDynamicAware() {
         Exchange out = fluentTemplate.to("direct:usersDrink")
                 .withExchange(ExchangeBuilder.anExchange(context).withProperty("user", "joes").build()).send();
         assertEquals("a user", out.getMessage().getBody(String.class));
@@ -93,7 +87,7 @@ public class HttpSendDynamicAwareUriWithoutSlashTest extends BaseHttpTest {
     }
 
     @Test
-    public void testDynamicAwareWithoutSlash() throws Exception {
+    public void testDynamicAwareWithoutSlash() {
         Exchange out = fluentTemplate.to("direct:usersDrinkWithoutSlash")
                 .withExchange(ExchangeBuilder.anExchange(context).withProperty("user", "joes").build()).send();
         assertEquals("a user", out.getMessage().getBody(String.class));

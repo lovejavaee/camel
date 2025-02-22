@@ -71,7 +71,7 @@ public final class ReflectionHelper {
          *
          * @param clazz the class to operate on
          */
-        void doWith(Class clazz) throws IllegalArgumentException, IllegalAccessException;
+        void doWith(Class<?> clazz) throws IllegalArgumentException, IllegalAccessException;
     }
 
     /**
@@ -82,8 +82,8 @@ public final class ReflectionHelper {
      */
     public static void doWithClasses(Class<?> clazz, ClassCallback cc) throws IllegalArgumentException {
         // and then nested classes
-        Class[] classes = clazz.getDeclaredClasses();
-        for (Class aClazz : classes) {
+        Class<?>[] classes = clazz.getDeclaredClasses();
+        for (Class<?> aClazz : classes) {
             try {
                 cc.doWith(aClazz);
             } catch (IllegalAccessException ex) {
@@ -179,14 +179,61 @@ public final class ReflectionHelper {
 
     public static void setField(Field f, Object instance, Object value) {
         try {
-            boolean oldAccessible = f.isAccessible();
-            boolean shouldSetAccessible = !Modifier.isPublic(f.getModifiers()) && !oldAccessible;
-            if (shouldSetAccessible) {
+            if (!Modifier.isPublic(f.getModifiers()) && !f.canAccess(instance)) {
                 f.setAccessible(true);
             }
-            f.set(instance, value);
-            if (shouldSetAccessible) {
-                f.setAccessible(oldAccessible);
+            // must use fine-grained for the correct type when setting a field value via reflection
+            Class<?> type = f.getType();
+            if (boolean.class == type) {
+                boolean val;
+                if (value instanceof Boolean) {
+                    val = (boolean) value;
+                } else {
+                    val = Boolean.parseBoolean(value.toString());
+                }
+                f.setBoolean(instance, val);
+            } else if (byte.class == type) {
+                byte val;
+                if (value instanceof Byte) {
+                    val = (byte) value;
+                } else {
+                    val = Byte.parseByte(value.toString());
+                }
+                f.setByte(instance, val);
+            } else if (int.class == type) {
+                int val;
+                if (value instanceof Integer) {
+                    val = (int) value;
+                } else {
+                    val = Integer.parseInt(value.toString());
+                }
+                f.setInt(instance, val);
+            } else if (long.class == type) {
+                long val;
+                if (value instanceof Long) {
+                    val = (long) value;
+                } else {
+                    val = Long.parseLong(value.toString());
+                }
+                f.setLong(instance, val);
+            } else if (float.class == type) {
+                float val;
+                if (value instanceof Float) {
+                    val = (float) value;
+                } else {
+                    val = Float.parseFloat(value.toString());
+                }
+                f.setFloat(instance, val);
+            } else if (double.class == type) {
+                double val;
+                if (value instanceof Double) {
+                    val = (double) value;
+                } else {
+                    val = Double.parseDouble(value.toString());
+                }
+                f.setDouble(instance, val);
+            } else {
+                f.set(instance, value);
             }
         } catch (Exception ex) {
             throw new UnsupportedOperationException("Cannot inject value of class: " + value.getClass() + " into: " + f);
@@ -195,16 +242,10 @@ public final class ReflectionHelper {
 
     public static Object getField(Field f, Object instance) {
         try {
-            boolean oldAccessible = f.isAccessible();
-            boolean shouldSetAccessible = !Modifier.isPublic(f.getModifiers()) && !oldAccessible;
-            if (shouldSetAccessible) {
+            if (!Modifier.isPublic(f.getModifiers()) && !f.canAccess(instance)) {
                 f.setAccessible(true);
             }
-            Object answer = f.get(instance);
-            if (shouldSetAccessible) {
-                f.setAccessible(oldAccessible);
-            }
-            return answer;
+            return f.get(instance);
         } catch (Exception ex) {
             // ignore
         }

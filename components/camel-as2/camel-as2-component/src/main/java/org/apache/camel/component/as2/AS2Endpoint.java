@@ -22,11 +22,15 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.util.Map;
 
+import javax.net.ssl.SSLContext;
+
 import org.apache.camel.Category;
 import org.apache.camel.Consumer;
 import org.apache.camel.Processor;
 import org.apache.camel.Producer;
 import org.apache.camel.RuntimeCamelException;
+import org.apache.camel.component.as2.api.AS2AsyncMDNServerConnection;
+import org.apache.camel.component.as2.api.AS2AsyncMDNServerManager;
 import org.apache.camel.component.as2.api.AS2ClientConnection;
 import org.apache.camel.component.as2.api.AS2ClientManager;
 import org.apache.camel.component.as2.api.AS2CompressionAlgorithm;
@@ -46,7 +50,7 @@ import org.apache.camel.spi.UriParam;
 import org.apache.camel.support.component.AbstractApiEndpoint;
 import org.apache.camel.support.component.ApiMethod;
 import org.apache.camel.support.component.ApiMethodPropertiesHelper;
-import org.apache.http.entity.ContentType;
+import org.apache.hc.core5.http.ContentType;
 
 /**
  * Transfer data securely and reliably using the AS2 protocol (RFC4130).
@@ -64,6 +68,9 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
     private Object apiProxy;
 
     private AS2ClientConnection as2ClientConnection;
+
+    private AS2AsyncMDNServerConnection as2AsyncMDNServerConnection;
+
     private AS2ServerConnection as2ServerConnection;
 
     public AS2Endpoint(String uri, AS2Component component,
@@ -74,6 +81,10 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
 
     public AS2ClientConnection getAS2ClientConnection() {
         return as2ClientConnection;
+    }
+
+    public AS2AsyncMDNServerConnection getAS2AsyncMDNServerConnection() {
+        return as2AsyncMDNServerConnection;
     }
 
     public AS2ServerConnection getAS2ServerConnection() {
@@ -91,8 +102,19 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
         if (inBody != null) {
             throw new IllegalArgumentException("Option inBody is not supported for consumer endpoint");
         }
-        final AS2Consumer consumer = new AS2Consumer(this, processor);
-        configureConsumer(consumer);
+        Consumer consumer;
+        switch (configuration.getApiName()) {
+            case SERVER:
+                consumer = new AS2Consumer(this, processor);
+                configureConsumer(consumer);
+                break;
+            case RECEIPT:
+                consumer = new AS2AsyncMDNConsumer(this, processor);
+                configureConsumer(consumer);
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid API name " + configuration.getApiName());
+        }
         return consumer;
     }
 
@@ -224,6 +246,14 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
         configuration.setEncryptingCertificateChain(encryptingCertificateChain);
     }
 
+    public SSLContext getSslContext() {
+        return configuration.getSslContext();
+    }
+
+    public void setSslContext(SSLContext sslContext) {
+        configuration.setSslContext(sslContext);
+    }
+
     @Override
     protected ApiMethodPropertiesHelper<AS2Configuration> getPropertiesHelper() {
         return AS2PropertiesHelper.getHelper(getCamelContext());
@@ -243,6 +273,9 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
                 break;
             case SERVER:
                 createAS2ServerConnection();
+                break;
+            case RECEIPT:
+                createAS2AsyncMDNServerConnection();
                 break;
             default:
                 break;
@@ -265,6 +298,8 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
             case SERVER:
                 apiProxy = new AS2ServerManager(getAS2ServerConnection());
                 break;
+            case RECEIPT:
+                apiProxy = new AS2AsyncMDNServerManager(getAS2AsyncMDNServerConnection());
             default:
                 throw new IllegalArgumentException("Invalid API name " + apiName);
         }
@@ -290,4 +325,11 @@ public class AS2Endpoint extends AbstractApiEndpoint<AS2ApiName, AS2Configuratio
         }
     }
 
+    private void createAS2AsyncMDNServerConnection() {
+        try {
+            as2AsyncMDNServerConnection = AS2ConnectionHelper.createAS2AsyncMDNServerConnection(configuration);
+        } catch (IOException e) {
+            throw new RuntimeCamelException("Async MDN Server HTTP connection failed", e);
+        }
+    }
 }

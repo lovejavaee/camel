@@ -26,12 +26,13 @@
 
     <!-- START SNIPPET: example -->
     <camelContext xmlns="http://camel.apache.org/schema/spring">
+    <jmxAgent id="jmx" disabled="true"/>
         <interceptFrom>
-            <when>
+            <onWhen>
                 <simple>${body} contains 'Goofy'</simple>
-                <to uri="mock:goofy"/>
-                <stop/>
-            </when>
+            </onWhen>
+            <to uri="mock:goofy"/>
+            <stop/>
         </interceptFrom>
         <route>
             <from uri="direct:start"/>

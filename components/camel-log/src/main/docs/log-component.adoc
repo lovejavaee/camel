@@ -1,10 +1,11 @@
-= Log Component
-:doctitle: Log
+= Log Data Component
+:doctitle: Log Data
 :shortname: log
 :artifactid: camel-log
-:description: Log messages to the underlying logging mechanism.
+:description: Prints data form the routed message (such as body and headers) to the logger.
 :since: 1.1
 :supportlevel: Stable
+:tabs-sync-option:
 :component-header: Only producer is supported
 :core:
 //Manually maintained attributes
@@ -17,7 +18,7 @@
 The Log component logs message exchanges to the underlying logging
 mechanism.
 
-Camel uses http://www.slf4j.org/[SLF4J] which allows you to configure
+Camel uses http://www.slf4j.org/[SLF4J], which allows you to configure
 logging via, among others:
 
 * Log4j
@@ -41,7 +42,7 @@ can append query options to the URI in the following format,
 If there's single instance
 of `org.slf4j.Logger` found in the Registry, the *loggingCategory* is no
 longer used to create logger instance. The registered instance is used
-instead. Also it is possible to reference particular `Logger` instance
+instead. Also, it is possible to reference particular `Logger` instance
 using `?logger=#myLogger` URI parameter. Eventually, if there's no
 registered and URI `logger` parameter, the logger instance is created
 using *loggingCategory*.
@@ -60,11 +61,9 @@ also ships with the `Throughput` logger, which is used whenever the
 
 [TIP]
 ====
-*Also a log in the DSL*
-
 There is also a `log` directly in the DSL, but it has a different
-purpose. Its meant for lightweight and human logs. See more details at
-LogEIP.
+purpose. It's meant for lightweight and human logs. See more details at
+xref:eips:log-eip.adoc[LogEIP].
 ====
 
 
@@ -81,8 +80,9 @@ include::partial$component-endpoint-options.adoc[]
 
 // endpoint options: END
 
+== Examples
 
-== Regular logger sample
+=== Regular logger example
 
 In the route below we log the incoming orders at `DEBUG` level before
 the order is processed:
@@ -103,7 +103,7 @@ Or using Spring XML to define the route:
 </route>
 ----
 
-== Regular logger with formatter sample
+=== Regular logger with formatter example
 
 In the route below we log the incoming orders at `INFO` level before the
 order is processed.
@@ -114,7 +114,7 @@ from("activemq:orders").
     to("log:com.mycompany.order?showAll=true&multiline=true").to("bean:processOrder");
 ----
 
-== Throughput logger with groupSize sample
+=== Throughput logger with groupSize example
 
 In the route below we log the throughput of the incoming orders at
 `DEBUG` level grouped by 10 messages.
@@ -125,10 +125,10 @@ from("activemq:orders").
     to("log:com.mycompany.order?level=DEBUG&groupSize=10").to("bean:processOrder");
 ----
 
-== Throughput logger with groupInterval sample
+=== Throughput logger with groupInterval example
 
 This route will result in message stats logged every 10s, with an
-initial 60s delay and stats should be displayed even if there isn't any
+initial 60s delay, and stats should be displayed even if there isn't any
 message traffic.
 
 [source,java]
@@ -143,7 +143,7 @@ The following will be logged:
 "Received: 1000 new messages, with total 2000 so far. Last group took: 10000 millis which is: 100 messages per second. average: 100"
 ----
 
-== Masking sensitive information like password
+=== Masking sensitive information like password
 
 You can enable security masking for logging by setting `logMask` flag to `true`.
 Note that this option also affects Log EIP.
@@ -182,7 +182,7 @@ And in XML:
 If you want to use a custom masking formatter, put it into registry with the name `CamelCustomLogMask`.
 Note that the masking formatter must implement `org.apache.camel.spi.MaskingFormatter`.
 
-== Full customization of the logging output
+=== Full customization of the logging output
 
 With the options outlined in the xref:log-component.adoc[#Formatting] section, you
 can control much of the output of the logger. However, log lines will
@@ -225,7 +225,7 @@ in either of two ways:
 </bean>
 ----
 
-=== Convention over configuration:*
+==== Convention over configuration:*
 
 Simply by registering a bean with the name `logFormatter`; the Log
 Component is intelligent enough to pick it up automatically.
@@ -239,16 +239,16 @@ Component is intelligent enough to pick it up automatically.
 ====
 The `ExchangeFormatter` gets applied to *all Log endpoints within
 that Camel Context*. If you need different ExchangeFormatters for
-different endpoints, just instantiate the LogComponent as many times as
+different endpoints, instantiate the LogComponent as many times as
 needed, and use the relevant bean name as the endpoint prefix.
 ====
 
 
 When using a custom log formatter, you
 can specify parameters in the log uri, which gets configured on the
-custom log formatter. Though when you do that you should define the
-"logFormatter" as prototype scoped so its not shared if you have
-different parameters, eg:
+custom log formatter. Though when you do that, you should define the
+"logFormatter" as prototype scoped, so it's not shared if you have
+different parameters, e.g.:
 
 [source,xml]
 ----

@@ -47,7 +47,9 @@ import org.apache.camel.spi.ComponentResolver;
 import org.apache.camel.spi.ConfigurerResolver;
 import org.apache.camel.spi.DataFormatResolver;
 import org.apache.camel.spi.DeferServiceFactory;
+import org.apache.camel.spi.DumpRoutesStrategy;
 import org.apache.camel.spi.EndpointRegistry;
+import org.apache.camel.spi.EndpointServiceRegistry;
 import org.apache.camel.spi.ExchangeFactory;
 import org.apache.camel.spi.ExchangeFactoryManager;
 import org.apache.camel.spi.ExecutorServiceManager;
@@ -63,8 +65,10 @@ import org.apache.camel.spi.ManagementNameStrategy;
 import org.apache.camel.spi.MessageHistoryFactory;
 import org.apache.camel.spi.ModelJAXBContextFactory;
 import org.apache.camel.spi.ModelToXMLDumper;
+import org.apache.camel.spi.ModelToYAMLDumper;
 import org.apache.camel.spi.ModelineFactory;
 import org.apache.camel.spi.NodeIdFactory;
+import org.apache.camel.spi.NormalizedEndpointUri;
 import org.apache.camel.spi.PackageScanClassResolver;
 import org.apache.camel.spi.PackageScanResourceResolver;
 import org.apache.camel.spi.PeriodTaskResolver;
@@ -81,6 +85,7 @@ import org.apache.camel.spi.RouteController;
 import org.apache.camel.spi.RouteFactory;
 import org.apache.camel.spi.RoutesLoader;
 import org.apache.camel.spi.ShutdownStrategy;
+import org.apache.camel.spi.StartupConditionStrategy;
 import org.apache.camel.spi.StreamCachingStrategy;
 import org.apache.camel.spi.Tracer;
 import org.apache.camel.spi.TransformerRegistry;
@@ -89,11 +94,12 @@ import org.apache.camel.spi.UnitOfWorkFactory;
 import org.apache.camel.spi.UriFactoryResolver;
 import org.apache.camel.spi.UuidGenerator;
 import org.apache.camel.spi.ValidatorRegistry;
+import org.apache.camel.spi.VariableRepositoryFactory;
 import org.apache.camel.support.DefaultRegistry;
 import org.apache.camel.support.DefaultUuidGenerator;
-import org.apache.camel.support.NormalizedUri;
 import org.apache.camel.support.PluginHelper;
 import org.apache.camel.support.ResolverHelper;
+import org.apache.camel.support.startup.DefaultStartupConditionStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -141,7 +147,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected HealthCheckRegistry createHealthCheckRegistry() {
         Optional<HealthCheckRegistry> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 HealthCheckRegistry.FACTORY,
                 HealthCheckRegistry.class);
 
@@ -152,7 +158,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected DevConsoleRegistry createDevConsoleRegistry() {
         Optional<DevConsoleRegistry> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 DevConsoleRegistry.FACTORY,
                 DevConsoleRegistry.class);
 
@@ -163,7 +169,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected TypeConverter createTypeConverter() {
         return new DefaultTypeConverter(
                 getCamelContextReference(), PluginHelper.getPackageScanClassResolver(this), getInjector(),
-                isLoadTypeConverters());
+                isLoadTypeConverters(), isTypeConverterStatisticsEnabled());
     }
 
     @Override
@@ -173,15 +179,15 @@ public class SimpleCamelContext extends AbstractCamelContext {
         if (typeConverter == null) {
             typeConverter = createTypeConverter();
         }
-        if (typeConverter instanceof TypeConverterRegistry) {
-            return (TypeConverterRegistry) typeConverter;
+        if (typeConverter instanceof TypeConverterRegistry typeConverterRegistry) {
+            return typeConverterRegistry;
         }
         return null;
     }
 
     @Override
     protected Injector createInjector() {
-        FactoryFinder finder = getBootstrapFactoryFinder();
+        FactoryFinder finder = getCamelContextExtension().getBootstrapFactoryFinder();
         Optional<Injector> result = finder.newInstance("Injector", Injector.class);
         return result.orElseGet(() -> new DefaultInjector(getCamelContextReference()));
     }
@@ -190,7 +196,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected PropertiesComponent createPropertiesComponent() {
         Optional<PropertiesComponent> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 PropertiesComponent.FACTORY,
                 PropertiesComponent.class);
 
@@ -231,7 +237,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ModelJAXBContextFactory createModelJAXBContextFactory() {
         Optional<ModelJAXBContextFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ModelJAXBContextFactory.FACTORY,
                 ModelJAXBContextFactory.class);
 
@@ -252,7 +258,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ModelineFactory createModelineFactory() {
         Optional<ModelineFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ModelineFactory.FACTORY,
                 ModelineFactory.class);
 
@@ -291,7 +297,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ProcessorFactory createProcessorFactory() {
         Optional<ProcessorFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ProcessorFactory.FACTORY,
                 ProcessorFactory.class);
 
@@ -307,7 +313,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected InternalProcessorFactory createInternalProcessorFactory() {
         Optional<InternalProcessorFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 InternalProcessorFactory.FACTORY,
                 InternalProcessorFactory.class);
 
@@ -397,7 +403,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected RuntimeCamelCatalog createRuntimeCamelCatalog() {
         Optional<RuntimeCamelCatalog> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 RuntimeCamelCatalog.FACTORY,
                 RuntimeCamelCatalog.class);
 
@@ -406,6 +412,37 @@ public class SimpleCamelContext extends AbstractCamelContext {
         } else {
             throw new IllegalArgumentException(
                     "Cannot find RuntimeCamelCatalog on classpath. Add camel-core-catalog to classpath.");
+        }
+    }
+
+    @Override
+    protected DumpRoutesStrategy createDumpRoutesStrategy() {
+        DumpRoutesStrategy answer = getCamelContextReference().hasService(DumpRoutesStrategy.class);
+        if (answer != null) {
+            return answer;
+        }
+
+        // is there any custom which we prioritize over default
+        Optional<DumpRoutesStrategy> result = ResolverHelper.resolveService(
+                getCamelContextReference(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
+                DumpRoutesStrategy.FACTORY,
+                DumpRoutesStrategy.class);
+
+        if (result.isEmpty()) {
+            // lookup default factory
+            result = ResolverHelper.resolveService(
+                    getCamelContextReference(),
+                    getCamelContextExtension().getBootstrapFactoryFinder(),
+                    "default-" + DumpRoutesStrategy.FACTORY,
+                    DumpRoutesStrategy.class);
+        }
+
+        if (result.isPresent()) {
+            return result.get();
+        } else {
+            throw new IllegalArgumentException(
+                    "Cannot find DumpRoutesStrategy on classpath. Add camel-core-engine to classpath.");
         }
     }
 
@@ -423,7 +460,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected HeadersMapFactory createHeadersMapFactory() {
         Optional<HeadersMapFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 HeadersMapFactory.FACTORY,
                 HeadersMapFactory.class);
 
@@ -439,7 +476,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
         // then classpath scanning
         Optional<CliConnectorFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 CliConnectorFactory.FACTORY,
                 CliConnectorFactory.class);
         // cli-connector is optional
@@ -450,7 +487,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected BeanProxyFactory createBeanProxyFactory() {
         Optional<BeanProxyFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 BeanProxyFactory.FACTORY,
                 BeanProxyFactory.class);
 
@@ -465,7 +502,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected AnnotationBasedProcessorFactory createAnnotationBasedProcessorFactory() {
         Optional<AnnotationBasedProcessorFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 AnnotationBasedProcessorFactory.FACTORY,
                 AnnotationBasedProcessorFactory.class);
 
@@ -481,7 +518,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected DeferServiceFactory createDeferServiceFactory() {
         Optional<DeferServiceFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 DeferServiceFactory.FACTORY,
                 DeferServiceFactory.class);
 
@@ -497,7 +534,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected BeanProcessorFactory createBeanProcessorFactory() {
         Optional<BeanProcessorFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 BeanProcessorFactory.FACTORY,
                 BeanProcessorFactory.class);
 
@@ -517,7 +554,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected RoutesLoader createRoutesLoader() {
         Optional<RoutesLoader> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 RoutesLoader.FACTORY,
                 RoutesLoader.class);
 
@@ -528,7 +565,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ResourceLoader createResourceLoader() {
         Optional<ResourceLoader> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ResourceLoader.FACTORY,
                 ResourceLoader.class);
 
@@ -539,14 +576,29 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ModelToXMLDumper createModelToXMLDumper() {
         Optional<ModelToXMLDumper> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ModelToXMLDumper.FACTORY,
                 ModelToXMLDumper.class);
 
         if (result.isPresent()) {
             return result.get();
         } else {
-            throw new IllegalArgumentException("Cannot find ModelToXMLDumper on classpath. Add camel-xml-jaxb to classpath.");
+            throw new IllegalArgumentException("Cannot find ModelToXMLDumper on classpath. Add camel-xml-io to classpath.");
+        }
+    }
+
+    @Override
+    protected ModelToYAMLDumper createModelToYAMLDumper() {
+        Optional<ModelToYAMLDumper> result = ResolverHelper.resolveService(
+                getCamelContextReference(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
+                ModelToYAMLDumper.FACTORY,
+                ModelToYAMLDumper.class);
+
+        if (result.isPresent()) {
+            return result.get();
+        } else {
+            throw new IllegalArgumentException("Cannot find ModelToYAMLDumper on classpath. Add camel-yaml-io to classpath.");
         }
     }
 
@@ -554,7 +606,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected RestBindingJaxbDataFormatFactory createRestBindingJaxbDataFormatFactory() {
         Optional<RestBindingJaxbDataFormatFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 RestBindingJaxbDataFormatFactory.FACTORY,
                 RestBindingJaxbDataFormatFactory.class);
 
@@ -571,10 +623,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
         Tracer tracer = null;
         if (getRegistry() != null) {
             // lookup in registry
-            Map<String, Tracer> map = getRegistry().findByTypeWithName(Tracer.class);
-            if (map.size() == 1) {
-                tracer = map.values().iterator().next();
-            }
+            tracer = getRegistry().findSingleByType(Tracer.class);
         }
         if (tracer == null) {
             tracer = getCamelContextExtension().getContextPlugin(Tracer.class);
@@ -583,6 +632,10 @@ public class SimpleCamelContext extends AbstractCamelContext {
             tracer = new DefaultTracer();
             tracer.setEnabled(isTracing());
             tracer.setStandby(isTracingStandby());
+            // enable both rest/templates if templates is enabled (we only want 1 public option)
+            boolean restOrTemplates = isTracingTemplates();
+            tracer.setTraceTemplates(restOrTemplates);
+            tracer.setTraceRests(restOrTemplates);
             getCamelContextExtension().addContextPlugin(Tracer.class, tracer);
         }
         return tracer;
@@ -607,7 +660,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected RestRegistryFactory createRestRegistryFactory() {
         Optional<RestRegistryFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 RestRegistryFactory.FACTORY,
                 RestRegistryFactory.class);
 
@@ -619,7 +672,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     }
 
     @Override
-    protected EndpointRegistry<NormalizedUri> createEndpointRegistry(Map<NormalizedUri, Endpoint> endpoints) {
+    protected EndpointRegistry createEndpointRegistry(Map<NormalizedEndpointUri, Endpoint> endpoints) {
         return new DefaultEndpointRegistry(getCamelContextReference(), endpoints);
     }
 
@@ -632,7 +685,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ExchangeFactory createExchangeFactory() {
         Optional<ExchangeFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ExchangeFactory.FACTORY,
                 ExchangeFactory.class);
 
@@ -648,7 +701,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ProcessorExchangeFactory createProcessorExchangeFactory() {
         Optional<ProcessorExchangeFactory> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ProcessorExchangeFactory.FACTORY,
                 ProcessorExchangeFactory.class);
 
@@ -659,7 +712,7 @@ public class SimpleCamelContext extends AbstractCamelContext {
     protected ReactiveExecutor createReactiveExecutor() {
         Optional<ReactiveExecutor> result = ResolverHelper.resolveService(
                 getCamelContextReference(),
-                getBootstrapFactoryFinder(),
+                getCamelContextExtension().getBootstrapFactoryFinder(),
                 ReactiveExecutor.FACTORY,
                 ReactiveExecutor.class);
 
@@ -667,12 +720,27 @@ public class SimpleCamelContext extends AbstractCamelContext {
     }
 
     @Override
-    protected ValidatorRegistry<ValidatorKey> createValidatorRegistry() {
+    protected ValidatorRegistry createValidatorRegistry() {
         return new DefaultValidatorRegistry(getCamelContextReference());
     }
 
     @Override
-    protected TransformerRegistry<TransformerKey> createTransformerRegistry() {
+    protected VariableRepositoryFactory createVariableRepositoryFactory() {
+        return new DefaultVariableRepositoryFactory(getCamelContextReference());
+    }
+
+    @Override
+    protected EndpointServiceRegistry createEndpointServiceRegistry() {
+        return new DefaultEndpointServiceRegistry(getCamelContextReference());
+    }
+
+    @Override
+    protected StartupConditionStrategy createStartupConditionStrategy() {
+        return new DefaultStartupConditionStrategy();
+    }
+
+    @Override
+    protected TransformerRegistry createTransformerRegistry() {
         return new DefaultTransformerRegistry(getCamelContextReference());
     }
 
@@ -701,6 +769,14 @@ public class SimpleCamelContext extends AbstractCamelContext {
     @Override
     public String addRouteFromTemplate(
             String routeId, String routeTemplateId, String prefixId, RouteTemplateContext routeTemplateContext)
+            throws Exception {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String addRouteFromKamelet(
+            String routeId, String routeTemplateId, String prefixId, String parentRouteId, String parentProcessorId,
+            Map<String, Object> parameters)
             throws Exception {
         throw new UnsupportedOperationException();
     }

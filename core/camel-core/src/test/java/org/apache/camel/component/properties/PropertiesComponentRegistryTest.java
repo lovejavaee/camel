@@ -25,7 +25,10 @@ import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.camel.support.DefaultRegistry;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PropertiesComponentRegistryTest extends ContextTestSupport {
 
@@ -56,7 +59,7 @@ public class PropertiesComponentRegistryTest extends ContextTestSupport {
     }
 
     @Test
-    public void testPropertiesComponentRegistryPlain() throws Exception {
+    public void testPropertiesComponentRegistryPlain() {
         context.start();
 
         assertSame(foo, context.getRegistry().lookupByName("foo"));
@@ -65,37 +68,34 @@ public class PropertiesComponentRegistryTest extends ContextTestSupport {
     }
 
     @Test
-    public void testPropertiesComponentRegistryLookupName() throws Exception {
+    public void testPropertiesComponentRegistryLookupName() {
         context.start();
 
         assertSame(foo, context.getRegistry().lookupByName("{{bean.foo}}"));
         assertSame(bar, context.getRegistry().lookupByName("{{bean.bar}}"));
 
-        try {
-            context.getRegistry().lookupByName("{{bean.unknown}}");
-            fail("Should have thrown exception");
-        } catch (RuntimeCamelException e) {
-            IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertEquals("Property with key [bean.unknown] not found in properties from text: {{bean.unknown}}",
-                    cause.getMessage());
-        }
+        RuntimeCamelException e = assertThrows(RuntimeCamelException.class,
+                () -> context.getRegistry().lookupByName("{{bean.unknown}}"),
+                "Should have thrown exception");
+
+        IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertEquals("Property with key [bean.unknown] not found in properties from text: {{bean.unknown}}",
+                cause.getMessage());
     }
 
     @Test
-    public void testPropertiesComponentRegistryLookupNameAndType() throws Exception {
+    public void testPropertiesComponentRegistryLookupNameAndType() {
         context.start();
 
         assertSame(foo, context.getRegistry().lookupByNameAndType("{{bean.foo}}", MyFooBean.class));
         assertSame(bar, context.getRegistry().lookupByNameAndType("{{bean.bar}}", MyDummyBean.class));
 
-        try {
-            context.getRegistry().lookupByNameAndType("{{bean.unknown}}", MyDummyBean.class);
-            fail("Should have thrown exception");
-        } catch (RuntimeCamelException e) {
-            IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
-            assertEquals("Property with key [bean.unknown] not found in properties from text: {{bean.unknown}}",
-                    cause.getMessage());
-        }
-    }
+        RuntimeCamelException e = assertThrows(RuntimeCamelException.class,
+                () -> context.getRegistry().lookupByNameAndType("{{bean.unknown}}", MyDummyBean.class),
+                "Should have thrown exception");
 
+        IllegalArgumentException cause = assertIsInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertEquals("Property with key [bean.unknown] not found in properties from text: {{bean.unknown}}",
+                cause.getMessage());
+    }
 }

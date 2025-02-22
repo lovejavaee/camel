@@ -30,10 +30,10 @@ public class SimpleOverrideMethodTest extends LanguageTestSupport {
     }
 
     @Test
-    public void testOverrideMethod() throws Exception {
+    public void testOverrideMethod() {
         Path path = new File("target").toPath();
         exchange.getIn().setBody(path);
-        assertExpression("${body.getFileName}", path.getFileName().toString());
+        assertExpression("${body.getFileName.toString}", path.getFileName().toString());
     }
 
 }

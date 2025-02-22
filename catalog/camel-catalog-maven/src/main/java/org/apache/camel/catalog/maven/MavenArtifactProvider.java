@@ -22,13 +22,17 @@ import org.apache.camel.catalog.CamelCatalog;
 
 /**
  * Provider which allows downloading artifact using Maven and add content to the {@link CamelCatalog}.
+ *
+ * @deprecated use {@code org.apache.camel.tooling.maven.support.MavenDownloader} from {@code camel-tooling-maven}
+ *             instead.
  */
+@Deprecated(since = "4.6.0")
 public interface MavenArtifactProvider {
 
     /**
      * Configures the directory for the download cache.
      * <p/>
-     * The default folder is <tt>USER_HOME/.groovy/grape</tt>
+     * The default directory is provider dependant.
      *
      * @param directory the directory.
      */

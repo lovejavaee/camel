@@ -22,6 +22,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+import com.google.api.gax.paging.Page;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.Bucket;
@@ -36,8 +37,6 @@ import org.apache.camel.Expression;
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.RuntimeCamelException;
-import org.apache.camel.health.HealthCheckHelper;
-import org.apache.camel.health.WritableHealthCheckRepository;
 import org.apache.camel.spi.Language;
 import org.apache.camel.spi.Synchronization;
 import org.apache.camel.support.EmptyAsyncCallback;
@@ -54,9 +53,6 @@ public class GoogleCloudStorageConsumer extends ScheduledBatchPollingConsumer {
 
     private final Language language;
 
-    private WritableHealthCheckRepository healthCheckRepository;
-    private GoogleCloudStorageConsumerHealthCheck consumerHealthCheck;
-
     public GoogleCloudStorageConsumer(GoogleCloudStorageEndpoint endpoint, Processor processor) {
         super(endpoint, processor);
         this.language = getEndpoint().getCamelContext().resolveLanguage("file");
@@ -65,16 +61,6 @@ public class GoogleCloudStorageConsumer extends ScheduledBatchPollingConsumer {
     @Override
     protected void doStart() throws Exception {
         super.doStart();
-
-        healthCheckRepository = HealthCheckHelper.getHealthCheckRepository(
-                getEndpoint().getCamelContext(),
-                "components",
-                WritableHealthCheckRepository.class);
-
-        if (healthCheckRepository != null) {
-            consumerHealthCheck = new GoogleCloudStorageConsumerHealthCheck(this, getRouteId());
-            healthCheckRepository.addHealthCheck(consumerHealthCheck);
-        }
 
         if (getConfiguration().isMoveAfterRead()) {
             Bucket bucket = getStorageClient().get(getConfiguration().getDestinationBucket());
@@ -112,9 +98,19 @@ public class GoogleCloudStorageConsumer extends ScheduledBatchPollingConsumer {
         } else {
             LOG.trace("Queueing objects in bucket [{}]...", bucketName);
 
-            List<Blob> bloblist = new LinkedList<>();
-            for (Blob blob : getStorageClient().list(bucketName).iterateAll()) {
+            Page<Blob> page;
+            if (ObjectHelper.isEmpty(getConfiguration().getPrefix())) {
+                page = getStorageClient().list(bucketName);
+            } else {
+                Storage.BlobListOption option = Storage.BlobListOption.prefix(getConfiguration().getPrefix());
+                page = getStorageClient().list(bucketName, option);
+            }
 
+            // okay we have some response from Google so lets mark the consumer as ready
+            forceConsumerAsReady();
+
+            List<Blob> bloblist = new LinkedList<>();
+            for (Blob blob : page.iterateAll()) {
                 if (filter != null && !filter.isEmpty()) {
                     if (blob.getBlobId().getName().matches(filter)) {
                         bloblist.add(blob);
@@ -122,7 +118,6 @@ public class GoogleCloudStorageConsumer extends ScheduledBatchPollingConsumer {
                 } else {
                     bloblist.add(blob);
                 }
-
             }
 
             if (LOG.isTraceEnabled()) {

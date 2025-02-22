@@ -22,10 +22,9 @@ import com.jcraft.jsch.ProxyHTTP;
 import org.apache.camel.BindToRegistry;
 import org.apache.camel.Exchange;
 import org.apache.camel.test.AvailablePortFinder;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.littleshoot.proxy.HttpProxyServer;
 import org.littleshoot.proxy.ProxyAuthenticator;
@@ -34,14 +33,13 @@ import org.littleshoot.proxy.impl.DefaultHttpProxyServer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @EnabledIf(value = "org.apache.camel.test.infra.ftp.services.embedded.SftpUtil#hasRequiredAlgorithms('src/test/resources/hostkey.pem')")
 public class SftpSimpleProduceThroughProxyIT extends SftpServerTestSupport {
 
     private static HttpProxyServer proxyServer;
     private final int proxyPort = AvailablePortFinder.getNextAvailable();
 
-    @BeforeAll
+    @BeforeEach
     public void setupProxy() {
         proxyServer = DefaultHttpProxyServer.bootstrap()
                 .withPort(proxyPort)
@@ -58,7 +56,7 @@ public class SftpSimpleProduceThroughProxyIT extends SftpServerTestSupport {
                 }).start();
     }
 
-    @AfterAll
+    @AfterEach
     public void cleanup() {
         proxyServer.stop();
     }
@@ -80,7 +78,8 @@ public class SftpSimpleProduceThroughProxyIT extends SftpServerTestSupport {
     public void testSftpSimpleSubPathProduceThroughProxy() {
         template.sendBodyAndHeader(
                 "sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}"
-                                   + "/mysub?username=admin&password=admin&proxy=#proxy",
+                                   + "/mysub?username=admin&password=admin&proxy=#proxy&knownHostsFile="
+                                   + service.getKnownHostsFile(),
                 "Bye World", Exchange.FILE_NAME,
                 "bye.txt");
 
@@ -92,7 +91,8 @@ public class SftpSimpleProduceThroughProxyIT extends SftpServerTestSupport {
     @Test
     public void testSftpSimpleTwoSubPathProduceThroughProxy() {
         template.sendBodyAndHeader("sftp://localhost:{{ftp.server.port}}/{{ftp.root.dir}}"
-                                   + "/mysub/myother?username=admin&password=admin&proxy=#proxy",
+                                   + "/mysub/myother?username=admin&password=admin&proxy=#proxy&knownHostsFile="
+                                   + service.getKnownHostsFile(),
                 "Farewell World",
                 Exchange.FILE_NAME, "farewell.txt");
 

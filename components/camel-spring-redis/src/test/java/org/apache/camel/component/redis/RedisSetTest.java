@@ -20,7 +20,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.camel.spi.Registry;
-import org.apache.camel.support.SimpleRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -28,6 +27,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -42,12 +42,10 @@ public class RedisSetTest extends RedisTestSupport {
     private SetOperations<String, String> setOperations;
 
     @Override
-    protected Registry createCamelRegistry() throws Exception {
+    protected void bindToRegistry(Registry registry) throws Exception {
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
 
-        Registry registry = new SimpleRegistry();
         registry.bind("redisTemplate", redisTemplate);
-        return registry;
     }
 
     @Test
@@ -60,7 +58,7 @@ public class RedisSetTest extends RedisTestSupport {
                 RedisConstants.VALUE, "value");
 
         verify(setOperations).add("key", "value");
-        assertEquals(null, result);
+        assertNull(result);
 
     }
 

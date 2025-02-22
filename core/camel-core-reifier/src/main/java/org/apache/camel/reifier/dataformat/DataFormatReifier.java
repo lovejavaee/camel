@@ -28,6 +28,7 @@ import org.apache.camel.model.dataformat.ASN1DataFormat;
 import org.apache.camel.model.dataformat.AvroDataFormat;
 import org.apache.camel.model.dataformat.BarcodeDataFormat;
 import org.apache.camel.model.dataformat.Base64DataFormat;
+import org.apache.camel.model.dataformat.BeanioDataFormat;
 import org.apache.camel.model.dataformat.BindyDataFormat;
 import org.apache.camel.model.dataformat.CBORDataFormat;
 import org.apache.camel.model.dataformat.ContentTypeHeaderAware;
@@ -38,6 +39,7 @@ import org.apache.camel.model.dataformat.FhirDataformat;
 import org.apache.camel.model.dataformat.FhirJsonDataFormat;
 import org.apache.camel.model.dataformat.FhirXmlDataFormat;
 import org.apache.camel.model.dataformat.FlatpackDataFormat;
+import org.apache.camel.model.dataformat.FuryDataFormat;
 import org.apache.camel.model.dataformat.GrokDataFormat;
 import org.apache.camel.model.dataformat.GzipDeflaterDataFormat;
 import org.apache.camel.model.dataformat.HL7DataFormat;
@@ -49,8 +51,10 @@ import org.apache.camel.model.dataformat.JsonDataFormat;
 import org.apache.camel.model.dataformat.LZFDataFormat;
 import org.apache.camel.model.dataformat.MimeMultipartDataFormat;
 import org.apache.camel.model.dataformat.PGPDataFormat;
+import org.apache.camel.model.dataformat.ParquetAvroDataFormat;
 import org.apache.camel.model.dataformat.ProtobufDataFormat;
 import org.apache.camel.model.dataformat.RssDataFormat;
+import org.apache.camel.model.dataformat.SmooksDataFormat;
 import org.apache.camel.model.dataformat.SoapDataFormat;
 import org.apache.camel.model.dataformat.SwiftMtDataFormat;
 import org.apache.camel.model.dataformat.SwiftMxDataFormat;
@@ -172,7 +176,6 @@ public abstract class DataFormatReifier<T extends DataFormatDefinition> extends 
         return answer;
     }
 
-    // CHECKSTYLE:OFF
     private static DataFormatReifier<? extends DataFormatDefinition> coreReifier(
             CamelContext camelContext, DataFormatDefinition definition) {
         if (definition instanceof ASN1DataFormat) {
@@ -183,6 +186,8 @@ public abstract class DataFormatReifier<T extends DataFormatDefinition> extends 
             return new BarcodeDataFormatReifier(camelContext, definition);
         } else if (definition instanceof Base64DataFormat) {
             return new Base64DataFormatReifier(camelContext, definition);
+        } else if (definition instanceof BeanioDataFormat) {
+            return new BeanioDataFormatReifier(camelContext, definition);
         } else if (definition instanceof BindyDataFormat) {
             return new BindyDataFormatReifier(camelContext, definition);
         } else if (definition instanceof CBORDataFormat) {
@@ -201,6 +206,8 @@ public abstract class DataFormatReifier<T extends DataFormatDefinition> extends 
             return new FhirDataFormatReifier<>(camelContext, definition);
         } else if (definition instanceof FlatpackDataFormat) {
             return new FlatpackDataFormatReifier(camelContext, definition);
+        } else if (definition instanceof FuryDataFormat) {
+            return new FuryDataFormatReifier(camelContext, definition);
         } else if (definition instanceof GrokDataFormat) {
             return new GrokDataFormatReifier(camelContext, definition);
         } else if (definition instanceof GzipDeflaterDataFormat) {
@@ -221,12 +228,16 @@ public abstract class DataFormatReifier<T extends DataFormatDefinition> extends 
             return new LZFDataFormatReifier(camelContext, definition);
         } else if (definition instanceof MimeMultipartDataFormat) {
             return new MimeMultipartDataFormatReifier(camelContext, definition);
+        } else if (definition instanceof ParquetAvroDataFormat) {
+            return new ParquetAvroDataFormatReifier(camelContext, definition);
         } else if (definition instanceof PGPDataFormat) {
             return new PGPDataFormatReifier(camelContext, definition);
         } else if (definition instanceof ProtobufDataFormat) {
             return new ProtobufDataFormatReifier(camelContext, definition);
         } else if (definition instanceof RssDataFormat) {
             return new RssDataFormatReifier(camelContext, definition);
+        } else if (definition instanceof SmooksDataFormat) {
+            return new SmooksDataFormatReifier(camelContext, definition);
         } else if (definition instanceof SoapDataFormat) {
             return new SoapDataFormatReifier(camelContext, definition);
         } else if (definition instanceof SyslogDataFormat) {
@@ -258,18 +269,18 @@ public abstract class DataFormatReifier<T extends DataFormatDefinition> extends 
         }
         return null;
     }
-    // CHECKSTYLE:ON
 
     public DataFormat createDataFormat() {
         DataFormat dataFormat = definition.getDataFormat();
         if (dataFormat == null) {
             dataFormat = doCreateDataFormat();
             if (dataFormat != null) {
-                if (dataFormat instanceof DataFormatContentTypeHeader && definition instanceof ContentTypeHeaderAware) {
-                    String header = ((ContentTypeHeaderAware) definition).getContentTypeHeader();
+                if (dataFormat instanceof DataFormatContentTypeHeader dataFormatContentTypeHeader
+                        && definition instanceof ContentTypeHeaderAware contentTypeHeaderAware) {
+                    String header = contentTypeHeaderAware.getContentTypeHeader();
                     // is enabled by default so assume true if null
                     final boolean contentTypeHeader = parseBoolean(header, true);
-                    ((DataFormatContentTypeHeader) dataFormat).setContentTypeHeader(contentTypeHeader);
+                    dataFormatContentTypeHeader.setContentTypeHeader(contentTypeHeader);
                 }
                 // configure the rest of the options
                 configureDataFormat(dataFormat);
@@ -324,8 +335,8 @@ public abstract class DataFormatReifier<T extends DataFormatDefinition> extends 
         PropertyConfigurer configurer = null;
         String name = getDataFormatName();
         LOG.trace("Discovering optional dataformat property configurer class for dataformat: {}", name);
-        if (dataFormat instanceof PropertyConfigurerAware) {
-            configurer = ((PropertyConfigurerAware) dataFormat).getPropertyConfigurer(dataFormat);
+        if (dataFormat instanceof PropertyConfigurerAware propertyConfigurerAware) {
+            configurer = propertyConfigurerAware.getPropertyConfigurer(dataFormat);
             if (LOG.isDebugEnabled() && configurer != null) {
                 LOG.debug("Discovered dataformat property configurer using the PropertyConfigurerAware: {} -> {}", name,
                         configurer);

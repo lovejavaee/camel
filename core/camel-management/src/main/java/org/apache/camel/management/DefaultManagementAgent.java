@@ -69,9 +69,12 @@ public class DefaultManagementAgent extends ServiceSupport implements Management
     private Boolean endpointRuntimeStatisticsEnabled;
     private Boolean registerAlways = false;
     private Boolean registerNewRoutes = true;
+    private Boolean registerRoutesCreateByKamelet = false;
+    private Boolean registerRoutesCreateByTemplate = true;
     private Boolean mask = true;
     private Boolean includeHostName = false;
     private Boolean useHostIPAddress = false;
+    private Boolean updateRouteEnabled = false;
     private String managementNamePattern = "#name#";
     private ManagementStatisticsLevel statisticsLevel = ManagementStatisticsLevel.Default;
     private ManagementMBeansLevel mBeansLevel = ManagementMBeansLevel.Default;
@@ -112,6 +115,14 @@ public class DefaultManagementAgent extends ServiceSupport implements Management
             registerNewRoutes = Boolean.getBoolean(JmxSystemPropertyKeys.REGISTER_NEW_ROUTES);
             values.put(JmxSystemPropertyKeys.REGISTER_NEW_ROUTES, registerNewRoutes);
         }
+        if (System.getProperty(JmxSystemPropertyKeys.REGISTER_ROUTES_CREATED_BY_TEMPLATE) != null) {
+            registerRoutesCreateByTemplate = Boolean.getBoolean(JmxSystemPropertyKeys.REGISTER_ROUTES_CREATED_BY_TEMPLATE);
+            values.put(JmxSystemPropertyKeys.REGISTER_ROUTES_CREATED_BY_TEMPLATE, registerRoutesCreateByTemplate);
+        }
+        if (System.getProperty(JmxSystemPropertyKeys.REGISTER_ROUTES_CREATED_BY_KAMELET) != null) {
+            registerRoutesCreateByKamelet = Boolean.getBoolean(JmxSystemPropertyKeys.REGISTER_ROUTES_CREATED_BY_KAMELET);
+            values.put(JmxSystemPropertyKeys.REGISTER_ROUTES_CREATED_BY_KAMELET, registerRoutesCreateByKamelet);
+        }
         if (System.getProperty(JmxSystemPropertyKeys.MASK) != null) {
             mask = Boolean.getBoolean(JmxSystemPropertyKeys.MASK);
             values.put(JmxSystemPropertyKeys.MASK, mask);
@@ -140,6 +151,10 @@ public class DefaultManagementAgent extends ServiceSupport implements Management
         if (System.getProperty(JmxSystemPropertyKeys.USE_HOST_IP_ADDRESS) != null) {
             useHostIPAddress = Boolean.getBoolean(JmxSystemPropertyKeys.USE_HOST_IP_ADDRESS);
             values.put(JmxSystemPropertyKeys.USE_HOST_IP_ADDRESS, useHostIPAddress);
+        }
+        if (System.getProperty(JmxSystemPropertyKeys.UPDATE_ROUTE_ENABLED) != null) {
+            updateRouteEnabled = Boolean.getBoolean(JmxSystemPropertyKeys.UPDATE_ROUTE_ENABLED);
+            values.put(JmxSystemPropertyKeys.UPDATE_ROUTE_ENABLED, updateRouteEnabled);
         }
 
         if (!values.isEmpty()) {
@@ -215,6 +230,22 @@ public class DefaultManagementAgent extends ServiceSupport implements Management
     @Override
     public void setRegisterNewRoutes(Boolean registerNewRoutes) {
         this.registerNewRoutes = registerNewRoutes;
+    }
+
+    public Boolean getRegisterRoutesCreateByKamelet() {
+        return registerRoutesCreateByKamelet != null && registerRoutesCreateByKamelet;
+    }
+
+    public void setRegisterRoutesCreateByKamelet(Boolean registerRoutesCreateByKamelet) {
+        this.registerRoutesCreateByKamelet = registerRoutesCreateByKamelet;
+    }
+
+    public Boolean getRegisterRoutesCreateByTemplate() {
+        return registerRoutesCreateByTemplate != null && registerRoutesCreateByTemplate;
+    }
+
+    public void setRegisterRoutesCreateByTemplate(Boolean registerRoutesCreateByTemplate) {
+        this.registerRoutesCreateByTemplate = registerRoutesCreateByTemplate;
     }
 
     @Override
@@ -295,6 +326,16 @@ public class DefaultManagementAgent extends ServiceSupport implements Management
     @Override
     public void setMBeansLevel(ManagementMBeansLevel mBeansLevel) {
         this.mBeansLevel = mBeansLevel;
+    }
+
+    @Override
+    public Boolean getUpdateRouteEnabled() {
+        return updateRouteEnabled != null && updateRouteEnabled;
+    }
+
+    @Override
+    public void setUpdateRouteEnabled(Boolean updateRouteEnabled) {
+        this.updateRouteEnabled = updateRouteEnabled;
     }
 
     @Override

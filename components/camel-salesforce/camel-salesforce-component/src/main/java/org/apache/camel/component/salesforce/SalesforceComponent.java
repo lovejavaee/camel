@@ -49,13 +49,13 @@ import org.apache.camel.support.jsse.SSLContextParameters;
 import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.camel.util.StringHelper;
+import org.eclipse.jetty.client.Authentication;
+import org.eclipse.jetty.client.BasicAuthentication;
+import org.eclipse.jetty.client.DigestAuthentication;
 import org.eclipse.jetty.client.HttpProxy;
 import org.eclipse.jetty.client.Origin;
 import org.eclipse.jetty.client.ProxyConfiguration;
 import org.eclipse.jetty.client.Socks4Proxy;
-import org.eclipse.jetty.client.api.Authentication;
-import org.eclipse.jetty.client.util.BasicAuthentication;
-import org.eclipse.jetty.client.util.DigestAuthentication;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,7 +145,7 @@ public class SalesforceComponent extends DefaultComponent implements SSLContextP
     @Metadata(description = "KeyStore parameters to use in OAuth JWT flow. The KeyStore should contain only one entry"
                             + " with private key and certificate. Salesforce does not verify the certificate chain, so this can easily be"
                             + " a selfsigned certificate. Make sure that you upload the certificate to the corresponding connected app.",
-              label = "common,security", secret = true)
+              label = "common,security")
     private KeyStoreParameters keystore;
 
     @Metadata(description = "Value to use for the Audience claim (aud) when using OAuth JWT flow. If not set, the login URL will be used, which is"
@@ -153,15 +153,15 @@ public class SalesforceComponent extends DefaultComponent implements SSLContextP
               label = "common,security")
     private String jwtAudience;
 
-    @Metadata(description = "Explicit authentication method to be used, one of USERNAME_PASSWORD, REFRESH_TOKEN or JWT."
+    @Metadata(description = "Explicit authentication method to be used, one of USERNAME_PASSWORD, REFRESH_TOKEN, CLIENT_CREDENTIALS, or JWT."
                             + " Salesforce component can auto-determine the authentication method to use from the properties set, set this "
                             + " property to eliminate any ambiguity.",
-              label = "common,security", enums = "USERNAME_PASSWORD,REFRESH_TOKEN,JWT")
+              label = "common,security", enums = "USERNAME_PASSWORD,REFRESH_TOKEN,CLIENT_CREDENTIALS,JWT")
     private AuthenticationType authenticationType;
 
     @Metadata(description = "If set to true prevents the component from authenticating to Salesforce with the start of"
                             + " the component. You would generally set this to the (default) false and authenticate early and be immediately"
-                            + " aware of any authentication issues.",
+                            + " aware of any authentication issues. Lazy login is not supported by salesforce consumers.",
               defaultValue = "false", label = "common,security")
     private boolean lazyLogin;
 
@@ -172,6 +172,11 @@ public class SalesforceComponent extends DefaultComponent implements SSLContextP
     @Metadata(description = "Pub/Sub port",
               defaultValue = "7443", label = "common,security")
     private int pubSubPort = 7443;
+
+    @Metadata(description = "Allow the Pub/Sub API client to use the proxy detected by java.net.ProxySelector. If false then"
+                            + " no proxy server will be used.",
+              defaultValue = "true", label = "common,proxy")
+    private boolean pubsubAllowUseSystemProxy = true;
 
     @Metadata(description = "Global endpoint configuration - use to set values that are common to all endpoints",
               label = "common,advanced")
@@ -786,6 +791,14 @@ public class SalesforceComponent extends DefaultComponent implements SSLContextP
         this.httpProxyUseDigestAuth = httpProxyUseDigestAuth;
     }
 
+    public boolean isPubsubAllowUseSystemProxy() {
+        return pubsubAllowUseSystemProxy;
+    }
+
+    public void setPubsubAllowUseSystemProxy(boolean pubsubAllowUseSystemProxy) {
+        this.pubsubAllowUseSystemProxy = pubsubAllowUseSystemProxy;
+    }
+
     public int getWorkerPoolSize() {
         return workerPoolSize;
     }
@@ -973,7 +986,7 @@ public class SalesforceComponent extends DefaultComponent implements SSLContextP
             if (httpProxyExcludedAddresses != null && !httpProxyExcludedAddresses.isEmpty()) {
                 proxy.getExcludedAddresses().addAll(httpProxyExcludedAddresses);
             }
-            httpClient.getProxyConfiguration().getProxies().add(proxy);
+            httpClient.getProxyConfiguration().addProxy(proxy);
         }
         if (httpProxyUsername != null && httpProxyPassword != null) {
             StringHelper.notEmpty(httpProxyAuthUri, "httpProxyAuthUri");

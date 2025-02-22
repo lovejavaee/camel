@@ -25,7 +25,10 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BeanNoTypeConvertionPossibleWhenHeaderTest extends ContextTestSupport {
 
@@ -36,22 +39,21 @@ public class BeanNoTypeConvertionPossibleWhenHeaderTest extends ContextTestSuppo
 
         // we send in a bar string as header which cannot be converted to a
         // number so it should fail
-        try {
-            template.requestBodyAndHeader("direct:start", "Hello World", "foo", 555);
-            fail("Should have thrown an exception");
-        } catch (CamelExecutionException e) {
-            ParameterBindingException pbe = assertIsInstanceOf(ParameterBindingException.class, e.getCause());
-            assertEquals(1, pbe.getIndex());
-            assertTrue(pbe.getMethod().getName().contains("hello"));
-            assertEquals(555, pbe.getParameterValue());
+        CamelExecutionException e = assertThrows(CamelExecutionException.class,
+                () -> template.requestBodyAndHeader("direct:start", "Hello World", "foo", 555),
+                "Should have thrown an exception");
 
-            NoTypeConversionAvailableException ntae
-                    = assertIsInstanceOf(NoTypeConversionAvailableException.class, e.getCause().getCause());
-            assertEquals(Integer.class, ntae.getFromType());
-            assertEquals(Document.class, ntae.getToType());
-            assertEquals(555, ntae.getValue());
-            assertNotNull(ntae.getMessage());
-        }
+        ParameterBindingException pbe = assertIsInstanceOf(ParameterBindingException.class, e.getCause());
+        assertEquals(1, pbe.getIndex());
+        assertTrue(pbe.getMethod().getName().contains("hello"));
+        assertEquals(555, pbe.getParameterValue());
+
+        NoTypeConversionAvailableException ntae
+                = assertIsInstanceOf(NoTypeConversionAvailableException.class, e.getCause().getCause());
+        assertEquals(Integer.class, ntae.getFromType());
+        assertEquals(Document.class, ntae.getToType());
+        assertEquals(555, ntae.getValue());
+        assertNotNull(ntae.getMessage());
 
         assertMockEndpointsSatisfied();
     }
@@ -73,7 +75,7 @@ public class BeanNoTypeConvertionPossibleWhenHeaderTest extends ContextTestSuppo
         mock.expectedBodiesReceived("Hello World");
         mock.message(0).header("foo").isNull();
 
-        template.requestBodyAndHeader("direct:start", "Hello World", "foo", (Object) null);
+        template.requestBodyAndHeader("direct:start", "Hello World", "foo", null);
 
         assertMockEndpointsSatisfied();
     }
@@ -91,10 +93,10 @@ public class BeanNoTypeConvertionPossibleWhenHeaderTest extends ContextTestSuppo
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start").bean(BeanWithHeaderAnnotation.class).to("mock:result");
             }
         };

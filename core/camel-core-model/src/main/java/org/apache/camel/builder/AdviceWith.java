@@ -204,8 +204,7 @@ public final class AdviceWith {
 
         // inject this route into the advice route builder so it can access this route
         // and offer features to manipulate the route directly
-        if (builder instanceof AdviceWithRouteBuilder) {
-            AdviceWithRouteBuilder arb = (AdviceWithRouteBuilder) builder;
+        if (builder instanceof AdviceWithRouteBuilder arb) {
             arb.setOriginalRoute(definition);
         }
 
@@ -213,10 +212,11 @@ public final class AdviceWith {
         RoutesDefinition routes = builder.configureRoutes(camelContext);
 
         // was logging enabled or disabled
-        boolean logRoutesAsXml = true;
-        if (builder instanceof AdviceWithRouteBuilder) {
-            AdviceWithRouteBuilder arb = (AdviceWithRouteBuilder) builder;
+        boolean logRoutesAsXml;
+        if (builder instanceof AdviceWithRouteBuilder arb) {
             logRoutesAsXml = arb.isLogRouteAsXml();
+        } else {
+            logRoutesAsXml = true;
         }
 
         LOG.debug("AdviceWith routes: {}", routes);
@@ -239,11 +239,11 @@ public final class AdviceWith {
         }
 
         String beforeAsXml = null;
-        final ModelToXMLDumper modelToXMLDumper = PluginHelper.getModelToXMLDumper(ecc);
         if (logRoutesAsXml && LOG.isInfoEnabled()) {
             try {
+                ModelToXMLDumper modelToXMLDumper = PluginHelper.getModelToXMLDumper(ecc);
                 beforeAsXml = modelToXMLDumper.dumpModelAsXml(camelContext, definition);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 // ignore, it may be due jaxb is not on classpath etc
             }
         }
@@ -252,8 +252,8 @@ public final class AdviceWith {
         model.removeRouteDefinition(definition);
 
         // any advice with tasks we should execute first?
-        if (builder instanceof AdviceWithRouteBuilder) {
-            List<AdviceWithTask> tasks = ((AdviceWithRouteBuilder) builder).getAdviceWithTasks();
+        if (builder instanceof AdviceWithRouteBuilder adviceWithRouteBuilder) {
+            List<AdviceWithTask> tasks = adviceWithRouteBuilder.getAdviceWithTasks();
             for (AdviceWithTask task : tasks) {
                 task.task();
             }
@@ -276,11 +276,12 @@ public final class AdviceWith {
             LOG.info("AdviceWith route after: {}", merged);
         }
 
-        if (beforeAsXml != null && logRoutesAsXml && LOG.isInfoEnabled()) {
+        if (beforeAsXml != null && LOG.isInfoEnabled()) {
             try {
+                ModelToXMLDumper modelToXMLDumper = PluginHelper.getModelToXMLDumper(ecc);
                 String afterAsXml = modelToXMLDumper.dumpModelAsXml(camelContext, merged);
                 LOG.info("Adviced route before/after as XML:\n{}\n\n{}", beforeAsXml, afterAsXml);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 // ignore, it may be due jaxb is not on classpath etc
             }
         }
@@ -299,8 +300,8 @@ public final class AdviceWith {
         }
 
         RouteDefinition rd;
-        if (routeId instanceof RouteDefinition) {
-            rd = (RouteDefinition) routeId;
+        if (routeId instanceof RouteDefinition routeDefinition) {
+            rd = routeDefinition;
         } else {
             String id = mcc.getTypeConverter().convertTo(String.class, routeId);
             if (id != null) {
@@ -313,7 +314,7 @@ public final class AdviceWith {
                     }
                 }
                 if (rd == null) {
-                    throw new IllegalArgumentException("Cannot advice route as route with id: " + routeId + " does not exists");
+                    throw new IllegalArgumentException("Cannot advice route as route with id: " + routeId + " does not exist");
                 }
             } else {
                 // grab first route

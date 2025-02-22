@@ -34,9 +34,10 @@ import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.RestApiConsumerFactory;
 import org.apache.camel.spi.RestConfiguration;
 import org.apache.camel.spi.RestConsumerFactory;
+import org.apache.camel.spi.RestOpenApiConsumerFactory;
 import org.apache.camel.spi.annotations.Component;
 import org.apache.camel.support.CamelContextHelper;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HeaderFilterStrategyComponent;
 import org.apache.camel.support.RestComponentHelper;
 import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.util.FileUtil;
@@ -48,20 +49,22 @@ import org.slf4j.LoggerFactory;
  * Exposes HTTP endpoints leveraging the given platform's (SpringBoot, WildFly, Quarkus, ...) HTTP server.
  */
 @Component("platform-http")
-public class PlatformHttpComponent extends DefaultComponent implements RestConsumerFactory, RestApiConsumerFactory {
+public class PlatformHttpComponent extends HeaderFilterStrategyComponent
+        implements RestConsumerFactory, RestApiConsumerFactory, RestOpenApiConsumerFactory {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlatformHttpComponent.class);
 
     @Metadata(label = "advanced", description = "An HTTP Server engine implementation to serve the requests")
     private volatile PlatformHttpEngine engine;
+    @Metadata(label = "advanced,consumer", defaultValue = "false",
+              description = "When Camel is complete processing the message, and the HTTP server is writing response. This option controls whether Camel"
+                            + " should catch any failure during writing response and store this on the Exchange, which allows onCompletion/UnitOfWork to"
+                            + " regard the Exchange as failed and have access to the caused exception from the HTTP server.")
+    private boolean handleWriteResponseError;
 
     private final Set<HttpEndpointModel> httpEndpoints = new TreeSet<>();
-
     private final List<PlatformHttpListener> listeners = new ArrayList<>();
-
     private volatile boolean localEngine;
-
-    private final Object lock = new Object();
 
     public PlatformHttpComponent() {
         this(null);
@@ -75,6 +78,8 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
     protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
         PlatformHttpEndpoint endpoint = new PlatformHttpEndpoint(uri, remaining, this);
         endpoint.setPlatformHttpEngine(engine);
+        endpoint.setHandleWriteResponseError(handleWriteResponseError);
+        setEndpointHeaderFilterStrategy(endpoint);
         setProperties(endpoint, parameters);
         return endpoint;
     }
@@ -86,8 +91,9 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
             throws Exception {
 
         // reuse the createConsumer method we already have. The api need to use GET and match on uri prefix
-        return doCreateConsumer(camelContext, processor, "GET", contextPath, null, null, null, configuration,
-                parameters, true);
+        return doCreateConsumer(camelContext, processor, "GET", contextPath, null, null, "application/json,text/yaml",
+                configuration,
+                parameters, true, true);
     }
 
     @Override
@@ -97,20 +103,29 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
             String consumes, String produces, RestConfiguration configuration, Map<String, Object> parameters)
             throws Exception {
         return doCreateConsumer(camelContext, processor, verb, basePath, uriTemplate, consumes, produces, configuration,
-                parameters, false);
+                parameters, false, true);
+    }
+
+    @Override
+    public Consumer createConsumer(
+            CamelContext camelContext, Processor processor, String contextPath, RestConfiguration configuration,
+            Map<String, Object> parameters)
+            throws Exception {
+        return doCreateConsumer(camelContext, processor, null, contextPath, null, null, null, configuration,
+                parameters, true, false);
     }
 
     /**
      * Adds a known http endpoint managed by this component.
      */
-    public void addHttpEndpoint(String uri, String verbs, Consumer consumer) {
-        HttpEndpointModel model = new HttpEndpointModel(uri, verbs, consumer);
+    public void addHttpEndpoint(String uri, String verbs, String consumes, String produces, Consumer consumer) {
+        HttpEndpointModel model = new HttpEndpointModel(uri, verbs, consumes, produces, consumer);
         httpEndpoints.add(model);
         for (PlatformHttpListener listener : listeners) {
             try {
                 listener.registerHttpEndpoint(model);
             } catch (Exception e) {
-                LOG.warn("Error adding listener due to " + e.getMessage() + ". This exception is ignored", e);
+                LOG.warn("Error adding listener due to {}. This exception is ignored", e.getMessage(), e);
             }
         }
     }
@@ -126,7 +141,7 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
                 try {
                     listener.unregisterHttpEndpoint(model);
                 } catch (Exception e) {
-                    LOG.warn("Error removing listener due to " + e.getMessage() + ". This exception is ignored", e);
+                    LOG.warn("Error removing listener due to {}. This exception is ignored", e.getMessage(), e);
                 }
             }
         });
@@ -181,10 +196,19 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
         this.engine = engine;
     }
 
+    public boolean isHandleWriteResponseError() {
+        return handleWriteResponseError;
+    }
+
+    public void setHandleWriteResponseError(boolean handleWriteResponseError) {
+        this.handleWriteResponseError = handleWriteResponseError;
+    }
+
     private Consumer doCreateConsumer(
             CamelContext camelContext, Processor processor, String verb, String basePath,
             String uriTemplate,
-            String consumes, String produces, RestConfiguration configuration, Map<String, Object> parameters, boolean api)
+            String consumes, String produces, RestConfiguration configuration, Map<String, Object> parameters,
+            boolean api, boolean register)
             throws Exception {
 
         String path = basePath;
@@ -223,8 +247,9 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
         if (api) {
             map.put("matchOnUriPrefix", "true");
         }
-
-        RestComponentHelper.addHttpRestrictParam(map, verb, cors);
+        if (verb != null) {
+            RestComponentHelper.addHttpRestrictParam(map, verb, cors);
+        }
 
         String url = RestComponentHelper.createRestConsumerUrl("platform-http", path, map);
 
@@ -233,7 +258,8 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
         endpoint.setProduces(produces);
 
         // configure consumer properties
-        Consumer consumer = endpoint.createConsumer(processor);
+        DefaultPlatformHttpConsumer consumer = endpoint.createConsumer(processor);
+        consumer.setRegister(register);
         if (config.getConsumerProperties() != null && !config.getConsumerProperties().isEmpty()) {
             setProperties(camelContext, consumer, config.getConsumerProperties());
         }
@@ -243,7 +269,8 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
 
     PlatformHttpEngine getOrCreateEngine() {
         if (engine == null) {
-            synchronized (lock) {
+            lock.lock();
+            try {
                 if (engine == null) {
                     LOG.debug("Lookup platform http engine from registry");
 
@@ -263,6 +290,8 @@ public class PlatformHttpComponent extends DefaultComponent implements RestConsu
                         localEngine = true;
                     }
                 }
+            } finally {
+                lock.unlock();
             }
         }
 

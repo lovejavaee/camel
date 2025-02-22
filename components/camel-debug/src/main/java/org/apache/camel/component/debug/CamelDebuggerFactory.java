@@ -17,7 +17,9 @@
 package org.apache.camel.component.debug;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.impl.debugger.BacklogDebugger;
+import org.apache.camel.impl.debugger.DebuggerJmxConnectorService;
+import org.apache.camel.impl.debugger.DefaultBacklogDebugger;
+import org.apache.camel.spi.BacklogDebugger;
 import org.apache.camel.spi.Debugger;
 import org.apache.camel.spi.DebuggerFactory;
 import org.apache.camel.spi.annotations.JdkService;
@@ -28,23 +30,42 @@ public class CamelDebuggerFactory implements DebuggerFactory {
 
     @Override
     public Debugger createDebugger(CamelContext camelContext) throws Exception {
-        // must enable message history for debugger to capture more details
-        camelContext.setMessageHistory(true);
-        // must enable source location so debugger tooling knows to map breakpoints to source code
-        camelContext.setSourceLocationEnabled(true);
+        // only create a debugger if none already exists
+        if (camelContext.hasService(BacklogDebugger.class) == null) {
 
-        BacklogDebugger backlog = BacklogDebugger.createDebugger(camelContext);
-        // we need to enable debugger after context is started
-        camelContext.addLifecycleStrategy(new LifecycleStrategySupport() {
-            @Override
-            public void onContextStarted(CamelContext context) {
-                backlog.enableDebugger();
-            }
-        });
-        camelContext.addService(backlog);
+            BacklogDebugger backlog = DefaultBacklogDebugger.createDebugger(camelContext);
+            backlog.setStandby(camelContext.isDebugStandby());
 
-        // to make debugging possible for tooling we need to make it possible to do remote JMX connection
-        camelContext.addService(new JmxConnectorService());
+            // must enable source location and history
+            // so debugger tooling knows to map breakpoints to source code
+            camelContext.setSourceLocationEnabled(true);
+            camelContext.setMessageHistory(true);
+
+            // enable debugger on camel
+            camelContext.setDebugging(true);
+
+            // to make debugging possible for tooling we need to make it possible to do remote JMX connection
+            DebuggerJmxConnectorService connector = new DebuggerJmxConnectorService();
+            connector.setCreateConnector(true);
+            camelContext.addService(connector);
+
+            // we need to enable debugger after context is started
+            camelContext.addLifecycleStrategy(new LifecycleStrategySupport() {
+                @Override
+                public void onContextStarted(CamelContext context) {
+                    // only enable debugger if not in standby mode
+                    if (!backlog.isStandby()) {
+                        backlog.enableDebugger();
+                    }
+                }
+
+                @Override
+                public void onContextStopping(CamelContext context) {
+                    backlog.disableDebugger();
+                }
+            });
+            camelContext.addService(backlog, true, true);
+        }
 
         // return null as we fool camel-core into using this backlog debugger as we added it as a service
         return null;

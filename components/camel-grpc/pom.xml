@@ -24,17 +24,13 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-grpc</artifactId>
     <packaging>jar</packaging>
     <name>Camel :: gRPC</name>
     <description>Camel component for gRPC (Remote Procedure Call) support</description>
-
-    <properties>
-        <protobuf-version>${grpc-protobuf-version}</protobuf-version>
-    </properties>
 
     <dependencies>
 
@@ -47,7 +43,6 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-auth</artifactId>
-            <version>${grpc-version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.google.code.findbugs</groupId>
@@ -58,44 +53,30 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
-            <version>${grpc-version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
-            <version>${grpc-version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.google.code.findbugs</groupId>
                     <artifactId>jsr305</artifactId>
                 </exclusion>
-                <exclusion>
-                    <groupId>com.google.protobuf</groupId>
-                    <artifactId>protobuf-java</artifactId>
-                </exclusion>
             </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>${protobuf-version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>${grpc-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-core</artifactId>
         </dependency>
 
         <dependency>
             <groupId>org.javassist</groupId>
             <artifactId>javassist</artifactId>
             <version>${javassist-version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-tcnative-boringssl-static</artifactId>
-            <version>${grpc-netty-tcnative-boringssl-static-version}</version>
         </dependency>
 
         <dependency>
@@ -161,29 +142,19 @@
             <version>3.0.2</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
 
     <build>
-        <extensions>
-            <!-- Operating system and CPU architecture detection extension -->
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>${os-maven-plugin-version}</version>
-            </extension>
-        </extensions>
-
         <plugins>
             <!--
               Check if the running OS platform supports the protobuf generator plugin.
               If the platform doesn't support, the protobuf test code generation, their
               assembly and launch will be skipped
               Supported platforms are:
-              - Linux (x86 32 and 64-bit)
-              - Windows (x86 32 and 64-bit)
-              - OSX (x86 32 and 64-bit)
+              - Linux: x86_32, x86_64, aarch_64, ppcle_64 & s390_64
+              - Windows: x86_32 & x86_64
+              - OSX: x86_64 & aarch_64
             -->
             <plugin>
                 <groupId>org.codehaus.gmavenplus</groupId>
@@ -198,7 +169,7 @@
                         <configuration>
                             <scripts>
                                 <script><![CDATA[
-                  project.properties['skipTests']=project.properties['os.detected.classifier'].matches('^.*?(linux|windows|osx)-x86.*$') ? 'false' : 'true';
+                  project.properties['skipTests']=project.properties['os.detected.classifier'].matches('^(linux-(x86_(32|64)|aarch_64|ppcle_64|s390_64)|windows-x86_(32|64)|osx-(x86_64|aarch_64))$') ? 'false' : 'true';
                 ]]></script>
                             </scripts>
                         </configuration>
@@ -222,28 +193,48 @@
 
             <!-- gRPC and protobuf Java code generator plugin -->
             <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
+                <groupId>io.github.ascopes</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
                 <version>${protobuf-maven-plugin-version}</version>
                 <configuration>
-                    <protocArtifact>com.google.protobuf:protoc:${protobuf-version}:exe:${os.detected.classifier}
-                    </protocArtifact>
-                    <pluginId>grpc-java</pluginId>
-                    <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc-version}:exe:${os.detected.classifier}
-                    </pluginArtifact>
-                    <checkStaleness>true</checkStaleness>
-                    <skip>${skipTests}</skip>
+                    <protocVersion>${protobuf-version}</protocVersion>
+                    <sourceDirectories>
+                        <sourceDirectory>src/test/proto</sourceDirectory>
+                    </sourceDirectories>
+                    <binaryMavenPlugins>
+                        <binaryMavenPlugin>
+                            <groupId>io.grpc</groupId>
+                            <artifactId>protoc-gen-grpc-java</artifactId>
+                            <version>${grpc-version}</version>
+                        </binaryMavenPlugin>
+                    </binaryMavenPlugins>
                 </configuration>
                 <executions>
                     <execution>
                         <goals>
-                            <goal>test-compile</goal>
-                            <goal>test-compile-custom</goal>
+                            <goal>generate-test</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
-
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>add-test-source</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>target/generated-test-sources/protobuf</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <executions>
@@ -260,13 +251,6 @@
                 </executions>
             </plugin>
 
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <skipTests>${skipTests}</skipTests>
-                </configuration>
-            </plugin>
             <!-- Force the version of guava to camel-package-maven-plugin to prevent build failure due to the
              usage of an old/incompatible version of guava -->
             <plugin>
@@ -276,7 +260,7 @@
                     <dependency>
                         <groupId>com.google.guava</groupId>
                         <artifactId>guava</artifactId>
-                        <version>${grpc-guava-version}</version>
+                        <version>${guava-version}</version>
                     </dependency>
                 </dependencies>
             </plugin>

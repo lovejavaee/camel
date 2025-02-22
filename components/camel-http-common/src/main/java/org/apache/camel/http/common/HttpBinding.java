@@ -135,6 +135,12 @@ public interface HttpBinding {
     boolean isMuteException();
 
     /**
+     * If enabled and an Exchange failed processing on the consumer side the exception's stack trace will be logged when
+     * the exception stack trace is not sent in the response's body.
+     */
+    boolean isLogException();
+
+    /**
      * Whether to allow java serialization when a request uses context-type=application/x-java-serialized-object
      * <p/>
      * This is by default turned off. If you enable this then be aware that Java will deserialize the incoming data from
@@ -187,6 +193,12 @@ public interface HttpBinding {
     void setMuteException(boolean muteException);
 
     /**
+     * If enabled and an Exchange failed processing on the consumer side the exception's stack trace will be logged when
+     * the exception stack trace is not sent in the response's body.
+     */
+    void setLogException(boolean logException);
+
+    /**
      * Whether to allow java serialization when a request uses context-type=application/x-java-serialized-object
      * <p/>
      * This is by default turned off. If you enable this then be aware that Java will deserialize the incoming data from
@@ -206,7 +218,7 @@ public interface HttpBinding {
     /**
      * Sets the header filter strategy to use.
      * <p/>
-     * Will default use {@link org.apache.camel.http.common.HttpHeaderFilterStrategy}
+     * Will default use {@link org.apache.camel.http.base.HttpHeaderFilterStrategy}
      *
      * @param headerFilterStrategy the custom strategy
      */

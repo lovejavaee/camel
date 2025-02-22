@@ -22,6 +22,8 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import jakarta.servlet.DispatcherType;
 
@@ -34,17 +36,17 @@ import org.apache.camel.support.jsse.SSLContextParameters;
 import org.cometd.bayeux.server.BayeuxServer;
 import org.cometd.bayeux.server.SecurityPolicy;
 import org.cometd.server.BayeuxServerImpl;
-import org.cometd.server.CometDServlet;
+import org.cometd.server.http.jakarta.CometDServlet;
+import org.eclipse.jetty.ee10.servlet.FilterHolder;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.ee10.servlet.SessionHandler;
+import org.eclipse.jetty.ee10.servlets.CrossOriginFilter;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
-import org.eclipse.jetty.server.session.SessionHandler;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
-import org.eclipse.jetty.servlets.CrossOriginFilter;
-import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.resource.MountedPathResourceFactory;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +58,7 @@ import org.slf4j.LoggerFactory;
 public class CometdComponent extends DefaultComponent implements SSLContextParametersAware {
     private static final Logger LOG = LoggerFactory.getLogger(CometdComponent.class);
 
+    private final Lock connectorsLock = new ReentrantLock();
     private final Map<String, ConnectorRef> connectors = new LinkedHashMap<>();
 
     private List<BayeuxServer.BayeuxServerListener> serverListeners;
@@ -64,7 +67,7 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
     private String sslKeyPassword;
     @Metadata(label = "security", secret = true)
     private String sslPassword;
-    @Metadata(label = "security", secret = true)
+    @Metadata(label = "security")
     private String sslKeystore;
     @Metadata(label = "security")
     private SecurityPolicy securityPolicy;
@@ -116,7 +119,8 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
         CometdEndpoint endpoint = prodcon.getEndpoint();
         String connectorKey = endpoint.getProtocol() + ":" + endpoint.getUri().getHost() + ":" + endpoint.getPort();
 
-        synchronized (connectors) {
+        connectorsLock.lock();
+        try {
             ConnectorRef connectorRef = connectors.get(connectorKey);
             if (connectorRef == null) {
                 ServerConnector connector;
@@ -144,7 +148,7 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
                 connectorRef.increment();
             }
 
-            BayeuxServerImpl bayeux = connectorRef.servlet.getBayeux();
+            BayeuxServerImpl bayeux = (BayeuxServerImpl) connectorRef.servlet.getBayeuxServer();
 
             if (securityPolicy != null) {
                 bayeux.setSecurityPolicy(securityPolicy);
@@ -160,6 +164,8 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
                 }
             }
             prodcon.setBayeux(bayeux);
+        } finally {
+            connectorsLock.unlock();
         }
     }
 
@@ -171,16 +177,17 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
 
         String connectorKey = endpoint.getProtocol() + ":" + endpoint.getUri().getHost() + ":" + endpoint.getPort();
 
-        synchronized (connectors) {
+        connectorsLock.lock();
+        try {
             ConnectorRef connectorRef = connectors.get(connectorKey);
-            if (connectorRef != null) {
-                if (connectorRef.decrement() == 0) {
-                    connectorRef.server.removeConnector(connectorRef.connector);
-                    connectorRef.connector.stop();
-                    connectorRef.server.stop();
-                    connectors.remove(connectorKey);
-                }
+            if (connectorRef != null && connectorRef.decrement() == 0) {
+                connectorRef.server.removeConnector(connectorRef.connector);
+                connectorRef.connector.stop();
+                connectorRef.server.stop();
+                connectors.remove(connectorKey);
             }
+        } finally {
+            connectorsLock.unlock();
         }
     }
 
@@ -189,7 +196,9 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
         CometDServlet servlet = new CometDServlet();
 
         ServletContextHandler context
-                = new ServletContextHandler(server, "/", ServletContextHandler.NO_SECURITY | ServletContextHandler.NO_SESSIONS);
+                = new ServletContextHandler("/", false, false);
+
+        server.setHandler(context);
 
         ServletHolder holder = new ServletHolder();
         holder.setServlet(servlet);
@@ -202,18 +211,18 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
             LOG.debug(">>> Protocol found: {}, and resource: {}", resources[0], resources[1]);
 
             if (resources[0].equals("file")) {
-                context.setBaseResource(Resource.newResource(resources[1]));
+                context.setBaseResource(new MountedPathResourceFactory().newResource(resources[1]));
             } else if (resources[0].equals("classpath")) {
                 // Create a URL handler using classpath protocol
                 URL url = this.getCamelContext().getClassResolver().loadResourceAsURL(resources[1]);
-                context.setBaseResource(Resource.newResource(url));
+                context.setBaseResource(new MountedPathResourceFactory().newResource(url));
             }
         }
 
         applyCrossOriginFiltering(endpoint, context);
 
         context.addServlet(holder, "/cometd/*");
-        context.addServlet("org.eclipse.jetty.servlet.DefaultServlet", "/");
+        context.addServlet("org.eclipse.jetty.ee10.servlet.DefaultServlet", "/");
         context.setSessionHandler(new SessionHandler());
 
         holder.setInitParameter("timeout", Integer.toString(endpoint.getTimeout()));
@@ -350,10 +359,15 @@ public class CometdComponent extends DefaultComponent implements SSLContextParam
 
     @Override
     protected void doStop() throws Exception {
-        for (ConnectorRef connectorRef : connectors.values()) {
-            connectorRef.connector.stop();
+        connectorsLock.lock();
+        try {
+            for (ConnectorRef connectorRef : connectors.values()) {
+                connectorRef.connector.stop();
+            }
+            connectors.clear();
+        } finally {
+            connectorsLock.unlock();
         }
-        connectors.clear();
 
         super.doStop();
     }

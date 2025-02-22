@@ -22,28 +22,31 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import com.orbitz.consul.Consul;
-import com.orbitz.consul.KeyValueClient;
-import com.orbitz.consul.SessionClient;
-import com.orbitz.consul.async.ConsulResponseCallback;
-import com.orbitz.consul.model.ConsulResponse;
-import com.orbitz.consul.model.kv.Value;
-import com.orbitz.consul.model.session.ImmutableSession;
-import com.orbitz.consul.model.session.SessionInfo;
-import com.orbitz.consul.option.QueryOptions;
 import org.apache.camel.cluster.CamelClusterMember;
 import org.apache.camel.support.cluster.AbstractCamelClusterView;
 import org.apache.camel.util.ObjectHelper;
+import org.kiwiproject.consul.Consul;
+import org.kiwiproject.consul.KeyValueClient;
+import org.kiwiproject.consul.SessionClient;
+import org.kiwiproject.consul.async.ConsulResponseCallback;
+import org.kiwiproject.consul.model.ConsulResponse;
+import org.kiwiproject.consul.model.kv.Value;
+import org.kiwiproject.consul.model.session.ImmutableSession;
+import org.kiwiproject.consul.model.session.SessionInfo;
+import org.kiwiproject.consul.option.QueryOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class ConsulClusterView extends AbstractCamelClusterView {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsulClusterService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConsulClusterView.class);
 
     private final ConsulClusterConfiguration configuration;
     private final ConsulLocalMember localMember;
+    private final Lock sessionIdLock = new ReentrantLock();
     private final AtomicReference<String> sessionId;
     private final Watcher watcher;
 
@@ -113,21 +116,25 @@ final class ConsulClusterView extends AbstractCamelClusterView {
             if (keyValueClient.releaseLock(this.path, sessionId.get())) {
                 LOGGER.debug("Successfully released lock on path '{}' with id '{}'", path, sessionId.get());
             }
-
-            synchronized (sessionId) {
+            sessionIdLock.lock();
+            try {
                 sessionClient.destroySession(sessionId.getAndSet(null));
                 localMember.setMaster(false);
+            } finally {
+                sessionIdLock.unlock();
             }
         }
     }
 
     private boolean acquireLock() {
-        synchronized (sessionId) {
+        sessionIdLock.lock();
+        try {
             String sid = sessionId.get();
 
             return (sid != null)
-                    ? sessionClient.getSessionInfo(sid).map(si -> keyValueClient.acquireLock(path, sid)).orElse(Boolean.FALSE)
-                    : false;
+                    && sessionClient.getSessionInfo(sid).map(si -> keyValueClient.acquireLock(path, sid)).orElse(Boolean.FALSE);
+        } finally {
+            sessionIdLock.unlock();
         }
     }
 
@@ -136,18 +143,17 @@ final class ConsulClusterView extends AbstractCamelClusterView {
     // ***********************************************
 
     private final class ConsulLocalMember implements CamelClusterMember {
-        private AtomicBoolean master = new AtomicBoolean();
+        private final AtomicBoolean master = new AtomicBoolean();
 
         void setMaster(boolean master) {
             if (master && this.master.compareAndSet(false, true)) {
                 LOGGER.debug("Leadership taken for session id {}", sessionId.get());
-                fireLeadershipChangedEvent(Optional.of(this));
+                fireLeadershipChangedEvent(this);
                 return;
             }
             if (!master && this.master.compareAndSet(true, false)) {
                 LOGGER.debug("Leadership lost for session id {}", sessionId.get());
-                fireLeadershipChangedEvent(getLeader());
-                return;
+                fireLeadershipChangedEvent(getLeader().orElse(null));
             }
         }
 
@@ -261,7 +267,7 @@ final class ConsulClusterView extends AbstractCamelClusterView {
 
         @Override
         public void onFailure(Throwable throwable) {
-            LOGGER.debug("", throwable);
+            LOGGER.debug("{}", throwable.getMessage(), throwable);
 
             if (sessionId.get() != null) {
                 keyValueClient.releaseLock(configuration.getRootPath(), sessionId.get());

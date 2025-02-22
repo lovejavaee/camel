@@ -17,6 +17,7 @@
 package org.apache.camel.component.xslt;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,6 +26,7 @@ import javax.xml.transform.Source;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.URIResolver;
+import javax.xml.transform.stream.StreamSource;
 
 import org.xml.sax.EntityResolver;
 
@@ -53,7 +55,7 @@ import org.slf4j.LoggerFactory;
  */
 @ManagedResource(description = "Managed XsltEndpoint")
 @UriEndpoint(firstVersion = "1.3.0", scheme = "xslt", title = "XSLT", syntax = "xslt:resourceUri", producerOnly = true,
-             category = { Category.CORE, Category.TRANSFORMATION }, headersClass = XsltConstants.class)
+             remote = false, category = { Category.CORE, Category.TRANSFORMATION }, headersClass = XsltConstants.class)
 public class XsltEndpoint extends ProcessorEndpoint {
 
     private static final Logger LOG = LoggerFactory.getLogger(XsltEndpoint.class);
@@ -65,6 +67,8 @@ public class XsltEndpoint extends ProcessorEndpoint {
     @UriPath
     @Metadata(required = true)
     private String resourceUri;
+    @UriParam
+    private boolean allowTemplateFromHeader;
     @UriParam(defaultValue = "true")
     private boolean contentCache = true;
     @UriParam(label = "advanced")
@@ -89,9 +93,16 @@ public class XsltEndpoint extends ProcessorEndpoint {
     private EntityResolver entityResolver;
     @UriParam(label = "advanced")
     private TransformerFactoryConfigurationStrategy transformerFactoryConfigurationStrategy;
+    @UriParam(label = "advanced")
+    private XsltMessageLogger xsltMessageLogger;
 
     public XsltEndpoint(String endpointUri, Component component) {
         super(endpointUri, component);
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @ManagedOperation(description = "Clears the cached XSLT stylesheet, forcing to re-load the stylesheet on next request")
@@ -112,10 +123,52 @@ public class XsltEndpoint extends ProcessorEndpoint {
 
     @Override
     protected void onExchange(Exchange exchange) throws Exception {
+        if (allowTemplateFromHeader) {
+            String newResourceUri = exchange.getIn().getHeader(XsltConstants.XSLT_RESOURCE_URI, String.class);
+            if (newResourceUri != null) {
+                exchange.getIn().removeHeader(XsltConstants.XSLT_RESOURCE_URI);
+
+                LOG.trace("{} set to {} creating new endpoint to handle exchange", XsltConstants.XSLT_RESOURCE_URI,
+                        newResourceUri);
+                XsltEndpoint newEndpoint = findOrCreateEndpoint(getEndpointUri(), newResourceUri);
+                newEndpoint.onExchange(exchange);
+                return;
+            }
+            String template = exchange.getIn().getHeader(XsltConstants.XSLT_STYLESHEET, String.class);
+            if (template != null) {
+                // need to create a new builder that uses this template as source
+                LOG.trace("Using XSLT stylesheet from header: {}", XsltConstants.XSLT_STYLESHEET);
+                XsltBuilder builder = createBuilderForCustomStylesheet(template, exchange);
+                builder.process(exchange);
+                return;
+            }
+        }
         if (!contentCache || cacheCleared) {
             loadResource(resourceUri, xslt);
         }
         super.onExchange(exchange);
+    }
+
+    protected XsltBuilder createBuilderForCustomStylesheet(String template, Exchange exchange) throws Exception {
+        InputStream is = getCamelContext().getTypeConverter().mandatoryConvertTo(InputStream.class, exchange, template);
+        XsltBuilder builder = createXsltBuilder();
+        builder.setTransformerSource(new StreamSource(is));
+        return builder;
+    }
+
+    @ManagedAttribute(description = "Whether to allow to use resource template from header or not (default false).")
+    public boolean isAllowTemplateFromHeader() {
+        return allowTemplateFromHeader;
+    }
+
+    /**
+     * Whether to allow to use resource template from header or not (default false).
+     *
+     * Enabling this allows to specify dynamic templates via message header. However this can be seen as a potential
+     * security vulnerability if the header is coming from a malicious user, so use this with care.
+     */
+    public void setAllowTemplateFromHeader(boolean allowTemplateFromHeader) {
+        this.allowTemplateFromHeader = allowTemplateFromHeader;
     }
 
     public boolean isCacheCleared() {
@@ -239,15 +292,15 @@ public class XsltEndpoint extends ProcessorEndpoint {
         this.errorListener = errorListener;
     }
 
-    @ManagedAttribute(description = "Cache for the resource content (the stylesheet file) when it is loaded.")
+    @ManagedAttribute(description = "Cache for the resource content (the stylesheet file) when it is loaded on startup.")
     public boolean isContentCache() {
         return contentCache;
     }
 
     /**
-     * Cache for the resource content (the stylesheet file) when it is loaded. If set to false Camel will reload the
-     * stylesheet file on each message processing. This is good for development. A cached stylesheet can be forced to
-     * reload at runtime via JMX using the clearCachedStylesheet operation.
+     * Cache for the resource content (the stylesheet file) when it is loaded on startup. If set to false Camel will
+     * reload the stylesheet file on each message processing. This is good for development. A cached stylesheet can be
+     * forced to reload at runtime via JMX using the clearCachedStylesheet operation.
      */
     public void setContentCache(boolean contentCache) {
         this.contentCache = contentCache;
@@ -311,6 +364,17 @@ public class XsltEndpoint extends ProcessorEndpoint {
         this.transformerFactoryConfigurationStrategy = transformerFactoryConfigurationStrategy;
     }
 
+    public XsltMessageLogger getXsltMessageLogger() {
+        return xsltMessageLogger;
+    }
+
+    /**
+     * A consumer to messages generated during XSLT transformations.
+     */
+    public void setXsltMessageLogger(XsltMessageLogger xsltMessageLogger) {
+        this.xsltMessageLogger = xsltMessageLogger;
+    }
+
     /**
      * Loads the resource.
      *
@@ -339,16 +403,17 @@ public class XsltEndpoint extends ProcessorEndpoint {
 
         // must load resource first which sets a template and do a stylesheet compilation to catch errors early
         // load resource from classpath otherwise load in doStart()
-        if (ResourceHelper.isClasspathUri(resourceUri)) {
+        if (contentCache && ResourceHelper.isClasspathUri(resourceUri)) {
             loadResource(resourceUri, xslt);
         }
-        setProcessor(getXslt());
+        setProcessor(xslt);
     }
 
     @Override
     protected void doStart() throws Exception {
         super.doStart();
-        if (!ResourceHelper.isClasspathUri(resourceUri)) {
+
+        if (contentCache && !ResourceHelper.isClasspathUri(resourceUri)) {
             loadResource(resourceUri, xslt);
         }
     }
@@ -401,6 +466,10 @@ public class XsltEndpoint extends ProcessorEndpoint {
 
         if (resultHandlerFactory != null) {
             xslt.setResultHandlerFactory(resultHandlerFactory);
+        }
+
+        if (xsltMessageLogger != null) {
+            xslt.setXsltMessageLogger(xsltMessageLogger);
         }
 
         // any additional transformer parameters then make a copy to avoid side-effects
